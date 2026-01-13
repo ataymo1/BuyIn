@@ -26,28 +26,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try {
-    const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json()
-    const { name, email } = body
-
-    const player = await db.player.create({
-      data: {
-        name,
-        email: email || null,
-      },
-    })
-
-    return NextResponse.json(player, { status: 201 })
-  } catch (error) {
-    console.error("Error creating player:", error)
-    return NextResponse.json(
-      { error: "Failed to create player" },
-      { status: 500 }
-    )
-  }
+  // Players can only be created when users sign up, not manually
+  return NextResponse.json(
+    { error: "Players can only be created when users sign up for an account" },
+    { status: 405 }
+  )
 }

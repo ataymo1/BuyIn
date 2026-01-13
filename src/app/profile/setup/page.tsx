@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { ProfileForm } from "@/components/profile/profile-form"
@@ -65,6 +66,10 @@ export default async function ProfileSetupPage() {
       })
     }
 
+    // Revalidate the cache to ensure fresh data is fetched
+    revalidatePath("/", "layout")
+    revalidatePath("/profile/setup")
+    
     redirect("/")
   }
 
