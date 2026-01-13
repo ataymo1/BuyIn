@@ -35,6 +35,14 @@ export function PlayerForm({ onSubmit, defaultValues }: PlayerFormProps) {
     },
   })
 
+  const handleSubmit = async (data: PlayerFormValues) => {
+    // Ensure only plain serializable data is passed
+    await onSubmit({
+      name: String(data.name),
+      email: data.email ? String(data.email) : undefined,
+    })
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -43,7 +51,7 @@ export function PlayerForm({ onSubmit, defaultValues }: PlayerFormProps) {
       </CardHeader>
       <CardContent>
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
+          onSubmit={form.handleSubmit(handleSubmit)}
           className="space-y-4"
         >
           <div className="space-y-2">

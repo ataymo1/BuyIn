@@ -15,6 +15,7 @@ model User {
   email         String    @unique
   name          String?
   image         String?
+  description   String?   @db.Text
   emailVerified DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

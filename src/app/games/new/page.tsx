@@ -1,15 +1,12 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { requireProfileComplete } from "@/lib/profile-check"
 import { GameForm } from "@/components/game/game-form"
 import { db } from "@/lib/db"
 
 async function createGame(data: { date: string; location?: string; notes?: string }) {
   "use server"
   
-  const session = await auth()
-  if (!session?.user) {
-    redirect("/login")
-  }
+  await requireProfileComplete()
 
   await db.game.create({
     data: {
@@ -23,10 +20,7 @@ async function createGame(data: { date: string; location?: string; notes?: strin
 }
 
 export default async function NewGamePage() {
-  const session = await auth()
-  if (!session?.user) {
-    redirect("/login")
-  }
+  await requireProfileComplete()
 
   return (
     <div className="space-y-8">

@@ -4,15 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Calendar, MapPin } from "lucide-react"
 import { db } from "@/lib/db"
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import { requireProfileComplete } from "@/lib/profile-check"
 import { format } from "date-fns"
 
 export default async function GamesPage() {
-  const session = await auth()
-  if (!session?.user) {
-    redirect("/login")
-  }
+  await requireProfileComplete()
 
   const games = await db.game.findMany({
     include: {

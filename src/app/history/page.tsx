@@ -1,15 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { db } from "@/lib/db"
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import { requireProfileComplete } from "@/lib/profile-check"
 import { format } from "date-fns"
 
 export default async function HistoryPage() {
-  const session = await auth()
-  if (!session?.user) {
-    redirect("/login")
-  }
+  await requireProfileComplete()
 
   const transactions = await db.transaction.findMany({
     include: {

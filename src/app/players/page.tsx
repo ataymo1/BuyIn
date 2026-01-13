@@ -1,18 +1,15 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PlayerForm } from "@/components/player/player-form"
 import { Plus } from "lucide-react"
 import { db } from "@/lib/db"
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import { requireProfileComplete } from "@/lib/profile-check"
 
 export default async function PlayersPage() {
-  const session = await auth()
-  if (!session?.user) {
-    redirect("/login")
-  }
+  await requireProfileComplete()
 
   const players = await db.player.findMany({
     orderBy: {

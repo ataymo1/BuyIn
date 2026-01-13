@@ -1,15 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatsCard } from "@/components/stats/stats-card"
 import { db } from "@/lib/db"
-import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import { requireProfileComplete } from "@/lib/profile-check"
 import { Calendar, Users, TrendingUp, DollarSign } from "lucide-react"
 
 export default async function StatsPage() {
-  const session = await auth()
-  if (!session?.user) {
-    redirect("/login")
-  }
+  await requireProfileComplete()
 
   const [totalGames, totalPlayers, totalBuyIns, totalCashOuts] =
     await Promise.all([

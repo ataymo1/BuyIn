@@ -54,6 +54,16 @@ export function TransactionForm({
     },
   })
 
+  const handleSubmit = async (data: TransactionFormValues) => {
+    // Ensure only plain serializable data is passed
+    await onSubmit({
+      playerId: String(data.playerId),
+      type: data.type,
+      amount: String(data.amount),
+      description: data.description ? String(data.description) : undefined,
+    })
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -62,7 +72,7 @@ export function TransactionForm({
       </CardHeader>
       <CardContent>
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
+          onSubmit={form.handleSubmit(handleSubmit)}
           className="space-y-4"
         >
           <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { requireProfileComplete } from "@/lib/profile-check"
 import { db } from "@/lib/db"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -14,10 +14,7 @@ export default async function GameDetailPage({
 }: {
   params: { id: string }
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    redirect("/login")
-  }
+  await requireProfileComplete()
 
   const game = await db.game.findUnique({
     where: { id: params.id },
@@ -67,6 +64,22 @@ export default async function GameDetailPage({
     })
 
     redirect(`/games/${data.gameId}`)
+  }
+
+  async function handleCreateTransaction(formData: {
+    playerId: string
+    type: "buyin" | "cashout"
+    amount: string
+    description?: string
+  }) {
+    "use server"
+    await createTransaction({
+      gameId: game.id,
+      playerId: formData.playerId,
+      type: formData.type,
+      amount: formData.amount,
+      description: formData.description,
+    })
   }
 
   return (
@@ -169,16 +182,8 @@ export default async function GameDetailPage({
         </CardHeader>
         <CardContent>
           <TransactionForm
-            players={players}
-            onSubmit={async (data) => {
-              await createTransaction({
-                gameId: game.id,
-                playerId: data.playerId,
-                type: data.type,
-                amount: data.amount,
-                description: data.description,
-              })
-            }}
+            players={players.map(p => ({ id: p.id, name: p.name }))}
+            onSubmit={handleCreateTransaction}
             defaultValues={{ playerId: "", type: "buyin", amount: "", description: "" }}
           />
         </CardContent>
