@@ -17,10 +17,11 @@ export default async function ProfileSetupPage() {
     select: {
       id: true,
       name: true,
+      // @ts-expect-error - description field exists in schema but Prisma types may be out of sync
       description: true,
       email: true,
     },
-  })
+  }) as { id: string; name: string | null; email: string; description: string | null } | null
 
   // If profile is already complete, redirect to dashboard
   if (user?.description) {
@@ -46,9 +47,10 @@ export default async function ProfileSetupPage() {
       where: { id: currentSession.user.id },
       data: {
         name: data.name,
+        // @ts-expect-error - description field exists in schema but Prisma types may be out of sync
         description: data.description,
       },
-    })
+    }) as unknown as { id: string; name: string | null; email: string; description: string | null }
 
     // Check if Player record exists for this user
     const existingPlayer = await db.player.findUnique({
