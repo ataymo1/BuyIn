@@ -1,18 +1,22 @@
-import { requireProfileComplete } from "@/lib/profile-check"
-import Navbar from "@/components/layout/navbar"
+import { redirect } from "next/navigation";
+import Navbar from "@/components/layout/navbar";
+import { auth } from "@/lib/auth";
 
 export default async function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  // This will redirect if not authenticated or profile incomplete
-  await requireProfileComplete()
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
 
   return (
     <div className="min-h-screen">
       <Navbar />
       <main className="container mx-auto px-4 py-8">{children}</main>
     </div>
-  )
+  );
 }

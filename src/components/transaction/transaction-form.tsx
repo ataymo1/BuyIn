@@ -1,68 +1,66 @@
-"use client"
+"use client";
 
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const transactionFormSchema = z.object({
-  playerId: z.string().min(1, "Player is required"),
   type: z.enum(["buyin", "cashout"]),
-  amount: z.string().min(1, "Amount is required").refine(
-    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
-    "Amount must be a positive number"
-  ),
+  amount: z
+    .string()
+    .min(1, "Amount is required")
+    .refine(
+      (val) => !isNaN(Number.parseFloat(val)) && Number.parseFloat(val) > 0,
+      "Amount must be a positive number"
+    ),
   description: z.string().optional(),
-})
+});
 
-type TransactionFormValues = z.infer<typeof transactionFormSchema>
+type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 
 interface TransactionFormProps {
-  onSubmit: (data: TransactionFormValues) => void | Promise<void>
-  players: Array<{ id: string; name: string }>
-  defaultValues?: Partial<TransactionFormValues>
+  onSubmit: (data: TransactionFormValues) => void | Promise<void>;
+  defaultValues?: Partial<TransactionFormValues>;
 }
 
 export function TransactionForm({
   onSubmit,
-  players,
   defaultValues,
 }: TransactionFormProps) {
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: defaultValues || {
-      playerId: "",
       type: "buyin",
       amount: "",
       description: "",
     },
-  })
+  });
 
   const handleSubmit = async (data: TransactionFormValues) => {
     // Ensure only plain serializable data is passed
     await onSubmit({
-      playerId: String(data.playerId),
       type: data.type,
       amount: String(data.amount),
       description: data.description ? String(data.description) : undefined,
-    })
-  }
+    });
+  };
 
   return (
     <Card>
@@ -71,40 +69,14 @@ export function TransactionForm({
         <CardDescription>Record a buy-in or cash-out</CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          onSubmit={form.handleSubmit(handleSubmit)}
-          className="space-y-4"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="playerId">Player</Label>
-            <Select
-              value={form.watch("playerId")}
-              onValueChange={(value) => form.setValue("playerId", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a player" />
-              </SelectTrigger>
-              <SelectContent>
-                {players.map((player) => (
-                  <SelectItem key={player.id} value={player.id}>
-                    {player.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.formState.errors.playerId && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.playerId.message}
-              </p>
-            )}
-          </div>
+        <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
           <div className="space-y-2">
             <Label htmlFor="type">Type</Label>
             <Select
-              value={form.watch("type")}
               onValueChange={(value: "buyin" | "cashout") =>
                 form.setValue("type", value)
               }
+              value={form.watch("type")}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -119,13 +91,13 @@ export function TransactionForm({
             <Label htmlFor="amount">Amount</Label>
             <Input
               id="amount"
-              type="number"
-              step="0.01"
               placeholder="0.00"
+              step="0.01"
+              type="number"
               {...form.register("amount")}
             />
             {form.formState.errors.amount && (
-              <p className="text-sm text-destructive">
+              <p className="text-destructive text-sm">
                 {form.formState.errors.amount.message}
               </p>
             )}
@@ -138,11 +110,11 @@ export function TransactionForm({
               {...form.register("description")}
             />
           </div>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button disabled={form.formState.isSubmitting} type="submit">
             {form.formState.isSubmitting ? "Adding..." : "Add Transaction"}
           </Button>
         </form>
       </CardContent>
     </Card>
-  )
+  );
 }

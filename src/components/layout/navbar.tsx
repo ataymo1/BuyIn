@@ -1,47 +1,36 @@
-import Link from "next/link"
-import { signOut } from "@/lib/auth"
-import { Button } from "@/components/ui/button"
-import { Home, Users, History, BarChart3, LogOut } from "lucide-react"
+import { BarChart3, Calendar, LogOut, UserCog } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { signOut } from "@/lib/auth";
 
 export default function Navbar() {
   async function handleSignOut() {
-    "use server"
-    await signOut({ redirectTo: "/login" })
+    "use server";
+    await signOut({ redirectTo: "/login" });
   }
 
   return (
     <nav className="border-b">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center space-x-8">
-          <Link href="/" className="text-xl font-bold">
+          <Link className="font-bold text-xl" href="/">
             BuyIn
           </Link>
           <div className="flex space-x-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm">
-                <Home className="mr-2 h-4 w-4" />
-                Dashboard
+            <Link href="/groups">
+              <Button size="sm" variant="ghost">
+                <UserCog className="mr-2 h-4 w-4" />
+                Groups
               </Button>
             </Link>
-            <Link href="/games">
-              <Button variant="ghost" size="sm">
-                Games
-              </Button>
-            </Link>
-            <Link href="/players">
-              <Button variant="ghost" size="sm">
-                <Users className="mr-2 h-4 w-4" />
-                Players
-              </Button>
-            </Link>
-            <Link href="/history">
-              <Button variant="ghost" size="sm">
-                <History className="mr-2 h-4 w-4" />
-                History
+            <Link href="/sessions">
+              <Button size="sm" variant="ghost">
+                <Calendar className="mr-2 h-4 w-4" />
+                Sessions
               </Button>
             </Link>
             <Link href="/stats">
-              <Button variant="ghost" size="sm">
+              <Button size="sm" variant="ghost">
                 <BarChart3 className="mr-2 h-4 w-4" />
                 Stats
               </Button>
@@ -49,12 +38,12 @@ export default function Navbar() {
           </div>
         </div>
         <form action={handleSignOut}>
-          <Button type="submit" variant="ghost" size="sm">
+          <Button size="sm" type="submit" variant="ghost">
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out
           </Button>
         </form>
       </div>
     </nav>
-  )
+  );
 }

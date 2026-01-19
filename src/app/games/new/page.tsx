@@ -1,34 +1,31 @@
-import { redirect } from "next/navigation"
-import { requireProfileComplete } from "@/lib/profile-check"
-import { GameForm } from "@/components/game/game-form"
-import { db } from "@/lib/db"
-
-async function createGame(data: { date: string; location?: string; notes?: string }) {
-  "use server"
-  
-  await requireProfileComplete()
-
-  await db.game.create({
-    data: {
-      date: new Date(data.date),
-      location: data.location || null,
-      notes: data.notes || null,
-    },
-  })
-
-  redirect("/games")
-}
+import { Loader2 } from "lucide-react";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import Navbar from "@/components/layout/navbar";
+import { NewGameClient } from "@/components/new-game-client";
+import { auth } from "@/lib/auth";
 
 export default async function NewGamePage() {
-  await requireProfileComplete()
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">New Game</h1>
-        <p className="text-muted-foreground">Create a new poker game session</p>
-      </div>
-      <GameForm onSubmit={createGame} />
+    <div className="min-h-screen">
+      <Navbar />
+      <main className="container mx-auto px-4 py-8">
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          }
+        >
+          <NewGameClient />
+        </Suspense>
+      </main>
     </div>
-  )
+  );
 }
