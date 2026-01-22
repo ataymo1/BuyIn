@@ -3,6 +3,7 @@
 import { Check, Clock, Loader2, Search, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,6 +24,10 @@ export function GroupSearchClient() {
   const [requestingGroupId, setRequestingGroupId] = useState<string | null>(
     null
   );
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingJoinGroupId, setPendingJoinGroupId] = useState<string | null>(
+    null
+  );
 
   const { groups, isLoading } = useSearchGroups(searchTerm);
   const { userId } = useConvexUser();
@@ -33,16 +38,28 @@ export function GroupSearchClient() {
       return;
     }
 
-    setRequestingGroupId(groupId);
+    setPendingJoinGroupId(groupId);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false);
+
+    if (!userId || !pendingJoinGroupId) {
+      return;
+    }
+
+    setRequestingGroupId(pendingJoinGroupId);
     try {
       await requestToJoin({
-        groupId: groupId as Parameters<typeof requestToJoin>[0]["groupId"],
+        groupId: pendingJoinGroupId as Parameters<typeof requestToJoin>[0]["groupId"],
         userId,
       });
     } catch (error) {
       console.error("Failed to request to join:", error);
     } finally {
       setRequestingGroupId(null);
+      setPendingJoinGroupId(null);
     }
   };
 
@@ -169,6 +186,11 @@ export function GroupSearchClient() {
       </div>
 
       {renderContent()}
+
+      <PaymentInfoModal
+        open={showPaymentModal}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

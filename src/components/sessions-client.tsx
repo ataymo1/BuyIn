@@ -89,20 +89,25 @@ export function SessionsClient() {
     (g) => g.status === "COMPLETED"
   ).length;
 
-  // Get user's profit for each game
+  // Get user's profit for each game (only for completed games)
   const gamesWithUserProfit = gamesList.map((game) => {
     let userProfit: number | null = null;
+    let isParticipant = false;
     if (player) {
       const userGamePlayer = game.gamePlayers?.find(
         (gp) => gp.playerId === player._id
       );
       if (userGamePlayer) {
-        const buyIn = userGamePlayer.buyIn ?? 0;
-        const cashOut = userGamePlayer.cashOut ?? 0;
-        userProfit = cashOut - buyIn;
+        isParticipant = true;
+        // Only calculate profit for completed games
+        if (game.status === "COMPLETED") {
+          const buyIn = userGamePlayer.buyIn ?? 0;
+          const cashOut = userGamePlayer.cashOut ?? 0;
+          userProfit = cashOut - buyIn;
+        }
       }
     }
-    return { ...game, userProfit };
+    return { ...game, userProfit, isParticipant };
   });
 
   return (
@@ -239,6 +244,10 @@ export function SessionsClient() {
                         >
                           {game.userProfit > 0 ? "+" : ""}$
                           {game.userProfit.toFixed(2)}
+                        </span>
+                      ) : game.isParticipant && game.status === "ACTIVE" ? (
+                        <span className="font-medium text-yellow-600 dark:text-yellow-500">
+                          Pending
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
