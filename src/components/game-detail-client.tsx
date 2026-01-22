@@ -6,6 +6,7 @@ import { Edit2, Loader2, MoreVertical, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -67,6 +68,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Transaction form state
   const [buyInAmount, setBuyInAmount] = useState("");
@@ -207,7 +209,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   );
   const isJoined = !!userGamePlayer;
 
-  async function handleJoinGame() {
+  function handleJoinClick() {
+    setShowPaymentModal(true);
+  }
+
+  async function handlePaymentSuccess() {
+    setShowPaymentModal(false);
+    await performJoinGame();
+  }
+
+  async function performJoinGame() {
     if (!player?._id) {
       console.error(
         "[handleJoinGame] No player record - waiting for player sync"
@@ -275,7 +286,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         </div>
         <div className="flex items-center gap-2">
           {game.status === "ACTIVE" && !isJoined && (
-            <Button onClick={handleJoinGame}>Join Session</Button>
+            <Button onClick={handleJoinClick}>Join Session</Button>
           )}
 
           {/* Owner-only actions menu */}
@@ -548,7 +559,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
             <p className="mb-4 text-muted-foreground">
               Join this session to start adding your transactions
             </p>
-            <Button onClick={handleJoinGame}>Join Session</Button>
+            <Button onClick={handleJoinClick}>Join Session</Button>
           </CardContent>
         </Card>
       )}
@@ -672,6 +683,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Payment Info Modal */}
+      <PaymentInfoModal
+        open={showPaymentModal}
+        onSuccess={handlePaymentSuccess}
+      />
 
       {/* Click outside to close actions menu */}
       {showActionsMenu && (

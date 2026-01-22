@@ -3,7 +3,9 @@
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { GroupForm } from "@/components/group/group-form";
+import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import { useConvexUser, useCreateGroup } from "@/lib/convex-hooks";
 
@@ -11,6 +13,9 @@ export function NewGroupClient() {
   const router = useRouter();
   const { userId, isLoading } = useConvexUser();
   const createGroup = useCreateGroup();
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -48,10 +53,18 @@ export function NewGroupClient() {
       });
       console.log("[handleCreateGroup] Group created successfully:", groupId);
 
-      router.push(`/groups/${groupId}`);
+      setPendingGroupId(groupId);
+      setShowPaymentModal(true);
     } catch (error) {
       console.error("[handleCreateGroup] Error creating group:", error);
       throw error;
+    }
+  }
+
+  function handlePaymentSuccess() {
+    setShowPaymentModal(false);
+    if (pendingGroupId) {
+      router.push(`/groups/${pendingGroupId}`);
     }
   }
 
@@ -70,6 +83,11 @@ export function NewGroupClient() {
         </div>
       </div>
       <GroupForm onSubmit={handleCreateGroup} />
+
+      <PaymentInfoModal
+        open={showPaymentModal}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

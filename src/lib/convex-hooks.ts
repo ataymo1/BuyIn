@@ -320,3 +320,7 @@ export function useUserPendingRequests() {
 export function useCancelJoinRequest() {
   return useMutation(api.groups.cancelJoinRequest);
 }
+
+export function useUpdateUser() {
+  return useMutation(api.auth.updateUser);
+}

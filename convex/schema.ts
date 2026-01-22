@@ -9,6 +9,8 @@ export default defineSchema({
     image: v.optional(v.string()),
     description: v.optional(v.string()),
     emailVerified: v.optional(v.number()),
+    venmo: v.optional(v.string()),
+    zelle: v.optional(v.string()),
   }).index("by_email", ["email"]),
 
   accounts: defineTable({

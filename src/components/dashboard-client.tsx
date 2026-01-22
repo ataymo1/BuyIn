@@ -6,6 +6,7 @@ import {
   ArrowRight,
   BarChart3,
   Calendar,
+  CreditCard,
   Loader2,
   MapPin,
   Play,
@@ -150,6 +151,23 @@ export function DashboardClient() {
                   <p className="font-semibold">View Stats</p>
                   <p className="text-muted-foreground text-sm">
                     Track your performance
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Payment Info */}
+          <Link href="/profile">
+            <Card className="cursor-pointer transition-all hover:border-primary hover:shadow-md">
+              <CardContent className="flex items-center gap-4 pt-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900">
+                  <CreditCard className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+                </div>
+                <div>
+                  <p className="font-semibold">Payment Info</p>
+                  <p className="text-muted-foreground text-sm">
+                    Manage Venmo & Zelle
                   </p>
                 </div>
               </CardContent>
