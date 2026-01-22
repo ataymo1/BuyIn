@@ -2,7 +2,17 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
-import { Edit2, Loader2, MoreVertical, Trash2, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Banknote,
+  Edit2,
+  HandCoins,
+  Loader2,
+  MoreVertical,
+  Skull,
+  Trash2,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -71,10 +81,10 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Transaction form state
+  const [activeAction, setActiveAction] = useState<"buyin" | "cashout" | "busted" | null>(null);
   const [buyInAmount, setBuyInAmount] = useState("");
   const [cashOutAmount, setCashOutAmount] = useState("");
-  const [isAddingBuyIn, setIsAddingBuyIn] = useState(false);
-  const [isAddingCashOut, setIsAddingCashOut] = useState(false);
+  const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
 
   // Edit form state
   const [editLocation, setEditLocation] = useState("");
@@ -450,14 +460,52 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       {game.status === "ACTIVE" && isJoined && (
         <Card>
           <CardHeader>
-            <CardTitle>Add Transaction</CardTitle>
-            <CardDescription>Record your buy-in or cash-out</CardDescription>
+            <CardTitle>Actions</CardTitle>
+            <CardDescription>What would you like to do?</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {/* Buy-In Input */}
-              <div className="space-y-2">
-                <Label htmlFor="buyin-amount">Buy-In Amount</Label>
+            {activeAction === null ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Button
+                  variant="outline"
+                  className="h-24 flex-col gap-2"
+                  onClick={() => setActiveAction("buyin")}
+                >
+                  <Banknote className="h-8 w-8 text-green-600" />
+                  <span>Buy-in</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-24 flex-col gap-2"
+                  onClick={() => setActiveAction("cashout")}
+                >
+                  <HandCoins className="h-8 w-8 text-blue-600" />
+                  <span>Cash Out</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-24 flex-col gap-2"
+                  onClick={() => setActiveAction("busted")}
+                >
+                  <Skull className="h-8 w-8 text-red-600" />
+                  <span>I Busted</span>
+                </Button>
+              </div>
+            ) : activeAction === "buyin" ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setActiveAction(null);
+                      setBuyInAmount("");
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-medium">Buy-in Amount</span>
+                </div>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
@@ -465,7 +513,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                     </span>
                     <Input
                       className="pl-7"
-                      disabled={isAddingBuyIn}
+                      disabled={isSubmittingTransaction}
                       id="buyin-amount"
                       min="0"
                       onChange={(e) => setBuyInAmount(e.target.value)}
@@ -473,37 +521,50 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       step="0.01"
                       type="number"
                       value={buyInAmount}
+                      autoFocus
                     />
                   </div>
                   <Button
                     disabled={
-                      isAddingBuyIn || !buyInAmount || Number(buyInAmount) <= 0
+                      isSubmittingTransaction || !buyInAmount || Number(buyInAmount) <= 0
                     }
                     onClick={async () => {
                       const amount = Number(buyInAmount);
                       if (amount > 0) {
-                        setIsAddingBuyIn(true);
+                        setIsSubmittingTransaction(true);
                         try {
                           await handleCreateTransaction("buyin", amount);
                           setBuyInAmount("");
+                          setActiveAction(null);
                         } finally {
-                          setIsAddingBuyIn(false);
+                          setIsSubmittingTransaction(false);
                         }
                       }
                     }}
                   >
-                    {isAddingBuyIn ? (
+                    {isSubmittingTransaction ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      "Add"
+                      "Add Buy-in"
                     )}
                   </Button>
                 </div>
               </div>
-
-              {/* Cash-Out Input */}
-              <div className="space-y-2">
-                <Label htmlFor="cashout-amount">Cash-Out Amount</Label>
+            ) : activeAction === "cashout" ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setActiveAction(null);
+                      setCashOutAmount("");
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-medium">Cash Out Amount</span>
+                </div>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
@@ -511,7 +572,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                     </span>
                     <Input
                       className="pl-7"
-                      disabled={isAddingCashOut}
+                      disabled={isSubmittingTransaction}
                       id="cashout-amount"
                       min="0"
                       onChange={(e) => setCashOutAmount(e.target.value)}
@@ -519,36 +580,57 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       step="0.01"
                       type="number"
                       value={cashOutAmount}
+                      autoFocus
                     />
                   </div>
                   <Button
                     disabled={
-                      isAddingCashOut ||
-                      !cashOutAmount ||
-                      Number(cashOutAmount) <= 0
+                      isSubmittingTransaction || !cashOutAmount || Number(cashOutAmount) <= 0
                     }
                     onClick={async () => {
                       const amount = Number(cashOutAmount);
                       if (amount > 0) {
-                        setIsAddingCashOut(true);
+                        setIsSubmittingTransaction(true);
                         try {
                           await handleCreateTransaction("cashout", amount);
                           setCashOutAmount("");
+                          setActiveAction(null);
                         } finally {
-                          setIsAddingCashOut(false);
+                          setIsSubmittingTransaction(false);
                         }
                       }
                     }}
                   >
-                    {isAddingCashOut ? (
+                    {isSubmittingTransaction ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      "Add"
+                      "Cash Out"
                     )}
                   </Button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveAction(null)}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-medium">Settlement Info</span>
+                </div>
+                <div className="rounded-lg border border-dashed p-6 text-center">
+                  <Skull className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+                  <p className="mb-2 font-medium">P2P Settlement Coming Soon</p>
+                  <p className="text-muted-foreground text-sm">
+                    The peer-to-peer settlement system is being built. Once complete,
+                    you&apos;ll see who you owe and their payment details here.
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
