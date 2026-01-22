@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
-export async function middleware(request: Request) {
+export async function proxy(request: Request) {
   const session = await auth();
 
   // If user is not authenticated, redirect to login
