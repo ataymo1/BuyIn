@@ -7,6 +7,7 @@ import {
     CardContent
 } from "@/components/ui/card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { MobileCardSkeleton, Skeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import {
     useConvexUser,
     useGames,
@@ -17,7 +18,6 @@ import { format } from "date-fns";
 import {
     Calendar,
     History,
-    Loader2,
     LogIn,
     MapPin,
     Users
@@ -46,6 +46,60 @@ function getStatusColorClass(status: string): string {
   return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
 }
 
+function SessionsSkeleton() {
+  return (
+    <div className="space-y-8">
+      {/* Sessions to Join Skeleton */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-5 w-5" />
+          <Skeleton className="h-6 w-36" />
+        </div>
+        <Card>
+          <CardContent className="p-0">
+            {/* Desktop table skeleton */}
+            <div className="hidden md:block">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <TableRowSkeleton key={i} columns={5} />
+              ))}
+            </div>
+            {/* Mobile card skeleton */}
+            <div className="space-y-4 p-4 md:hidden">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <MobileCardSkeleton key={i} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Your Sessions Skeleton */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-5 w-5" />
+          <Skeleton className="h-6 w-32" />
+        </div>
+        <Card>
+          <CardContent className="p-0">
+            {/* Desktop table skeleton */}
+            <div className="hidden md:block">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <TableRowSkeleton key={i} columns={6} />
+              ))}
+            </div>
+            {/* Mobile card skeleton */}
+            <div className="space-y-4 p-4 md:hidden">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <MobileCardSkeleton key={i} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export function SessionsClient() {
   const { player, isLoading: playerLoading } = usePlayer();
   const { userId, user } = useConvexUser();
@@ -61,11 +115,7 @@ export function SessionsClient() {
   const isLoading = playerLoading || gamesLoading;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <SessionsSkeleton />;
   }
 
   const gamesList = games ?? [];

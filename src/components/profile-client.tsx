@@ -16,7 +16,67 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useConvexUser, useUpdateUser } from "@/lib/convex-hooks";
+
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-5 w-72" />
+        </div>
+        <Skeleton className="h-10 w-28" />
+      </div>
+
+      {/* Username Section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-5" />
+            <Skeleton className="h-6 w-24" />
+          </div>
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-5 w-32" />
+        </CardContent>
+      </Card>
+
+      {/* Payment Methods Section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-5" />
+            <Skeleton className="h-6 w-36" />
+          </div>
+          <Skeleton className="h-4 w-80" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border p-4 space-y-2">
+              <Skeleton className="h-4 w-12" />
+              <Skeleton className="h-5 w-32" />
+            </div>
+            <div className="rounded-lg border p-4 space-y-2">
+              <Skeleton className="h-4 w-12" />
+              <Skeleton className="h-5 w-40" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sign Out Section */}
+      <Card>
+        <CardContent className="pt-6">
+          <Skeleton className="h-10 w-full" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 const profileFormSchema = z
   .object({
@@ -86,11 +146,7 @@ export function ProfileClient() {
   };
 
   if (userLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   return (

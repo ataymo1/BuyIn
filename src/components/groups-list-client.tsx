@@ -1,21 +1,40 @@
 "use client";
 
-import { Loader2, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { GroupCard } from "@/components/group/group-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { GroupCardSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useUserGroups } from "@/lib/convex-hooks";
+
+function GroupsListSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="mt-2 h-5 w-64" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-28" />
+          <Skeleton className="h-10 w-28" />
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <GroupCardSkeleton key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function GroupsListClient() {
   const { groups, isLoading } = useUserGroups();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <GroupsListSkeleton />;
   }
 
   return (

@@ -1,12 +1,36 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GameForm } from "@/components/game/game-form";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { FormFieldSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useConvexUser, useUserGroups } from "@/lib/convex-hooks";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+
+function NewGameSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <Skeleton className="h-9 w-36" />
+        <Skeleton className="h-5 w-56" />
+      </div>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormFieldSkeleton />
+          <FormFieldSkeleton />
+          <FormFieldSkeleton />
+          <Skeleton className="mt-4 h-10 w-full" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function NewGameClient() {
   const router = useRouter();
@@ -20,11 +44,7 @@ export function NewGameClient() {
   const isLoading = userLoading || groupsLoading;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <NewGameSkeleton />;
   }
 
   // Filter to only groups where user is owner

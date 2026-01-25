@@ -2,6 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  CardSkeleton,
+  GameItemSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
 import { useConvexUser, usePlayer, useUserGroups } from "@/lib/convex-hooks";
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
@@ -9,7 +14,6 @@ import {
     ArrowRight,
     BarChart3,
     Calendar,
-    Loader2,
     MapPin,
     Play,
     Plus,
@@ -29,6 +33,45 @@ function getProfitColorClass(profit: number): string {
   return "text-muted-foreground";
 }
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-8">
+      {/* Hero Header Skeleton */}
+      <div>
+        <Skeleton className="h-9 w-48" />
+      </div>
+
+      {/* Quick Actions Skeleton */}
+      <section>
+        <Skeleton className="mb-4 h-6 w-32" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      </section>
+
+      {/* Recent Games Skeleton */}
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-5" />
+            <Skeleton className="h-6 w-32" />
+          </div>
+          <Skeleton className="h-8 w-20" />
+        </div>
+        <Card>
+          <CardContent className="divide-y pt-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <GameItemSkeleton key={i} />
+            ))}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  );
+}
+
 export function DashboardClient() {
   const { isLoading: userLoading } = useConvexUser();
   const { groups, groupIds, isLoading: groupsLoading } = useUserGroups();
@@ -43,11 +86,7 @@ export function DashboardClient() {
   const isLoading = userLoading || groupsLoading || playerLoading;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   // Get recent games (up to 5)

@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
-import { Loader2, MapPin, Plus, Trophy, UserPlus } from "lucide-react";
+import { MapPin, Plus, Trophy, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { PendingRequestsList } from "@/components/group/pending-requests-list";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,111 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { Skeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { useConvexUser } from "@/lib/convex-hooks";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+
+function GroupDetailSkeleton() {
+  return (
+    <div className="space-y-8">
+      {/* Header Skeleton */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-64" />
+        </div>
+        <Skeleton className="h-10 w-32" />
+      </div>
+
+      {/* Standings Card Skeleton */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-5" />
+            <Skeleton className="h-6 w-36" />
+          </div>
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <TableRowSkeleton key={i} columns={4} />
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Active and Recent Sessions */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded border p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-8 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-36" />
+            <Skeleton className="h-4 w-44" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded border p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-8 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Members Section Skeleton */}
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-28" />
+          <Skeleton className="h-4 w-24" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between rounded border p-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 interface GroupDetailClientProps {
   groupId: string;
@@ -45,11 +147,7 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
   const isLoading = userLoading || group === undefined;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <GroupDetailSkeleton />;
   }
 
   if (!group) {

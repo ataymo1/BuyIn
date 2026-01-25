@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, DollarSign, Loader2, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { Calendar, DollarSign, TrendingDown, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import { StatsCard } from "@/components/stats/stats-card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,48 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  PageHeaderSkeleton,
+  Skeleton,
+  StatsCardSkeleton,
+  SummaryCardSkeleton,
+  TableRowSkeleton,
+} from "@/components/ui/skeleton";
 import { useUserGroups, useUserStats } from "@/lib/convex-hooks";
+
+function StatsSkeleton() {
+  return (
+    <div className="space-y-8">
+      <PageHeaderSkeleton />
+
+      {/* Stats Cards Skeleton */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <StatsCardSkeleton key={i} />
+        ))}
+      </div>
+
+      {/* Summary Cards Skeleton */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <SummaryCardSkeleton />
+        <SummaryCardSkeleton />
+      </div>
+
+      {/* Stats by Group Skeleton */}
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <TableRowSkeleton key={i} columns={2} />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function StatsClient() {
   const { groups, isLoading: groupsLoading } = useUserGroups();
@@ -21,11 +62,7 @@ export function StatsClient() {
   const isLoading = groupsLoading || statsLoading;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <StatsSkeleton />;
   }
 
   return (

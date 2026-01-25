@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Calendar,
   DollarSign,
-  Loader2,
   TrendingUp,
   UserCog,
 } from "lucide-react";
@@ -20,7 +19,52 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton, StatsCardSkeleton } from "@/components/ui/skeleton";
 import { api } from "../../convex/_generated/api";
+
+function PlayerStatsSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Skeleton className="h-9 w-20" />
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-48" />
+            <Skeleton className="h-5 w-64" />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards Skeleton */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <StatsCardSkeleton key={i} />
+        ))}
+      </div>
+
+      {/* Recent Games Skeleton */}
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-40" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded border p-3">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 interface PlayerStatsClientProps {
   userId: string;
@@ -30,11 +74,7 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
   const stats = useQuery(api.stats.getPlayerStats, { userId });
 
   if (stats === undefined) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PlayerStatsSkeleton />;
   }
 
   if (!stats) {
