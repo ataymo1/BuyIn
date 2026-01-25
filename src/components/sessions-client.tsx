@@ -458,15 +458,10 @@ export function SessionsClient() {
       )}
 
       {/* Payment Info Modal */}
-      {showPaymentModal && (
-        <PaymentInfoModal
-          onClose={() => {
-            setShowPaymentModal(false);
-            setPendingJoinGameId(null);
-          }}
-          onSuccess={handlePaymentSuccess}
-        />
-      )}
+      <PaymentInfoModal
+        open={showPaymentModal}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

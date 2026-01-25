@@ -53,7 +53,6 @@ export function NewGameClient() {
     groupId: string;
     date: string;
     location?: string;
-    notes?: string;
   }) {
     if (!userId) {
       throw new Error("Unauthorized");
@@ -67,7 +66,6 @@ export function NewGameClient() {
       groupId: data.groupId as Id<"groups">,
       date: new Date(data.date).getTime(),
       location: data.location,
-      notes: data.notes,
       createdById: userId,
     });
 

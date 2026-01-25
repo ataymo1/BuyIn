@@ -1,25 +1,5 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { format } from "date-fns";
-import {
-  ArrowLeft,
-  Banknote,
-  Check,
-  Clock,
-  Edit2,
-  HandCoins,
-  Loader2,
-  MoreVertical,
-  Pencil,
-  Skull,
-  Trash2,
-  Users,
-  X,
-} from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,8 +27,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useConvexUser, usePlayer } from "@/lib/convex-hooks";
+import { useMutation, useQuery } from "convex/react";
+import { format } from "date-fns";
+import {
+  ArrowLeft,
+  Banknote,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Edit2,
+  HandCoins,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -78,14 +78,18 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Transaction form state
-  const [activeAction, setActiveAction] = useState<"buyin" | "cashout" | "busted" | null>(null);
+  const [activeAction, setActiveAction] = useState<"buyin" | "cashout" | null>(null);
   const [buyInAmount, setBuyInAmount] = useState("");
   const [cashOutAmount, setCashOutAmount] = useState("");
   const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
 
+  // Collapsible sections state (default to collapsed)
+  const [isPlayersExpanded, setIsPlayersExpanded] = useState(false);
+  const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false);
+  const [isPendingExpanded, setIsPendingExpanded] = useState(false);
+
   // Edit form state
   const [editLocation, setEditLocation] = useState("");
-  const [editNotes, setEditNotes] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "COMPLETED">(
     "ACTIVE"
@@ -144,7 +148,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   function openEditDialog() {
     if (game) {
       setEditLocation(game.location ?? "");
-      setEditNotes(game.notes ?? "");
       setEditDate(format(new Date(game.date), "yyyy-MM-dd"));
       setEditStatus(game.status === "CANCELLED" ? "ACTIVE" : game.status);
       setShowEditDialog(true);
@@ -162,7 +165,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         gameId: gameId as Id<"games">,
         userId,
         location: editLocation || undefined,
-        notes: editNotes || undefined,
         date: new Date(editDate).getTime(),
       });
 
@@ -535,26 +537,39 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         </div>
       </div>
 
-      {game.notes && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">{game.notes}</p>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Players</CardTitle>
-            <CardDescription>Players in this session</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Players</CardTitle>
+                <CardDescription>Players in this session</CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPlayersExpanded(!isPlayersExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isPlayersExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {(game.gamePlayers?.length ?? 0) === 0 ? (
               <p className="text-muted-foreground text-sm">No players yet</p>
             ) : (
               <ResponsiveTable
-                data={game.gamePlayers ?? []}
+                data={
+                  isPlayersExpanded
+                    ? game.gamePlayers ?? []
+                    : (game.gamePlayers ?? []).slice(0, 3)
+                }
                 keyExtractor={(gp) => gp.id}
                 columns={[
                   {
@@ -626,8 +641,24 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>All Transactions</CardTitle>
-            <CardDescription>Buy-ins and cash-outs</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>All Transactions</CardTitle>
+                <CardDescription>Buy-ins and cash-outs</CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsTransactionsExpanded(!isTransactionsExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isTransactionsExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {(transactions?.length ?? 0) === 0 ? (
@@ -638,6 +669,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               <div className="space-y-2">
                 {transactions
                   ?.filter((tx) => tx.status !== "PENDING" && tx.status !== "REJECTED")
+                  .slice(0, isTransactionsExpanded ? undefined : 3)
                   .map((transaction) => (
                   <div
                     className="flex items-center justify-between rounded border p-3"
@@ -706,17 +738,35 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       {isSessionCreator && pendingBuyIns && pendingBuyIns.length > 0 && (
         <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-600" />
-              <CardTitle>Pending Transaction Requests</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-amber-600" />
+                <div>
+                  <CardTitle>Pending Transaction Requests</CardTitle>
+                  <CardDescription>
+                    Review and approve buy-in and cash-out requests from players
+                  </CardDescription>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPendingExpanded(!isPendingExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isPendingExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
             </div>
-            <CardDescription>
-              Review and approve buy-in and cash-out requests from players
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {pendingBuyIns.map((tx) => (
+              {pendingBuyIns
+                .slice(0, isPendingExpanded ? undefined : 3)
+                .map((tx) => (
                 <div
                   className="flex items-center justify-between rounded-lg border bg-background p-4"
                   key={tx._id}
@@ -776,7 +826,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
           </CardHeader>
           <CardContent>
             {activeAction === null ? (
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Button
                   variant="outline"
                   className="h-24 flex-col gap-2"
@@ -792,14 +842,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 >
                   <HandCoins className="h-8 w-8 text-blue-600" />
                   <span>Cash Out</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-24 flex-col gap-2"
-                  onClick={() => setActiveAction("busted")}
-                >
-                  <Skull className="h-8 w-8 text-red-600" />
-                  <span>I Busted</span>
                 </Button>
               </div>
             ) : activeAction === "buyin" ? (
@@ -920,28 +962,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   </Button>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setActiveAction(null)}
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="font-medium">Settlement Info</span>
-                </div>
-                <div className="rounded-lg border border-dashed p-6 text-center">
-                  <Skull className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-                  <p className="mb-2 font-medium">P2P Settlement Coming Soon</p>
-                  <p className="text-muted-foreground text-sm">
-                    The peer-to-peer settlement system is being built. Once complete,
-                    you&apos;ll see who you owe and their payment details here.
-                  </p>
-                </div>
-              </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       )}
@@ -985,16 +1006,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 onChange={(e) => setEditLocation(e.target.value)}
                 placeholder="e.g., John's House"
                 value={editLocation}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-notes">Notes</Label>
-              <Textarea
-                id="edit-notes"
-                onChange={(e) => setEditNotes(e.target.value)}
-                placeholder="Any additional notes..."
-                value={editNotes}
               />
             </div>
 

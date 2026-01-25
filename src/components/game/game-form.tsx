@@ -25,7 +25,6 @@ const gameFormSchema = z.object({
   groupId: z.string().min(1, "Group is required"),
   date: z.string().min(1, "Date is required"),
   location: z.string().optional(),
-  notes: z.string().optional(),
 });
 
 type GameFormValues = z.infer<typeof gameFormSchema>;
@@ -49,7 +48,6 @@ export function GameForm({
       groupId: defaultGroupId || "",
       date: new Date().toISOString().split("T")[0],
       location: "",
-      notes: "",
     },
   });
 
@@ -59,7 +57,6 @@ export function GameForm({
       groupId: String(data.groupId),
       date: String(data.date),
       location: data.location ? String(data.location) : undefined,
-      notes: data.notes ? String(data.notes) : undefined,
     });
   };
 
@@ -109,14 +106,6 @@ export function GameForm({
               id="location"
               placeholder="e.g., Home, Casino, Friend's house"
               {...form.register("location")}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes (optional)</Label>
-            <Input
-              id="notes"
-              placeholder="Any additional notes about this game"
-              {...form.register("notes")}
             />
           </div>
           <Button disabled={form.formState.isSubmitting} type="submit">
