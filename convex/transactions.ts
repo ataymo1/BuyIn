@@ -139,7 +139,7 @@ export const getTransactions = query({
   },
 });
 
-// Get pending buy-in requests for a session (session creator only)
+// Get pending transaction requests (buy-ins and cash-outs) for a session (session creator only)
 export const getPendingBuyIns = query({
   args: {
     gameId: v.id("games"),
@@ -199,7 +199,7 @@ export const isSessionCreator = query({
 });
 
 // Create transaction (with auto-join and totals update)
-// Buy-ins require approval from session creator, cashouts are auto-approved
+// Transactions from non-creators require approval from session creator
 export const createTransaction = mutation({
   args: {
     gameId: v.id("games"),
@@ -233,11 +233,9 @@ export const createTransaction = mutation({
       gamePlayer = await ctx.db.get(gpId);
     }
 
-    // Buy-ins from non-creators are PENDING, session creator's buy-ins are auto-approved
-    // Cash-outs are always auto-approved
+    // Transactions from non-creators are PENDING, session creator's transactions are auto-approved
     const isSessionCreator = game.createdById === args.createdById;
-    const isBuyIn = args.type === "buyin";
-    const status = isBuyIn && !isSessionCreator ? "PENDING" : "APPROVED";
+    const status = !isSessionCreator ? "PENDING" : "APPROVED";
 
     // Create transaction
     const txId = await ctx.db.insert("transactions", {
@@ -360,7 +358,7 @@ export const updateTransaction = mutation({
   },
 });
 
-// Approve a pending buy-in request (session creator only)
+// Approve a pending transaction request (session creator only)
 export const approveTransaction = mutation({
   args: {
     transactionId: v.id("transactions"),
@@ -378,7 +376,7 @@ export const approveTransaction = mutation({
       throw new Error("Game not found");
     }
     if (game.createdById !== args.userId) {
-      throw new Error("Only the session creator can approve buy-ins");
+      throw new Error("Only the session creator can approve transactions");
     }
 
     if (tx.status !== "PENDING") {
@@ -395,7 +393,7 @@ export const approveTransaction = mutation({
   },
 });
 
-// Reject a pending buy-in request (session creator only)
+// Reject a pending transaction request (session creator only)
 export const rejectTransaction = mutation({
   args: {
     transactionId: v.id("transactions"),
@@ -413,7 +411,7 @@ export const rejectTransaction = mutation({
       throw new Error("Game not found");
     }
     if (game.createdById !== args.userId) {
-      throw new Error("Only the session creator can reject buy-ins");
+      throw new Error("Only the session creator can reject transactions");
     }
 
     if (tx.status !== "PENDING") {

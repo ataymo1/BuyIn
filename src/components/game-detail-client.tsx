@@ -290,9 +290,10 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       createdById: userId,
     });
 
-    // Show feedback if buy-in is pending
+    // Show feedback if transaction is pending
     if (result.status === "PENDING") {
-      alert("Your buy-in request has been submitted and is awaiting approval from the session host.");
+      const transactionType = type === "buyin" ? "buy-in" : "cash-out";
+      alert(`Your ${transactionType} request has been submitted and is awaiting approval from the session host.`);
     }
   }
 
@@ -303,7 +304,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       await approveTransaction({ transactionId: txId, userId });
     } catch (error) {
       console.error("Failed to approve transaction:", error);
-      alert("Failed to approve buy-in. Please try again.");
+      alert("Failed to approve transaction. Please try again.");
     } finally {
       setIsApprovingId(null);
     }
@@ -316,7 +317,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       await rejectTransaction({ transactionId: txId, userId });
     } catch (error) {
       console.error("Failed to reject transaction:", error);
-      alert("Failed to reject buy-in. Please try again.");
+      alert("Failed to reject transaction. Please try again.");
     } finally {
       setIsRejectingId(null);
     }
@@ -692,16 +693,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         </Card>
       </div>
 
-      {/* Pending Buy-In Requests - Only visible to session creator */}
+      {/* Pending Transaction Requests - Only visible to session creator */}
       {isSessionCreator && pendingBuyIns && pendingBuyIns.length > 0 && (
         <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-amber-600" />
-              <CardTitle>Pending Buy-In Requests</CardTitle>
+              <CardTitle>Pending Transaction Requests</CardTitle>
             </div>
             <CardDescription>
-              Review and approve buy-in requests from players
+              Review and approve buy-in and cash-out requests from players
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -714,7 +715,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   <div>
                     <p className="font-medium">{tx.player?.name ?? "Unknown"}</p>
                     <p className="text-muted-foreground text-sm">
-                      Requested ${tx.amount.toFixed(2)} buy-in •{" "}
+                      Requested ${tx.amount.toFixed(2)} {tx.type === "buyin" ? "buy-in" : "cash-out"} •{" "}
                       {format(new Date(tx._creationTime), "h:mm a")}
                     </p>
                   </div>
