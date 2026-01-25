@@ -485,7 +485,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </Button>
 
               {showActionsMenu && (
-                <div className="absolute top-full right-0 mt-1 w-48 rounded-md border bg-background shadow-lg">
+                <div className="absolute top-full right-0 z-50 mt-1 w-48 rounded-md border bg-background shadow-lg">
                   <div className="p-1">
                     <button
                       className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
