@@ -61,11 +61,11 @@ export default function Navbar() {
       {/* Mobile Top Bar */}
       <nav className="border-b md:hidden">
         <div className="flex h-14 items-center justify-between px-4">
-          <ThemeToggle />
+          <div className="w-10" /> {/* Spacer to balance the toggle */}
           <Link className="font-bold text-xl" href="/">
             BuyIn
           </Link>
-          <div className="w-10" /> {/* Spacer to balance the toggle */}
+          <ThemeToggle />
         </div>
       </nav>
 
