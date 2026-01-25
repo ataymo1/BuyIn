@@ -79,7 +79,9 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
             value: stats.netProfit >= 0 ? "Positive" : "Negative",
             isPositive: stats.netProfit >= 0,
           }}
-          value={`$${stats.netProfit.toFixed(2)}`}
+          value={`${stats.netProfit >= 0 ? "+" : ""}$${stats.netProfit.toFixed(2)}`}
+          valueColorMode="profit"
+          numericValue={stats.netProfit}
         />
         <StatsCard
           description="All time"

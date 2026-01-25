@@ -37,6 +37,12 @@ export default function Navbar() {
                   Stats
                 </Button>
               </Link>
+              <Link href="/profile">
+                <Button size="sm" variant="ghost">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Button>
+              </Link>
             </div>
           </div>
           <form action={handleSignOut}>

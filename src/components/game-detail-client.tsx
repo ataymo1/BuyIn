@@ -594,9 +594,17 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                     key: "profit",
                     header: "Profit",
                     render: (gp) =>
-                      gp.profit !== null && gp.profit !== undefined
-                        ? `$${gp.profit.toFixed(2)}`
-                        : "—",
+                      gp.profit !== null && gp.profit !== undefined ? (
+                        <span
+                          className={`font-medium ${
+                            gp.profit >= 0 ? "text-green-600" : "text-red-600"
+                          }`}
+                        >
+                          {gp.profit >= 0 ? "+" : ""}${gp.profit.toFixed(2)}
+                        </span>
+                      ) : (
+                        "—"
+                      ),
                   },
                 ]}
                 renderCard={(gp) => (
