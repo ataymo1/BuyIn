@@ -1,6 +1,7 @@
 import { BarChart3, Calendar, Home, LogOut, User, UserCog } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth";
 
 export default function Navbar() {
@@ -45,21 +46,26 @@ export default function Navbar() {
               </Link>
             </div>
           </div>
-          <form action={handleSignOut}>
-            <Button size="sm" type="submit" variant="ghost">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
-            </Button>
-          </form>
+          <div className="flex items-center space-x-2">
+            <ThemeToggle />
+            <form action={handleSignOut}>
+              <Button size="sm" type="submit" variant="ghost">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </Button>
+            </form>
+          </div>
         </div>
       </nav>
 
-      {/* Mobile Top Bar - Logo only */}
+      {/* Mobile Top Bar */}
       <nav className="border-b md:hidden">
-        <div className="flex h-14 items-center justify-center px-4">
+        <div className="flex h-14 items-center justify-between px-4">
+          <ThemeToggle />
           <Link className="font-bold text-xl" href="/">
             BuyIn
           </Link>
+          <div className="w-10" /> {/* Spacer to balance the toggle */}
         </div>
       </nav>
 
