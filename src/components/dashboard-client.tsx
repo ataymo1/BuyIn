@@ -1,23 +1,22 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { format } from "date-fns";
-import {
-  ArrowRight,
-  BarChart3,
-  Calendar,
-  CreditCard,
-  Loader2,
-  MapPin,
-  Play,
-  Plus,
-  User,
-  Users,
-} from "lucide-react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useConvexUser, usePlayer, useUserGroups } from "@/lib/convex-hooks";
+import { useQuery } from "convex/react";
+import { format } from "date-fns";
+import {
+    ArrowRight,
+    BarChart3,
+    Calendar,
+    Loader2,
+    MapPin,
+    Play,
+    Plus,
+    User,
+    Users
+} from "lucide-react";
+import Link from "next/link";
 import { api } from "../../convex/_generated/api";
 
 function getProfitColorClass(profit: number): string {
@@ -77,9 +76,6 @@ export function DashboardClient() {
       {/* Hero Header */}
       <div>
         <h1 className="font-bold text-3xl">Welcome back!</h1>
-        <p className="text-muted-foreground">
-          What would you like to do today?
-        </p>
       </div>
 
       {/* Quick Actions */}
@@ -96,9 +92,6 @@ export function DashboardClient() {
                   </div>
                   <div>
                     <p className="font-semibold">Start New Game</p>
-                    <p className="text-muted-foreground text-sm">
-                      Begin a poker session
-                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -114,9 +107,6 @@ export function DashboardClient() {
                 </div>
                 <div>
                   <p className="font-semibold">Create Group</p>
-                  <p className="text-muted-foreground text-sm">
-                    Start a new poker group
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -132,9 +122,6 @@ export function DashboardClient() {
                   </div>
                   <div>
                     <p className="font-semibold">Your Groups</p>
-                    <p className="text-muted-foreground text-sm">
-                      {groups.length} group{groups.length !== 1 ? "s" : ""}
-                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -150,9 +137,6 @@ export function DashboardClient() {
                 </div>
                 <div>
                   <p className="font-semibold">View Stats</p>
-                  <p className="text-muted-foreground text-sm">
-                    Track your performance
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -167,9 +151,6 @@ export function DashboardClient() {
                 </div>
                 <div>
                   <p className="font-semibold">Profile Info</p>
-                  <p className="text-muted-foreground text-sm">
-                    Manage your profile
-                  </p>
                 </div>
               </CardContent>
             </Card>
