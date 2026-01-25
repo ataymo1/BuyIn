@@ -359,13 +359,76 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-bold text-2xl sm:text-3xl">Session Details</h1>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-            >
-              {game.status}
-            </span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-bold text-2xl sm:text-3xl">Session Details</h1>
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+              >
+                {game.status}
+              </span>
+            </div>
+            {/* Owner-only actions menu - positioned to the right on mobile */}
+            {canManage && (
+              <div className="relative flex-shrink-0 sm:hidden">
+                <Button
+                  onClick={() => setShowActionsMenu(!showActionsMenu)}
+                  size="sm"
+                  variant="outline"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+
+                {showActionsMenu && (
+                  <div className="fixed inset-x-4 top-auto bottom-20 z-50 w-auto rounded-md border bg-background shadow-lg">
+                    <div className="p-1">
+                      <button
+                        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+                        onClick={openEditDialog}
+                        type="button"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        Edit Session
+                      </button>
+
+                      {/* Status change options */}
+                      {game.status !== "ACTIVE" && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+                          onClick={() => handleStatusChange("ACTIVE")}
+                          type="button"
+                        >
+                          Mark as Active
+                        </button>
+                      )}
+                      {game.status !== "COMPLETED" && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+                          onClick={() => handleStatusChange("COMPLETED")}
+                          type="button"
+                        >
+                          Mark as Completed
+                        </button>
+                      )}
+
+                      <div className="my-1 h-px bg-border" />
+
+                      <button
+                        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-red-600 text-sm hover:bg-red-50 dark:hover:bg-red-900/20"
+                        onClick={() => {
+                          setShowDeleteDialog(true);
+                          setShowActionsMenu(false);
+                        }}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Session
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <p className="mt-1 text-muted-foreground text-sm sm:text-base">
             {format(new Date(game.date), "MMMM dd, yyyy")}
@@ -398,9 +461,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
             </Button>
           )}
 
-          {/* Owner-only actions menu */}
+          {/* Owner-only actions menu - desktop version */}
           {canManage && (
-            <div className="relative">
+            <div className="relative hidden sm:block">
               <Button
                 onClick={() => setShowActionsMenu(!showActionsMenu)}
                 size="sm"
@@ -410,7 +473,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </Button>
 
               {showActionsMenu && (
-                <div className="fixed inset-x-4 top-auto bottom-20 z-50 w-auto rounded-md border bg-background shadow-lg sm:absolute sm:inset-auto sm:top-full sm:right-0 sm:bottom-auto sm:mt-1 sm:w-48">
+                <div className="absolute top-full right-0 mt-1 w-48 rounded-md border bg-background shadow-lg">
                   <div className="p-1">
                     <button
                       className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
