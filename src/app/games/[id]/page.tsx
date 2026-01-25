@@ -21,7 +21,7 @@ export default async function GameDetailPage({ params }: PageProps) {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 pt-6 pb-32 md:py-8 md:pb-8">
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-12">
