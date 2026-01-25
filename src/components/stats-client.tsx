@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, DollarSign, Loader2, TrendingUp, Users } from "lucide-react";
+import { Calendar, DollarSign, Loader2, TrendingDown, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import { StatsCard } from "@/components/stats/stats-card";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export function StatsClient() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           description="Across all groups"
-          icon={<TrendingUp className="h-4 w-4" />}
+          icon={stats.netProfit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
           title="Net Profit"
           trend={{
             value: stats.netProfit >= 0 ? "Positive" : "Negative",
