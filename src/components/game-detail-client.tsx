@@ -5,13 +5,17 @@ import { format } from "date-fns";
 import {
   ArrowLeft,
   Banknote,
+  Check,
+  Clock,
   Edit2,
   HandCoins,
   Loader2,
   MoreVertical,
+  Pencil,
   Skull,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -94,6 +98,17 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     "ACTIVE"
   );
 
+  // Transaction edit state
+  const [editingTransaction, setEditingTransaction] = useState<{
+    id: Id<"transactions">;
+    amount: string;
+    type: string;
+    playerName: string;
+  } | null>(null);
+  const [isApprovingId, setIsApprovingId] = useState<string | null>(null);
+  const [isRejectingId, setIsRejectingId] = useState<string | null>(null);
+  const [isDeletingTxId, setIsDeletingTxId] = useState<string | null>(null);
+
   const game = useQuery(api.games.getGame, { gameId: gameId as Id<"games"> });
 
   const transactions = useQuery(api.transactions.getTransactions, {
@@ -106,7 +121,25 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     userId ? { gameId: gameId as Id<"games">, userId } : "skip"
   );
 
+  // Check if user is the session creator
+  const isSessionCreator = useQuery(
+    api.transactions.isSessionCreator,
+    userId ? { gameId: gameId as Id<"games">, userId } : "skip"
+  );
+
+  // Get pending buy-in requests (only for session creator)
+  const pendingBuyIns = useQuery(
+    api.transactions.getPendingBuyIns,
+    userId && isSessionCreator
+      ? { gameId: gameId as Id<"games">, userId }
+      : "skip"
+  );
+
   const createTransaction = useMutation(api.transactions.createTransaction);
+  const approveTransaction = useMutation(api.transactions.approveTransaction);
+  const rejectTransaction = useMutation(api.transactions.rejectTransaction);
+  const updateTransaction = useMutation(api.transactions.updateTransaction);
+  const deleteTransactionMutation = useMutation(api.transactions.deleteTransaction);
   const joinGame = useMutation(api.games.joinGame);
   const updateGame = useMutation(api.games.updateGame);
   const updateGameStatus = useMutation(api.games.updateGameStatus);
@@ -255,7 +288,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     if (!(player?._id && userId)) {
       return;
     }
-    await createTransaction({
+    const result = await createTransaction({
       gameId: gameId as Id<"games">,
       playerId: player._id,
       type: type === "buyin" ? "buyin" : "cashout",
@@ -263,6 +296,70 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       description,
       createdById: userId,
     });
+
+    // Show feedback if buy-in is pending
+    if (result.status === "PENDING") {
+      alert("Your buy-in request has been submitted and is awaiting approval from the session host.");
+    }
+  }
+
+  async function handleApproveTransaction(txId: Id<"transactions">) {
+    if (!userId) return;
+    setIsApprovingId(txId);
+    try {
+      await approveTransaction({ transactionId: txId, userId });
+    } catch (error) {
+      console.error("Failed to approve transaction:", error);
+      alert("Failed to approve buy-in. Please try again.");
+    } finally {
+      setIsApprovingId(null);
+    }
+  }
+
+  async function handleRejectTransaction(txId: Id<"transactions">) {
+    if (!userId) return;
+    setIsRejectingId(txId);
+    try {
+      await rejectTransaction({ transactionId: txId, userId });
+    } catch (error) {
+      console.error("Failed to reject transaction:", error);
+      alert("Failed to reject buy-in. Please try again.");
+    } finally {
+      setIsRejectingId(null);
+    }
+  }
+
+  async function handleUpdateTransaction() {
+    if (!userId || !editingTransaction) return;
+    setIsSubmitting(true);
+    try {
+      await updateTransaction({
+        transactionId: editingTransaction.id,
+        userId,
+        amount: Number(editingTransaction.amount),
+      });
+      setEditingTransaction(null);
+    } catch (error) {
+      console.error("Failed to update transaction:", error);
+      alert("Failed to update transaction. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDeleteTransaction(txId: Id<"transactions">) {
+    if (!userId) return;
+    if (!confirm("Are you sure you want to delete this transaction?")) return;
+
+    setIsDeletingTxId(txId);
+    try {
+      await deleteTransactionMutation({ transactionId: txId, userId });
+    } catch (error) {
+      console.error("Failed to delete transaction:", error);
+      alert("Failed to delete transaction. Please try again.");
+    } finally {
+      setIsDeletingTxId(null);
+    }
   }
 
   return (
@@ -425,30 +522,64 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </p>
             ) : (
               <div className="space-y-2">
-                {transactions?.map((transaction) => (
+                {transactions
+                  ?.filter((tx) => tx.status !== "PENDING" && tx.status !== "REJECTED")
+                  .map((transaction) => (
                   <div
                     className="flex items-center justify-between rounded border p-3"
                     key={transaction._id}
                   >
                     <div>
-                      <p className="font-medium">
-                        {transaction.type === "buyin" ? "Buy-In" : "Cash-Out"}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">
+                          {transaction.type === "buyin" ? "Buy-In" : "Cash-Out"}
+                        </p>
+                      </div>
                       <p className="text-muted-foreground text-sm">
                         {transaction.player?.name} •{" "}
                         {format(new Date(transaction._creationTime), "h:mm a")}
                       </p>
                     </div>
-                    <span
-                      className={`font-bold ${
-                        transaction.type === "buyin"
-                          ? "text-red-600"
-                          : "text-green-600"
-                      }`}
-                    >
-                      {transaction.type === "buyin" ? "-" : "+"}$
-                      {transaction.amount.toFixed(2)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`font-bold ${
+                          transaction.type === "buyin"
+                            ? "text-red-600"
+                            : "text-green-600"
+                        }`}
+                      >
+                        {transaction.type === "buyin" ? "-" : "+"}$
+                        {transaction.amount.toFixed(2)}
+                      </span>
+                      {isSessionCreator && (
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingTransaction({
+                              id: transaction._id as Id<"transactions">,
+                              amount: transaction.amount.toString(),
+                              type: transaction.type,
+                              playerName: transaction.player?.name ?? "Unknown",
+                            })}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={isDeletingTxId === transaction._id}
+                            onClick={() => handleDeleteTransaction(transaction._id as Id<"transactions">)}
+                          >
+                            {isDeletingTxId === transaction._id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3 text-red-500" />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -456,6 +587,72 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Buy-In Requests - Only visible to session creator */}
+      {isSessionCreator && pendingBuyIns && pendingBuyIns.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600" />
+              <CardTitle>Pending Buy-In Requests</CardTitle>
+            </div>
+            <CardDescription>
+              Review and approve buy-in requests from players
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingBuyIns.map((tx) => (
+                <div
+                  className="flex items-center justify-between rounded-lg border bg-background p-4"
+                  key={tx._id}
+                >
+                  <div>
+                    <p className="font-medium">{tx.player?.name ?? "Unknown"}</p>
+                    <p className="text-muted-foreground text-sm">
+                      Requested ${tx.amount.toFixed(2)} buy-in •{" "}
+                      {format(new Date(tx._creationTime), "h:mm a")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:hover:bg-red-950"
+                      disabled={isRejectingId === tx._id || isApprovingId === tx._id}
+                      onClick={() => handleRejectTransaction(tx._id as Id<"transactions">)}
+                    >
+                      {isRejectingId === tx._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <X className="mr-1 h-4 w-4" />
+                          Reject
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={isApprovingId === tx._id || isRejectingId === tx._id}
+                      onClick={() => handleApproveTransaction(tx._id as Id<"transactions">)}
+                    >
+                      {isApprovingId === tx._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="mr-1 h-4 w-4" />
+                          Approve
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {game.status === "ACTIVE" && isJoined && (
         <Card>
@@ -771,6 +968,72 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         open={showPaymentModal}
         onSuccess={handlePaymentSuccess}
       />
+
+      {/* Edit Transaction Dialog */}
+      <Dialog
+        open={!!editingTransaction}
+        onOpenChange={(open) => !open && setEditingTransaction(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Transaction</DialogTitle>
+            <DialogDescription>
+              Edit {editingTransaction?.type === "buyin" ? "buy-in" : "cash-out"} for {editingTransaction?.playerName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-tx-amount">Amount</Label>
+              <div className="relative">
+                <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="edit-tx-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="pl-7"
+                  value={editingTransaction?.amount ?? ""}
+                  onChange={(e) =>
+                    setEditingTransaction((prev) =>
+                      prev ? { ...prev, amount: e.target.value } : null
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => setEditingTransaction(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                isSubmitting ||
+                !editingTransaction?.amount ||
+                Number(editingTransaction?.amount) <= 0
+              }
+              onClick={handleUpdateTransaction}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Click outside to close actions menu */}
       {showActionsMenu && (
