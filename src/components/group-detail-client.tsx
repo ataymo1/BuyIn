@@ -13,14 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useConvexUser } from "@/lib/convex-hooks";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -77,16 +70,16 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-bold text-3xl">{group.name}</h1>
+          <h1 className="font-bold text-2xl sm:text-3xl">{group.name}</h1>
           {group.description && (
             <p className="text-muted-foreground">{group.description}</p>
           )}
         </div>
         {isOwner && (
           <Link href={`/games/new?groupId=${groupId}`}>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               New Session
             </Button>
@@ -109,46 +102,94 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
               No standings data available yet.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">Rank</TableHead>
-                  <TableHead>Player</TableHead>
-                  <TableHead>Games</TableHead>
-                  <TableHead>Net Profit</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(standings ?? []).map((standing, index) => (
-                  <TableRow key={standing.player?.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {index === 0 && (standings ?? []).length > 1 && (
-                          <Trophy className="h-4 w-4 text-yellow-500" />
-                        )}
-                        <span className="font-bold">#{index + 1}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {standing.player?.name}
-                    </TableCell>
-                    <TableCell>{standing.gamesPlayed}</TableCell>
-                    <TableCell>
-                      <span
-                        className={`font-bold ${
-                          standing.totalProfit >= 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {standing.totalProfit >= 0 ? "+" : ""}$
-                        {standing.totalProfit.toFixed(2)}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ResponsiveTable
+              data={(standings ?? []).map((standing, index) => ({
+                ...standing,
+                rank: index + 1,
+                isFirst: index === 0 && (standings ?? []).length > 1,
+              }))}
+              keyExtractor={(standing) => standing.player?.id ?? ""}
+              columns={[
+                {
+                  key: "rank",
+                  header: "Rank",
+                  className: "w-12",
+                  render: (standing) => (
+                    <div className="flex items-center gap-2">
+                      {standing.isFirst && (
+                        <Trophy className="h-4 w-4 text-yellow-500" />
+                      )}
+                      <span className="font-bold">#{standing.rank}</span>
+                    </div>
+                  ),
+                },
+                {
+                  key: "player",
+                  header: "Player",
+                  render: (standing) => (
+                    <span className="font-medium">{standing.player?.name}</span>
+                  ),
+                },
+                {
+                  key: "games",
+                  header: "Games",
+                  render: (standing) => standing.gamesPlayed,
+                },
+                {
+                  key: "profit",
+                  header: "Net Profit",
+                  render: (standing) => (
+                    <span
+                      className={`font-bold ${
+                        standing.totalProfit >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {standing.totalProfit >= 0 ? "+" : ""}$
+                      {standing.totalProfit.toFixed(2)}
+                    </span>
+                  ),
+                },
+              ]}
+              renderCard={(standing) => (
+                <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                        standing.isFirst
+                          ? "bg-yellow-100 dark:bg-yellow-900"
+                          : "bg-muted"
+                      }`}
+                    >
+                      {standing.isFirst ? (
+                        <Trophy className="h-5 w-5 text-yellow-500" />
+                      ) : (
+                        <span className="font-bold text-muted-foreground">
+                          #{standing.rank}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium">{standing.player?.name}</p>
+                      <p className="text-muted-foreground text-sm">
+                        {standing.gamesPlayed} games played
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`font-bold text-lg ${
+                      standing.totalProfit >= 0
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {standing.totalProfit >= 0 ? "+" : ""}$
+                    {standing.totalProfit.toFixed(2)}
+                  </span>
+                </div>
+              )}
+            />
           )}
         </CardContent>
       </Card>

@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Select,
   SelectContent,
@@ -46,14 +47,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useConvexUser, usePlayer } from "@/lib/convex-hooks";
 import { api } from "../../convex/_generated/api";
@@ -364,19 +357,21 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-bold text-3xl">Session Details</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-bold text-2xl sm:text-3xl">Session Details</h1>
             <span
               className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
             >
               {game.status}
             </span>
           </div>
-          <p className="text-muted-foreground">
+          <p className="mt-1 text-muted-foreground text-sm sm:text-base">
             {format(new Date(game.date), "MMMM dd, yyyy")}
-            {game.location && ` • ${game.location}`}
+            {game.location && (
+              <span className="hidden sm:inline"> • {game.location}</span>
+            )}
             {game.group && (
               <>
                 {" • "}
@@ -390,10 +385,17 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </>
             )}
           </p>
+          {game.location && (
+            <p className="mt-1 text-muted-foreground text-sm sm:hidden">
+              {game.location}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {game.status === "ACTIVE" && !isJoined && (
-            <Button onClick={handleJoinClick}>Join Session</Button>
+            <Button onClick={handleJoinClick} className="flex-1 sm:flex-none">
+              Join Session
+            </Button>
           )}
 
           {/* Owner-only actions menu */}
@@ -408,7 +410,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </Button>
 
               {showActionsMenu && (
-                <div className="absolute top-full right-0 z-10 mt-1 w-48 rounded-md border bg-background shadow-lg">
+                <div className="fixed inset-x-4 top-auto bottom-20 z-50 w-auto rounded-md border bg-background shadow-lg sm:absolute sm:inset-auto sm:top-full sm:right-0 sm:bottom-auto sm:mt-1 sm:w-48">
                   <div className="p-1">
                     <button
                       className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
@@ -478,34 +480,73 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
             {(game.gamePlayers?.length ?? 0) === 0 ? (
               <p className="text-muted-foreground text-sm">No players yet</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Player</TableHead>
-                    <TableHead>Buy-In</TableHead>
-                    <TableHead>Cash-Out</TableHead>
-                    <TableHead>Profit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {game.gamePlayers?.map((gp) => (
-                    <TableRow key={gp.id}>
-                      <TableCell>{gp.player?.name}</TableCell>
-                      <TableCell>${gp.buyIn.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {gp.cashOut !== null && gp.cashOut !== undefined
-                          ? `$${gp.cashOut.toFixed(2)}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {gp.profit !== null && gp.profit !== undefined
-                          ? `$${gp.profit.toFixed(2)}`
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ResponsiveTable
+                data={game.gamePlayers ?? []}
+                keyExtractor={(gp) => gp.id}
+                columns={[
+                  {
+                    key: "player",
+                    header: "Player",
+                    render: (gp) => gp.player?.name,
+                  },
+                  {
+                    key: "buyIn",
+                    header: "Buy-In",
+                    render: (gp) => `$${gp.buyIn.toFixed(2)}`,
+                  },
+                  {
+                    key: "cashOut",
+                    header: "Cash-Out",
+                    render: (gp) =>
+                      gp.cashOut !== null && gp.cashOut !== undefined
+                        ? `$${gp.cashOut.toFixed(2)}`
+                        : "—",
+                  },
+                  {
+                    key: "profit",
+                    header: "Profit",
+                    render: (gp) =>
+                      gp.profit !== null && gp.profit !== undefined
+                        ? `$${gp.profit.toFixed(2)}`
+                        : "—",
+                  },
+                ]}
+                renderCard={(gp) => (
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="mb-2 font-medium">{gp.player?.name}</div>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Buy-In</p>
+                        <p className="font-medium">${gp.buyIn.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Cash-Out</p>
+                        <p className="font-medium">
+                          {gp.cashOut !== null && gp.cashOut !== undefined
+                            ? `$${gp.cashOut.toFixed(2)}`
+                            : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Profit</p>
+                        <p
+                          className={`font-medium ${
+                            gp.profit !== null && gp.profit !== undefined
+                              ? gp.profit >= 0
+                                ? "text-green-600"
+                                : "text-red-600"
+                              : ""
+                          }`}
+                        >
+                          {gp.profit !== null && gp.profit !== undefined
+                            ? `${gp.profit >= 0 ? "+" : ""}$${gp.profit.toFixed(2)}`
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              />
             )}
           </CardContent>
         </Card>
@@ -1038,7 +1079,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       {/* Click outside to close actions menu */}
       {showActionsMenu && (
         <div
-          className="fixed inset-0 z-0"
+          className="fixed inset-0 z-40"
           onClick={() => setShowActionsMenu(false)}
           onKeyDown={(e) => e.key === "Escape" && setShowActionsMenu(false)}
         />

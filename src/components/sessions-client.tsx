@@ -20,14 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useGames, usePlayer, useUserGroups } from "@/lib/convex-hooks";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -113,8 +106,8 @@ export function SessionsClient() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-bold text-3xl">Session History</h1>
-        <p className="text-muted-foreground">
+        <h1 className="font-bold text-2xl sm:text-3xl">Session History</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
           View and filter your poker session history across all groups
         </p>
       </div>
@@ -187,30 +180,107 @@ export function SessionsClient() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Players</TableHead>
-                  <TableHead>Your Result</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {gamesWithUserProfit.map((game) => (
-                  <TableRow key={game.id}>
-                    <TableCell>
+            <ResponsiveTable
+              data={gamesWithUserProfit}
+              keyExtractor={(game) => game.id}
+              columns={[
+                {
+                  key: "date",
+                  header: "Date",
+                  render: (game) => (
+                    <div className="flex items-center">
+                      <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+                      {format(new Date(game.date), "MMM dd, yyyy")}
+                    </div>
+                  ),
+                },
+                {
+                  key: "group",
+                  header: "Group",
+                  render: (game) => (
+                    <div className="flex items-center">
+                      <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <Link
+                        className="hover:underline"
+                        href={`/groups/${game.group?.id}`}
+                      >
+                        {game.group?.name}
+                      </Link>
+                    </div>
+                  ),
+                },
+                {
+                  key: "location",
+                  header: "Location",
+                  render: (game) =>
+                    game.location ? (
                       <div className="flex items-center">
-                        <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                        {format(new Date(game.date), "MMM dd, yyyy")}
+                        <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
+                        {game.location}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    ),
+                },
+                {
+                  key: "status",
+                  header: "Status",
+                  render: (game) => (
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                    >
+                      {game.status}
+                    </span>
+                  ),
+                },
+                {
+                  key: "players",
+                  header: "Players",
+                  render: (game) => game.gamePlayers?.length ?? 0,
+                },
+                {
+                  key: "result",
+                  header: "Your Result",
+                  render: (game) =>
+                    game.userProfit !== null ? (
+                      <span
+                        className={`font-medium ${getProfitColorClass(game.userProfit)}`}
+                      >
+                        {game.userProfit > 0 ? "+" : ""}$
+                        {game.userProfit.toFixed(2)}
+                      </span>
+                    ) : game.isParticipant && game.status === "ACTIVE" ? (
+                      <span className="font-medium text-yellow-600 dark:text-yellow-500">
+                        Pending
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    ),
+                },
+                {
+                  key: "actions",
+                  header: "Actions",
+                  render: (game) => (
+                    <Link href={`/games/${game.id}`}>
+                      <Button size="sm" variant="outline">
+                        View
+                      </Button>
+                    </Link>
+                  ),
+                },
+              ]}
+              renderCard={(game) => (
+                <div className="rounded-lg border bg-card p-4">
+                  <div className="mb-3 flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">
+                          {format(new Date(game.date), "MMM dd, yyyy")}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
+                        <Users className="h-3 w-3" />
                         <Link
                           className="hover:underline"
                           href={`/groups/${game.group?.id}`}
@@ -218,29 +288,31 @@ export function SessionsClient() {
                           {game.group?.name}
                         </Link>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {game.location ? (
-                        <div className="flex items-center">
-                          <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
-                          {game.location}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-                      >
-                        {game.status}
-                      </span>
-                    </TableCell>
-                    <TableCell>{game.gamePlayers?.length ?? 0}</TableCell>
-                    <TableCell>
+                    </div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                    >
+                      {game.status}
+                    </span>
+                  </div>
+
+                  <div className="mb-3 flex flex-wrap gap-3 text-sm">
+                    {game.location && (
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {game.location}
+                      </div>
+                    )}
+                    <div className="text-muted-foreground">
+                      {game.gamePlayers?.length ?? 0} players
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
                       {game.userProfit !== null ? (
                         <span
-                          className={`font-medium ${getProfitColorClass(game.userProfit)}`}
+                          className={`font-semibold ${getProfitColorClass(game.userProfit)}`}
                         >
                           {game.userProfit > 0 ? "+" : ""}$
                           {game.userProfit.toFixed(2)}
@@ -250,20 +322,20 @@ export function SessionsClient() {
                           Pending
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground text-sm">
+                          Not participating
+                        </span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Link href={`/games/${game.id}`}>
-                        <Button size="sm" variant="outline">
-                          View
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                    <Link href={`/games/${game.id}`}>
+                      <Button size="sm" variant="outline">
+                        View
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
+            />
           </CardContent>
         </Card>
       )}

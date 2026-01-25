@@ -1,8 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CreditCard, Loader2 } from "lucide-react";
-import Link from "next/link";
+import { CreditCard, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -77,36 +76,28 @@ export function ProfileClient() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center space-x-4">
-        <Link href="/">
-          <Button size="sm" variant="ghost">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Dashboard
-          </Button>
-        </Link>
-        <div>
-          <h1 className="font-bold text-3xl">Payment Info</h1>
-          <p className="text-muted-foreground">
-            Manage your payment methods for settling up
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-bold text-2xl sm:text-3xl">Profile</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          Manage your payment methods for settling up
+        </p>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <CreditCard className="h-5 w-5" />
             Payment Methods
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-sm">
             Add your Venmo and/or Zelle details so group members can easily
             settle up with you. At least one payment method is required.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            <div className="grid gap-6 sm:grid-cols-2">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
+            <div className="space-y-4 sm:grid sm:grid-cols-2 sm:gap-6 sm:space-y-0">
               <div className="space-y-2">
                 <Label htmlFor="venmo">Venmo Username</Label>
                 <Input
@@ -127,7 +118,7 @@ export function ProfileClient() {
                   {...form.register("zelle")}
                 />
                 <p className="text-muted-foreground text-xs">
-                  The email or phone number linked to your Zelle account
+                  The email or phone number linked to your Zelle
                 </p>
               </div>
             </div>
@@ -138,8 +129,12 @@ export function ProfileClient() {
               </p>
             )}
 
-            <div className="flex items-center gap-4">
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <Button
+                type="submit"
+                disabled={form.formState.isSubmitting}
+                className="w-full sm:w-auto"
+              >
                 {form.formState.isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -150,7 +145,7 @@ export function ProfileClient() {
                 )}
               </Button>
               {saveSuccess && (
-                <p className="text-green-600 text-sm">
+                <p className="text-center text-green-600 text-sm sm:text-left">
                   Payment info saved successfully!
                 </p>
               )}
@@ -162,21 +157,27 @@ export function ProfileClient() {
       {/* Current Payment Info Summary */}
       {(user?.venmo || user?.zelle) && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Current Payment Info</CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base sm:text-lg">
+              Current Payment Info
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3 sm:grid sm:grid-cols-2 sm:gap-4 sm:space-y-0">
               {user?.venmo && (
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border p-3 sm:p-4">
                   <p className="mb-1 font-medium text-sm">Venmo</p>
-                  <p className="text-muted-foreground">{user.venmo}</p>
+                  <p className="break-all text-muted-foreground text-sm sm:text-base">
+                    {user.venmo}
+                  </p>
                 </div>
               )}
               {user?.zelle && (
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border p-3 sm:p-4">
                   <p className="mb-1 font-medium text-sm">Zelle</p>
-                  <p className="text-muted-foreground">{user.zelle}</p>
+                  <p className="break-all text-muted-foreground text-sm sm:text-base">
+                    {user.zelle}
+                  </p>
                 </div>
               )}
             </div>

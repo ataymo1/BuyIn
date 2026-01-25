@@ -20,7 +20,7 @@ export function GroupsListClient() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-bold text-3xl">Groups</h1>
           <p className="text-muted-foreground">
@@ -28,14 +28,14 @@ export function GroupsListClient() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/groups/search">
-            <Button variant="outline">
+          <Link href="/groups/search" className="flex-1 sm:flex-none">
+            <Button variant="outline" className="w-full sm:w-auto">
               <Search className="mr-2 h-4 w-4" />
               Find Groups
             </Button>
           </Link>
-          <Link href="/groups/new">
-            <Button>
+          <Link href="/groups/new" className="flex-1 sm:flex-none">
+            <Button className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               New Group
             </Button>

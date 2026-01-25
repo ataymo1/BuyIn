@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, DollarSign, Loader2, TrendingUp } from "lucide-react";
+import { Calendar, DollarSign, Loader2, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import { StatsCard } from "@/components/stats/stats-card";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useUserGroups, useUserStats } from "@/lib/convex-hooks";
 
 export function StatsClient() {
@@ -123,28 +116,45 @@ export function StatsClient() {
               No groups yet. Join a group to see your stats.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groups.map((group) => (
-                  <TableRow key={group?._id}>
-                    <TableCell className="font-medium">{group?.name}</TableCell>
-                    <TableCell>
-                      <Link href={`/groups/${group?._id}`}>
-                        <Button size="sm" variant="outline">
-                          View Group
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ResponsiveTable
+              data={groups.filter((g) => g !== null)}
+              keyExtractor={(group) => group?._id ?? ""}
+              columns={[
+                {
+                  key: "name",
+                  header: "Group",
+                  render: (group) => (
+                    <span className="font-medium">{group?.name}</span>
+                  ),
+                },
+                {
+                  key: "actions",
+                  header: "Actions",
+                  render: (group) => (
+                    <Link href={`/groups/${group?._id}`}>
+                      <Button size="sm" variant="outline">
+                        View Group
+                      </Button>
+                    </Link>
+                  ),
+                },
+              ]}
+              renderCard={(group) => (
+                <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <span className="font-medium">{group?.name}</span>
+                  </div>
+                  <Link href={`/groups/${group?._id}`}>
+                    <Button size="sm" variant="outline">
+                      View
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            />
           )}
         </CardContent>
       </Card>
