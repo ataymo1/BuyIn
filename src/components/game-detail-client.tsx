@@ -68,7 +68,7 @@ function getStatusColorClass(status: string): string {
 
 export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const router = useRouter();
-  const { userId, isLoading: userLoading } = useConvexUser();
+  const { userId, user, isLoading: userLoading } = useConvexUser();
   const { player, isLoading: playerLoading } = usePlayer();
 
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -246,7 +246,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const isJoined = !!userGamePlayer;
 
   function handleJoinClick() {
-    setShowPaymentModal(true);
+    // Check if user has payment info (venmo or zelle)
+    const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
+    
+    if (hasPaymentInfo) {
+      // User already has payment info, join directly
+      performJoinGame();
+    } else {
+      // User needs to add payment info first
+      setShowPaymentModal(true);
+    }
   }
 
   async function handlePaymentSuccess() {
