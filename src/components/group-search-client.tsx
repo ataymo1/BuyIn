@@ -30,29 +30,18 @@ export function GroupSearchClient() {
   );
 
   const { groups, isLoading } = useSearchGroups(searchTerm);
-  const { userId } = useConvexUser();
+  const { userId, user } = useConvexUser();
   const requestToJoin = useRequestToJoin();
 
-  const handleRequestToJoin = async (groupId: string) => {
+  const performJoinRequest = async (groupId: string) => {
     if (!userId) {
       return;
     }
 
-    setPendingJoinGroupId(groupId);
-    setShowPaymentModal(true);
-  };
-
-  const handlePaymentSuccess = async () => {
-    setShowPaymentModal(false);
-
-    if (!userId || !pendingJoinGroupId) {
-      return;
-    }
-
-    setRequestingGroupId(pendingJoinGroupId);
+    setRequestingGroupId(groupId);
     try {
       await requestToJoin({
-        groupId: pendingJoinGroupId as Parameters<typeof requestToJoin>[0]["groupId"],
+        groupId: groupId as Parameters<typeof requestToJoin>[0]["groupId"],
         userId,
       });
     } catch (error) {
@@ -61,6 +50,34 @@ export function GroupSearchClient() {
       setRequestingGroupId(null);
       setPendingJoinGroupId(null);
     }
+  };
+
+  const handleRequestToJoin = async (groupId: string) => {
+    if (!userId) {
+      return;
+    }
+
+    // Check if user has payment info (venmo or zelle)
+    const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
+    
+    if (hasPaymentInfo) {
+      // User already has payment info, proceed directly
+      await performJoinRequest(groupId);
+    } else {
+      // User needs to add payment info first
+      setPendingJoinGroupId(groupId);
+      setShowPaymentModal(true);
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false);
+
+    if (!pendingJoinGroupId) {
+      return;
+    }
+
+    await performJoinRequest(pendingJoinGroupId);
   };
 
   const renderCardAction = (group: (typeof groups)[0]) => {

@@ -1,21 +1,5 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { format } from "date-fns";
-import {
-  ArrowLeft,
-  Banknote,
-  Edit2,
-  HandCoins,
-  Loader2,
-  MoreVertical,
-  Skull,
-  Trash2,
-  Users,
-} from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Select,
   SelectContent,
@@ -42,16 +27,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { useConvexUser, usePlayer } from "@/lib/convex-hooks";
+import { useMutation, useQuery } from "convex/react";
+import { format } from "date-fns";
+import {
+  ArrowLeft,
+  Banknote,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Edit2,
+  HandCoins,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -71,7 +68,7 @@ function getStatusColorClass(status: string): string {
 
 export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const router = useRouter();
-  const { userId, isLoading: userLoading } = useConvexUser();
+  const { userId, user, isLoading: userLoading } = useConvexUser();
   const { player, isLoading: playerLoading } = usePlayer();
 
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -81,18 +78,33 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Transaction form state
-  const [activeAction, setActiveAction] = useState<"buyin" | "cashout" | "busted" | null>(null);
+  const [activeAction, setActiveAction] = useState<"buyin" | "cashout" | null>(null);
   const [buyInAmount, setBuyInAmount] = useState("");
   const [cashOutAmount, setCashOutAmount] = useState("");
   const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
 
+  // Collapsible sections state (default to collapsed)
+  const [isPlayersExpanded, setIsPlayersExpanded] = useState(false);
+  const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false);
+  const [isPendingExpanded, setIsPendingExpanded] = useState(false);
+
   // Edit form state
   const [editLocation, setEditLocation] = useState("");
-  const [editNotes, setEditNotes] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "COMPLETED">(
     "ACTIVE"
   );
+
+  // Transaction edit state
+  const [editingTransaction, setEditingTransaction] = useState<{
+    id: Id<"transactions">;
+    amount: string;
+    type: string;
+    playerName: string;
+  } | null>(null);
+  const [isApprovingId, setIsApprovingId] = useState<string | null>(null);
+  const [isRejectingId, setIsRejectingId] = useState<string | null>(null);
+  const [isDeletingTxId, setIsDeletingTxId] = useState<string | null>(null);
 
   const game = useQuery(api.games.getGame, { gameId: gameId as Id<"games"> });
 
@@ -106,7 +118,25 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     userId ? { gameId: gameId as Id<"games">, userId } : "skip"
   );
 
+  // Check if user is the session creator
+  const isSessionCreator = useQuery(
+    api.transactions.isSessionCreator,
+    userId ? { gameId: gameId as Id<"games">, userId } : "skip"
+  );
+
+  // Get pending buy-in requests (only for session creator)
+  const pendingBuyIns = useQuery(
+    api.transactions.getPendingBuyIns,
+    userId && isSessionCreator
+      ? { gameId: gameId as Id<"games">, userId }
+      : "skip"
+  );
+
   const createTransaction = useMutation(api.transactions.createTransaction);
+  const approveTransaction = useMutation(api.transactions.approveTransaction);
+  const rejectTransaction = useMutation(api.transactions.rejectTransaction);
+  const updateTransaction = useMutation(api.transactions.updateTransaction);
+  const deleteTransactionMutation = useMutation(api.transactions.deleteTransaction);
   const joinGame = useMutation(api.games.joinGame);
   const updateGame = useMutation(api.games.updateGame);
   const updateGameStatus = useMutation(api.games.updateGameStatus);
@@ -118,7 +148,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   function openEditDialog() {
     if (game) {
       setEditLocation(game.location ?? "");
-      setEditNotes(game.notes ?? "");
       setEditDate(format(new Date(game.date), "yyyy-MM-dd"));
       setEditStatus(game.status === "CANCELLED" ? "ACTIVE" : game.status);
       setShowEditDialog(true);
@@ -136,7 +165,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         gameId: gameId as Id<"games">,
         userId,
         location: editLocation || undefined,
-        notes: editNotes || undefined,
         date: new Date(editDate).getTime(),
       });
 
@@ -220,7 +248,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const isJoined = !!userGamePlayer;
 
   function handleJoinClick() {
-    setShowPaymentModal(true);
+    // Check if user has payment info (venmo or zelle)
+    const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
+    
+    if (hasPaymentInfo) {
+      // User already has payment info, join directly
+      performJoinGame();
+    } else {
+      // User needs to add payment info first
+      setShowPaymentModal(true);
+    }
   }
 
   async function handlePaymentSuccess() {
@@ -255,7 +292,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     if (!(player?._id && userId)) {
       return;
     }
-    await createTransaction({
+    const result = await createTransaction({
       gameId: gameId as Id<"games">,
       playerId: player._id,
       type: type === "buyin" ? "buyin" : "cashout",
@@ -263,23 +300,153 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       description,
       createdById: userId,
     });
+
+    // Show feedback if transaction is pending
+    if (result.status === "PENDING") {
+      const transactionType = type === "buyin" ? "buy-in" : "cash-out";
+      alert(`Your ${transactionType} request has been submitted and is awaiting approval from the session host.`);
+    }
+  }
+
+  async function handleApproveTransaction(txId: Id<"transactions">) {
+    if (!userId) return;
+    setIsApprovingId(txId);
+    try {
+      await approveTransaction({ transactionId: txId, userId });
+    } catch (error) {
+      console.error("Failed to approve transaction:", error);
+      alert("Failed to approve transaction. Please try again.");
+    } finally {
+      setIsApprovingId(null);
+    }
+  }
+
+  async function handleRejectTransaction(txId: Id<"transactions">) {
+    if (!userId) return;
+    setIsRejectingId(txId);
+    try {
+      await rejectTransaction({ transactionId: txId, userId });
+    } catch (error) {
+      console.error("Failed to reject transaction:", error);
+      alert("Failed to reject transaction. Please try again.");
+    } finally {
+      setIsRejectingId(null);
+    }
+  }
+
+  async function handleUpdateTransaction() {
+    if (!userId || !editingTransaction) return;
+    setIsSubmitting(true);
+    try {
+      await updateTransaction({
+        transactionId: editingTransaction.id,
+        userId,
+        amount: Number(editingTransaction.amount),
+      });
+      setEditingTransaction(null);
+    } catch (error) {
+      console.error("Failed to update transaction:", error);
+      alert("Failed to update transaction. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDeleteTransaction(txId: Id<"transactions">) {
+    if (!userId) return;
+    if (!confirm("Are you sure you want to delete this transaction?")) return;
+
+    setIsDeletingTxId(txId);
+    try {
+      await deleteTransactionMutation({ transactionId: txId, userId });
+    } catch (error) {
+      console.error("Failed to delete transaction:", error);
+      alert("Failed to delete transaction. Please try again.");
+    } finally {
+      setIsDeletingTxId(null);
+    }
   }
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-bold text-3xl">Session Details</h1>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-            >
-              {game.status}
-            </span>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-bold text-2xl sm:text-3xl">Session Details</h1>
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+              >
+                {game.status}
+              </span>
+            </div>
+            {/* Owner-only actions menu - positioned to the right on mobile */}
+            {canManage && (
+              <div className="relative flex-shrink-0 sm:hidden">
+                <Button
+                  onClick={() => setShowActionsMenu(!showActionsMenu)}
+                  size="sm"
+                  variant="outline"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+
+                {showActionsMenu && (
+                  <div className="fixed inset-x-4 top-auto bottom-20 z-50 w-auto rounded-md border bg-background shadow-lg">
+                    <div className="p-1">
+                      <button
+                        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+                        onClick={openEditDialog}
+                        type="button"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        Edit Session
+                      </button>
+
+                      {/* Status change options */}
+                      {game.status !== "ACTIVE" && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+                          onClick={() => handleStatusChange("ACTIVE")}
+                          type="button"
+                        >
+                          Mark as Active
+                        </button>
+                      )}
+                      {game.status !== "COMPLETED" && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+                          onClick={() => handleStatusChange("COMPLETED")}
+                          type="button"
+                        >
+                          Mark as Completed
+                        </button>
+                      )}
+
+                      <div className="my-1 h-px bg-border" />
+
+                      <button
+                        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-red-600 text-sm hover:bg-red-50 dark:hover:bg-red-900/20"
+                        onClick={() => {
+                          setShowDeleteDialog(true);
+                          setShowActionsMenu(false);
+                        }}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Session
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <p className="text-muted-foreground">
+          <p className="mt-1 text-muted-foreground text-sm sm:text-base">
             {format(new Date(game.date), "MMMM dd, yyyy")}
-            {game.location && ` • ${game.location}`}
+            {game.location && (
+              <span className="hidden sm:inline"> • {game.location}</span>
+            )}
             {game.group && (
               <>
                 {" • "}
@@ -293,15 +460,22 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </>
             )}
           </p>
+          {game.location && (
+            <p className="mt-1 text-muted-foreground text-sm sm:hidden">
+              {game.location}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {game.status === "ACTIVE" && !isJoined && (
-            <Button onClick={handleJoinClick}>Join Session</Button>
+            <Button onClick={handleJoinClick} className="flex-1 sm:flex-none">
+              Join Session
+            </Button>
           )}
 
-          {/* Owner-only actions menu */}
+          {/* Owner-only actions menu - desktop version */}
           {canManage && (
-            <div className="relative">
+            <div className="relative hidden sm:block">
               <Button
                 onClick={() => setShowActionsMenu(!showActionsMenu)}
                 size="sm"
@@ -311,7 +485,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </Button>
 
               {showActionsMenu && (
-                <div className="absolute top-full right-0 z-10 mt-1 w-48 rounded-md border bg-background shadow-lg">
+                <div className="absolute top-full right-0 mt-1 w-48 rounded-md border bg-background shadow-lg">
                   <div className="p-1">
                     <button
                       className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
@@ -363,60 +537,128 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         </div>
       </div>
 
-      {game.notes && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground text-sm">{game.notes}</p>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Players</CardTitle>
-            <CardDescription>Players in this session</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Players</CardTitle>
+                <CardDescription>Players in this session</CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPlayersExpanded(!isPlayersExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isPlayersExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {(game.gamePlayers?.length ?? 0) === 0 ? (
               <p className="text-muted-foreground text-sm">No players yet</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Player</TableHead>
-                    <TableHead>Buy-In</TableHead>
-                    <TableHead>Cash-Out</TableHead>
-                    <TableHead>Profit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {game.gamePlayers?.map((gp) => (
-                    <TableRow key={gp.id}>
-                      <TableCell>{gp.player?.name}</TableCell>
-                      <TableCell>${gp.buyIn.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {gp.cashOut !== null && gp.cashOut !== undefined
-                          ? `$${gp.cashOut.toFixed(2)}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {gp.profit !== null && gp.profit !== undefined
-                          ? `$${gp.profit.toFixed(2)}`
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ResponsiveTable
+                data={
+                  isPlayersExpanded
+                    ? game.gamePlayers ?? []
+                    : (game.gamePlayers ?? []).slice(0, 3)
+                }
+                keyExtractor={(gp) => gp.id}
+                columns={[
+                  {
+                    key: "player",
+                    header: "Player",
+                    render: (gp) => gp.player?.name,
+                  },
+                  {
+                    key: "buyIn",
+                    header: "Buy-In",
+                    render: (gp) => `$${gp.buyIn.toFixed(2)}`,
+                  },
+                  {
+                    key: "cashOut",
+                    header: "Cash-Out",
+                    render: (gp) =>
+                      gp.cashOut !== null && gp.cashOut !== undefined
+                        ? `$${gp.cashOut.toFixed(2)}`
+                        : "—",
+                  },
+                  {
+                    key: "profit",
+                    header: "Profit",
+                    render: (gp) =>
+                      gp.profit !== null && gp.profit !== undefined
+                        ? `$${gp.profit.toFixed(2)}`
+                        : "—",
+                  },
+                ]}
+                renderCard={(gp) => (
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="mb-2 font-medium">{gp.player?.name}</div>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Buy-In</p>
+                        <p className="font-medium">${gp.buyIn.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Cash-Out</p>
+                        <p className="font-medium">
+                          {gp.cashOut !== null && gp.cashOut !== undefined
+                            ? `$${gp.cashOut.toFixed(2)}`
+                            : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Profit</p>
+                        <p
+                          className={`font-medium ${
+                            gp.profit !== null && gp.profit !== undefined
+                              ? gp.profit >= 0
+                                ? "text-green-600"
+                                : "text-red-600"
+                              : ""
+                          }`}
+                        >
+                          {gp.profit !== null && gp.profit !== undefined
+                            ? `${gp.profit >= 0 ? "+" : ""}$${gp.profit.toFixed(2)}`
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              />
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>All Transactions</CardTitle>
-            <CardDescription>Buy-ins and cash-outs</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>All Transactions</CardTitle>
+                <CardDescription>Buy-ins and cash-outs</CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsTransactionsExpanded(!isTransactionsExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isTransactionsExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {(transactions?.length ?? 0) === 0 ? (
@@ -425,30 +667,65 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               </p>
             ) : (
               <div className="space-y-2">
-                {transactions?.map((transaction) => (
+                {transactions
+                  ?.filter((tx) => tx.status !== "PENDING" && tx.status !== "REJECTED")
+                  .slice(0, isTransactionsExpanded ? undefined : 3)
+                  .map((transaction) => (
                   <div
                     className="flex items-center justify-between rounded border p-3"
                     key={transaction._id}
                   >
                     <div>
-                      <p className="font-medium">
-                        {transaction.type === "buyin" ? "Buy-In" : "Cash-Out"}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">
+                          {transaction.type === "buyin" ? "Buy-In" : "Cash-Out"}
+                        </p>
+                      </div>
                       <p className="text-muted-foreground text-sm">
                         {transaction.player?.name} •{" "}
                         {format(new Date(transaction._creationTime), "h:mm a")}
                       </p>
                     </div>
-                    <span
-                      className={`font-bold ${
-                        transaction.type === "buyin"
-                          ? "text-red-600"
-                          : "text-green-600"
-                      }`}
-                    >
-                      {transaction.type === "buyin" ? "-" : "+"}$
-                      {transaction.amount.toFixed(2)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`font-bold ${
+                          transaction.type === "buyin"
+                            ? "text-red-600"
+                            : "text-green-600"
+                        }`}
+                      >
+                        {transaction.type === "buyin" ? "-" : "+"}$
+                        {transaction.amount.toFixed(2)}
+                      </span>
+                      {isSessionCreator && (
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingTransaction({
+                              id: transaction._id as Id<"transactions">,
+                              amount: transaction.amount.toString(),
+                              type: transaction.type,
+                              playerName: transaction.player?.name ?? "Unknown",
+                            })}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={isDeletingTxId === transaction._id}
+                            onClick={() => handleDeleteTransaction(transaction._id as Id<"transactions">)}
+                          >
+                            {isDeletingTxId === transaction._id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3 text-red-500" />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -456,6 +733,90 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Transaction Requests - Only visible to session creator */}
+      {isSessionCreator && pendingBuyIns && pendingBuyIns.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-amber-600" />
+                <div>
+                  <CardTitle>Pending Transaction Requests</CardTitle>
+                  <CardDescription>
+                    Review and approve buy-in and cash-out requests from players
+                  </CardDescription>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPendingExpanded(!isPendingExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isPendingExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingBuyIns
+                .slice(0, isPendingExpanded ? undefined : 3)
+                .map((tx) => (
+                <div
+                  className="flex items-center justify-between rounded-lg border bg-background p-4"
+                  key={tx._id}
+                >
+                  <div>
+                    <p className="font-medium">{tx.player?.name ?? "Unknown"}</p>
+                    <p className="text-muted-foreground text-sm">
+                      Requested ${tx.amount.toFixed(2)} {tx.type === "buyin" ? "buy-in" : "cash-out"} •{" "}
+                      {format(new Date(tx._creationTime), "h:mm a")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:hover:bg-red-950"
+                      disabled={isRejectingId === tx._id || isApprovingId === tx._id}
+                      onClick={() => handleRejectTransaction(tx._id as Id<"transactions">)}
+                    >
+                      {isRejectingId === tx._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <X className="mr-1 h-4 w-4" />
+                          Reject
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={isApprovingId === tx._id || isRejectingId === tx._id}
+                      onClick={() => handleApproveTransaction(tx._id as Id<"transactions">)}
+                    >
+                      {isApprovingId === tx._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="mr-1 h-4 w-4" />
+                          Approve
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {game.status === "ACTIVE" && isJoined && (
         <Card>
@@ -465,7 +826,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
           </CardHeader>
           <CardContent>
             {activeAction === null ? (
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Button
                   variant="outline"
                   className="h-24 flex-col gap-2"
@@ -481,14 +842,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 >
                   <HandCoins className="h-8 w-8 text-blue-600" />
                   <span>Cash Out</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-24 flex-col gap-2"
-                  onClick={() => setActiveAction("busted")}
-                >
-                  <Skull className="h-8 w-8 text-red-600" />
-                  <span>I Busted</span>
                 </Button>
               </div>
             ) : activeAction === "buyin" ? (
@@ -609,28 +962,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   </Button>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setActiveAction(null)}
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="font-medium">Settlement Info</span>
-                </div>
-                <div className="rounded-lg border border-dashed p-6 text-center">
-                  <Skull className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-                  <p className="mb-2 font-medium">P2P Settlement Coming Soon</p>
-                  <p className="text-muted-foreground text-sm">
-                    The peer-to-peer settlement system is being built. Once complete,
-                    you&apos;ll see who you owe and their payment details here.
-                  </p>
-                </div>
-              </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       )}
@@ -674,16 +1006,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 onChange={(e) => setEditLocation(e.target.value)}
                 placeholder="e.g., John's House"
                 value={editLocation}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-notes">Notes</Label>
-              <Textarea
-                id="edit-notes"
-                onChange={(e) => setEditNotes(e.target.value)}
-                placeholder="Any additional notes..."
-                value={editNotes}
               />
             </div>
 
@@ -772,10 +1094,76 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         onSuccess={handlePaymentSuccess}
       />
 
+      {/* Edit Transaction Dialog */}
+      <Dialog
+        open={!!editingTransaction}
+        onOpenChange={(open) => !open && setEditingTransaction(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Transaction</DialogTitle>
+            <DialogDescription>
+              Edit {editingTransaction?.type === "buyin" ? "buy-in" : "cash-out"} for {editingTransaction?.playerName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-tx-amount">Amount</Label>
+              <div className="relative">
+                <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="edit-tx-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="pl-7"
+                  value={editingTransaction?.amount ?? ""}
+                  onChange={(e) =>
+                    setEditingTransaction((prev) =>
+                      prev ? { ...prev, amount: e.target.value } : null
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => setEditingTransaction(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                isSubmitting ||
+                !editingTransaction?.amount ||
+                Number(editingTransaction?.amount) <= 0
+              }
+              onClick={handleUpdateTransaction}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Click outside to close actions menu */}
       {showActionsMenu && (
         <div
-          className="fixed inset-0 z-0"
+          className="fixed inset-0 z-40"
           onClick={() => setShowActionsMenu(false)}
           onKeyDown={(e) => e.key === "Escape" && setShowActionsMenu(false)}
         />

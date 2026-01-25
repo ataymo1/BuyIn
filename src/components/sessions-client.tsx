@@ -1,34 +1,29 @@
 "use client";
 
-import { format } from "date-fns";
-import {
-  Activity,
-  Calendar,
-  CheckCircle2,
-  Loader2,
-  MapPin,
-  Users,
-} from "lucide-react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { SessionFilters } from "@/components/sessions/session-filters";
+import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent
 } from "@/components/ui/card";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { useGames, usePlayer, useUserGroups } from "@/lib/convex-hooks";
+    useConvexUser,
+    useGames,
+    useJoinGame,
+    usePlayer,
+} from "@/lib/convex-hooks";
+import { format } from "date-fns";
+import {
+    Calendar,
+    History,
+    Loader2,
+    LogIn,
+    MapPin,
+    Users
+} from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 import type { Id } from "../../convex/_generated/dataModel";
 
 function getProfitColorClass(profit: number): string {
@@ -52,25 +47,18 @@ function getStatusColorClass(status: string): string {
 }
 
 export function SessionsClient() {
-  const searchParams = useSearchParams();
-  const groupIdParam = searchParams.get("groupId");
-  const statusParam = searchParams.get("status");
-
-  const { groups, isLoading: groupsLoading } = useUserGroups();
   const { player, isLoading: playerLoading } = usePlayer();
+  const { userId, user } = useConvexUser();
+  const joinGame = useJoinGame();
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingJoinGameId, setPendingJoinGameId] = useState<string | null>(
+    null
+  );
+  const [isJoining, setIsJoining] = useState<string | null>(null);
 
-  const { games, isLoading: gamesLoading } = useGames({
-    groupId:
-      groupIdParam && groupIdParam !== "all"
-        ? (groupIdParam as Id<"groups">)
-        : undefined,
-    status:
-      statusParam && statusParam !== "all"
-        ? (statusParam as "ACTIVE" | "COMPLETED")
-        : undefined,
-  });
+  const { games, isLoading: gamesLoading } = useGames({});
 
-  const isLoading = groupsLoading || playerLoading || gamesLoading;
+  const isLoading = playerLoading || gamesLoading;
 
   if (isLoading) {
     return (
@@ -81,13 +69,6 @@ export function SessionsClient() {
   }
 
   const gamesList = games ?? [];
-
-  // Calculate stats
-  const totalSessions = gamesList.length;
-  const activeSessions = gamesList.filter((g) => g.status === "ACTIVE").length;
-  const completedSessions = gamesList.filter(
-    (g) => g.status === "COMPLETED"
-  ).length;
 
   // Get user's profit for each game (only for completed games)
   const gamesWithUserProfit = gamesList.map((game) => {
@@ -110,105 +91,93 @@ export function SessionsClient() {
     return { ...game, userProfit, isParticipant };
   });
 
+  // Split games into: sessions to join (active and not joined), and user's sessions (all sessions user is part of)
+  const sessionsToJoin = gamesWithUserProfit.filter(
+    (game) => game.status === "ACTIVE" && !game.isParticipant
+  );
+  const userSessions = gamesWithUserProfit.filter(
+    (game) => game.isParticipant
+  );
+
+  const handleJoinSession = async (gameId: string) => {
+    if (!player?._id) {
+      alert("Please wait, setting up your player profile...");
+      return;
+    }
+
+    // Check if user has payment info
+    const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
+
+    if (hasPaymentInfo) {
+      // User has payment info, join directly
+      await performJoinGame(gameId);
+    } else {
+      // User needs to add payment info first
+      setPendingJoinGameId(gameId);
+      setShowPaymentModal(true);
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false);
+    if (pendingJoinGameId) {
+      await performJoinGame(pendingJoinGameId);
+      setPendingJoinGameId(null);
+    }
+  };
+
+  const performJoinGame = async (gameId: string) => {
+    if (!player?._id) {
+      return;
+    }
+
+    setIsJoining(gameId);
+    try {
+      await joinGame({
+        gameId: gameId as Id<"games">,
+        playerId: player._id,
+      });
+      // Refresh the page to update the session lists
+      window.location.reload();
+    } catch (error) {
+      console.error("Error joining session:", error);
+      alert("Failed to join session. Please try again.");
+    } finally {
+      setIsJoining(null);
+    }
+  };
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-bold text-3xl">Session History</h1>
-        <p className="text-muted-foreground">
-          View and filter your poker session history across all groups
-        </p>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">
-              Total Sessions
-            </CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{totalSessions}</div>
-            <p className="text-muted-foreground text-xs">All time</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Active</CardTitle>
-            <Activity className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl text-green-600">
-              {activeSessions}
-            </div>
-            <p className="text-muted-foreground text-xs">Currently active</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Completed</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl text-blue-600">
-              {completedSessions}
-            </div>
-            <p className="text-muted-foreground text-xs">Finished sessions</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <SessionFilters
-        groups={groups.map((g) => ({ id: g?._id ?? "", name: g?.name ?? "" }))}
-      />
-
-      {/* Sessions Table */}
-      {gamesList.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="mb-4 text-muted-foreground">
-              No sessions found matching your filters.
-            </p>
-            <p className="text-muted-foreground text-sm">
-              Sessions are created from group pages. Visit a group to create a
-              new session.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>All Sessions</CardTitle>
-            <CardDescription>
-              {totalSessions} {totalSessions === 1 ? "session" : "sessions"}{" "}
-              found
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Players</TableHead>
-                  <TableHead>Your Result</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {gamesWithUserProfit.map((game) => (
-                  <TableRow key={game.id}>
-                    <TableCell>
+      {/* Sessions to Join */}
+      {sessionsToJoin.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="font-semibold text-xl flex items-center gap-2">
+              <LogIn className="h-5 w-5 text-green-600" />
+              Sessions to Join
+            </h2>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <ResponsiveTable
+                data={sessionsToJoin}
+                keyExtractor={(game) => game.id}
+                columns={[
+                  {
+                    key: "date",
+                    header: "Date",
+                    render: (game) => (
                       <div className="flex items-center">
                         <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
                         {format(new Date(game.date), "MMM dd, yyyy")}
                       </div>
-                    </TableCell>
-                    <TableCell>
+                    ),
+                  },
+                  {
+                    key: "group",
+                    header: "Group",
+                    render: (game) => (
                       <div className="flex items-center">
                         <Users className="mr-2 h-4 w-4 text-muted-foreground" />
                         <Link
@@ -218,55 +187,281 @@ export function SessionsClient() {
                           {game.group?.name}
                         </Link>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {game.location ? (
+                    ),
+                  },
+                  {
+                    key: "location",
+                    header: "Location",
+                    render: (game) =>
+                      game.location ? (
                         <div className="flex items-center">
                           <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
                           {game.location}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
+                      ),
+                  },
+                  {
+                    key: "players",
+                    header: "Players",
+                    render: (game) => game.gamePlayers?.length ?? 0,
+                  },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (game) => (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => handleJoinSession(game.id)}
+                        disabled={isJoining === game.id}
+                      >
+                        <LogIn className="mr-2 h-4 w-4" />
+                        {isJoining === game.id ? "Joining..." : "Join Session"}
+                      </Button>
+                    ),
+                  },
+                ]}
+                renderCard={(game) => (
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="mb-3 flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">
+                            {format(new Date(game.date), "MMM dd, yyyy")}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
+                          <Users className="h-3 w-3" />
+                          <Link
+                            className="hover:underline"
+                            href={`/groups/${game.group?.id}`}
+                          >
+                            {game.group?.name}
+                          </Link>
+                        </div>
+                      </div>
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
                       >
                         {game.status}
                       </span>
-                    </TableCell>
-                    <TableCell>{game.gamePlayers?.length ?? 0}</TableCell>
-                    <TableCell>
-                      {game.userProfit !== null ? (
+                    </div>
+
+                    <div className="mb-3 flex flex-wrap gap-3 text-sm">
+                      {game.location && (
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {game.location}
+                        </div>
+                      )}
+                      <div className="text-muted-foreground">
+                        {game.gamePlayers?.length ?? 0} players
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => handleJoinSession(game.id)}
+                        disabled={isJoining === game.id}
+                      >
+                        <LogIn className="mr-2 h-4 w-4" />
+                        {isJoining === game.id ? "Joining..." : "Join Session"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* User's Sessions */}
+      {userSessions.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="font-semibold text-xl flex items-center gap-2">
+              <History className="h-5 w-5 text-blue-600" />
+              Your Sessions
+            </h2>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <ResponsiveTable
+                data={userSessions}
+                keyExtractor={(game) => game.id}
+                columns={[
+                  {
+                    key: "date",
+                    header: "Date",
+                    render: (game) => (
+                      <div className="flex items-center">
+                        <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+                        {format(new Date(game.date), "MMM dd, yyyy")}
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "group",
+                    header: "Group",
+                    render: (game) => (
+                      <div className="flex items-center">
+                        <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <Link
+                          className="hover:underline"
+                          href={`/groups/${game.group?.id}`}
+                        >
+                          {game.group?.name}
+                        </Link>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "location",
+                    header: "Location",
+                    render: (game) =>
+                      game.location ? (
+                        <div className="flex items-center">
+                          <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
+                          {game.location}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      ),
+                  },
+                  {
+                    key: "players",
+                    header: "Players",
+                    render: (game) => game.gamePlayers?.length ?? 0,
+                  },
+                  {
+                    key: "result",
+                    header: "Your Result",
+                    render: (game) =>
+                      game.userProfit !== null ? (
                         <span
                           className={`font-medium ${getProfitColorClass(game.userProfit)}`}
                         >
                           {game.userProfit > 0 ? "+" : ""}$
                           {game.userProfit.toFixed(2)}
                         </span>
-                      ) : game.isParticipant && game.status === "ACTIVE" ? (
+                      ) : game.status === "ACTIVE" ? (
                         <span className="font-medium text-yellow-600 dark:text-yellow-500">
                           Pending
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
+                      ),
+                  },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (game) => (
                       <Link href={`/games/${game.id}`}>
                         <Button size="sm" variant="outline">
                           View
                         </Button>
                       </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    ),
+                  },
+                ]}
+                renderCard={(game) => (
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="mb-3 flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">
+                            {format(new Date(game.date), "MMM dd, yyyy")}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
+                          <Users className="h-3 w-3" />
+                          <Link
+                            className="hover:underline"
+                            href={`/groups/${game.group?.id}`}
+                          >
+                            {game.group?.name}
+                          </Link>
+                        </div>
+                      </div>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                      >
+                        {game.status}
+                      </span>
+                    </div>
+
+                    <div className="mb-3 flex flex-wrap gap-3 text-sm">
+                      {game.location && (
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {game.location}
+                        </div>
+                      )}
+                      <div className="text-muted-foreground">
+                        {game.gamePlayers?.length ?? 0} players
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        {game.userProfit !== null ? (
+                          <span
+                            className={`font-semibold ${getProfitColorClass(game.userProfit)}`}
+                          >
+                            {game.userProfit > 0 ? "+" : ""}$
+                            {game.userProfit.toFixed(2)}
+                          </span>
+                        ) : game.status === "ACTIVE" ? (
+                          <span className="font-medium text-yellow-600 dark:text-yellow-500">
+                            Pending
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">
+                            Not participating
+                          </span>
+                        )}
+                      </div>
+                      <Link href={`/games/${game.id}`}>
+                        <Button size="sm" variant="outline">
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {sessionsToJoin.length === 0 && userSessions.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="mb-4 text-muted-foreground">
+              No sessions found.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Sessions are created from group pages. Visit a group to create a
+              new session.
+            </p>
           </CardContent>
         </Card>
       )}
+
+      {/* Payment Info Modal */}
+      <PaymentInfoModal
+        open={showPaymentModal}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

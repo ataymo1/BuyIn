@@ -123,8 +123,12 @@ export default defineSchema({
     amount: v.number(),
     description: v.optional(v.string()),
     createdById: v.id("users"),
+    status: v.optional(
+      v.union(v.literal("PENDING"), v.literal("APPROVED"), v.literal("REJECTED"))
+    ), // Buy-ins require approval from session creator
   })
     .index("by_gameId", ["gameId"])
     .index("by_playerId", ["playerId"])
-    .index("by_createdById", ["createdById"]),
+    .index("by_createdById", ["createdById"])
+    .index("by_gameId_status", ["gameId", "status"]),
 });

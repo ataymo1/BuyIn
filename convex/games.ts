@@ -153,6 +153,7 @@ export const getGame = query({
         return {
           ...tx,
           id: tx._id,
+          status: tx.status ?? "APPROVED", // Legacy transactions are considered approved
           player: player ? { id: player._id, name: player.name } : null,
           createdBy: createdByUser
             ? { id: createdByUser._id, name: createdByUser.name }
