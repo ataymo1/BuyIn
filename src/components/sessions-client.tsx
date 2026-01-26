@@ -16,6 +16,7 @@ import {
 } from "@/lib/convex-hooks";
 import { format } from "date-fns";
 import {
+    Banknote,
     Calendar,
     History,
     LogIn,
@@ -258,6 +259,25 @@ export function SessionsClient() {
                     render: (game) => game.gamePlayers?.length ?? 0,
                   },
                   {
+                    key: "banker",
+                    header: "Banker",
+                    render: (game) => {
+                      const isBanker = game.createdBy?.id === userId;
+                      return isBanker ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                          <Banknote className="h-3 w-3" />
+                          You
+                        </span>
+                      ) : game.createdBy ? (
+                        <span className="text-muted-foreground text-sm">
+                          {game.createdBy.name}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      );
+                    },
+                  },
+                  {
                     key: "actions",
                     header: "Actions",
                     render: (game) => (
@@ -273,7 +293,9 @@ export function SessionsClient() {
                     ),
                   },
                 ]}
-                renderCard={(game) => (
+                renderCard={(game) => {
+                  const isBanker = game.createdBy?.id === userId;
+                  return (
                   <div className="rounded-lg border bg-card p-4">
                     <div className="mb-3 flex items-start justify-between">
                       <div>
@@ -282,6 +304,12 @@ export function SessionsClient() {
                           <span className="font-medium">
                             {format(new Date(game.date), "MMM dd, yyyy")}
                           </span>
+                          {isBanker && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                              <Banknote className="h-3 w-3" />
+                              Banker
+                            </span>
+                          )}
                         </div>
                         <div className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
                           <Users className="h-3 w-3" />
@@ -324,7 +352,8 @@ export function SessionsClient() {
                       </Button>
                     </div>
                   </div>
-                )}
+                  );
+                }}
               />
             </CardContent>
           </Card>
@@ -409,6 +438,25 @@ export function SessionsClient() {
                       ),
                   },
                   {
+                    key: "banker",
+                    header: "Banker",
+                    render: (game) => {
+                      const isBanker = game.createdBy?.id === userId;
+                      return isBanker ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                          <Banknote className="h-3 w-3" />
+                          You
+                        </span>
+                      ) : game.createdBy ? (
+                        <span className="text-muted-foreground text-sm">
+                          {game.createdBy.name}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      );
+                    },
+                  },
+                  {
                     key: "actions",
                     header: "Actions",
                     render: (game) => (
@@ -420,72 +468,81 @@ export function SessionsClient() {
                     ),
                   },
                 ]}
-                renderCard={(game) => (
-                  <div className="rounded-lg border bg-card p-4">
-                    <div className="mb-3 flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">
-                            {format(new Date(game.date), "MMM dd, yyyy")}
-                          </span>
+                renderCard={(game) => {
+                  const isBanker = game.createdBy?.id === userId;
+                  return (
+                    <div className="rounded-lg border bg-card p-4">
+                      <div className="mb-3 flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">
+                              {format(new Date(game.date), "MMM dd, yyyy")}
+                            </span>
+                            {isBanker && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                <Banknote className="h-3 w-3" />
+                                Banker
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
+                            <Users className="h-3 w-3" />
+                            <Link
+                              className="hover:underline"
+                              href={`/groups/${game.group?.id}`}
+                            >
+                              {game.group?.name}
+                            </Link>
+                          </div>
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-muted-foreground text-sm">
-                          <Users className="h-3 w-3" />
-                          <Link
-                            className="hover:underline"
-                            href={`/groups/${game.group?.id}`}
-                          >
-                            {game.group?.name}
-                          </Link>
-                        </div>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                        >
+                          {game.status}
+                        </span>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-                      >
-                        {game.status}
-                      </span>
-                    </div>
 
-                    <div className="mb-3 flex flex-wrap gap-3 text-sm">
-                      {game.location && (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {game.location}
-                        </div>
-                      )}
-                      <div className="text-muted-foreground">
-                        {game.gamePlayers?.length ?? 0} players
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        {game.userProfit !== null ? (
-                          <span
-                            className={`font-semibold ${getProfitColorClass(game.userProfit)}`}
-                          >
-                            {game.userProfit > 0 ? "+" : ""}$
-                            {game.userProfit.toFixed(2)}
-                          </span>
-                        ) : game.status === "ACTIVE" ? (
-                          <span className="font-medium text-yellow-600 dark:text-yellow-500">
-                            Pending
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">
-                            Not participating
-                          </span>
+                      <div className="mb-3 flex flex-wrap gap-3 text-sm">
+                        {game.location && (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            {game.location}
+                          </div>
                         )}
+                        <div className="text-muted-foreground">
+                          {game.gamePlayers?.length ?? 0} players
+                        </div>
                       </div>
-                      <Link href={`/games/${game.id}`}>
-                        <Button size="sm" variant="outline">
-                          View
-                        </Button>
-                      </Link>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          {game.userProfit !== null ? (
+                            <span
+                              className={`font-semibold ${getProfitColorClass(game.userProfit)}`}
+                            >
+                              {game.userProfit > 0 ? "+" : ""}$
+                              {game.userProfit.toFixed(2)}
+                            </span>
+                          ) : game.status === "ACTIVE" ? (
+                            <span className="font-medium text-yellow-600 dark:text-yellow-500">
+                              Pending
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">
+                              Not participating
+                            </span>
+                          )}
+                        </div>
+                        <Link href={`/games/${game.id}`}>
+                          <Button size="sm" variant="outline">
+                            View
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                }}
               />
             </CardContent>
           </Card>

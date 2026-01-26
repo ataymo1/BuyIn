@@ -456,6 +456,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               >
                 {game.status}
               </span>
+              {isSessionCreator && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                  <Banknote className="h-3 w-3" />
+                  Banker
+                </span>
+              )}
             </div>
             {/* Owner-only actions menu - positioned to the right on mobile */}
             {canManage && (
@@ -534,6 +540,20 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   <Users className="h-3 w-3" />
                   {game.group.name}
                 </Link>
+              </>
+            )}
+            {game.createdBy && (
+              <>
+                {" • "}
+                <span className="inline-flex items-center gap-1">
+                  <Banknote className="h-3 w-3 text-amber-600" />
+                  <span>
+                    Banker: {game.createdBy.name}
+                    {isSessionCreator && (
+                      <span className="ml-1 text-amber-600">(You)</span>
+                    )}
+                  </span>
+                </span>
               </>
             )}
           </p>
@@ -1069,7 +1089,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
           <DialogHeader>
             <DialogTitle>Edit Session</DialogTitle>
             <DialogDescription>
-              Update session details. Only group owners can make changes.
+              Update session details. Group owners and session bankers can make changes.
             </DialogDescription>
           </DialogHeader>
 

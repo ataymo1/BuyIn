@@ -12,7 +12,7 @@ async function isGroupOwner(
   return group?.ownerId === userId;
 }
 
-// Query to check if user can manage a game (is group owner)
+// Query to check if user can manage a game (is group owner or session banker)
 export const canManageGame = query({
   args: { gameId: v.id("games"), userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -20,7 +20,9 @@ export const canManageGame = query({
     if (!game) {
       return false;
     }
-    return await isGroupOwner(ctx, game.groupId, args.userId);
+    const isOwner = await isGroupOwner(ctx, game.groupId, args.userId);
+    const isBanker = game.createdById === args.userId;
+    return isOwner || isBanker;
   },
 });
 
@@ -188,6 +190,18 @@ export const createGame = mutation({
     createdById: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // Verify user is a member of the group
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId_userId", (q) =>
+        q.eq("groupId", args.groupId).eq("userId", args.createdById)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("Only group members can create sessions");
+    }
+
     return await ctx.db.insert("games", {
       date: args.date,
       location: args.location,
@@ -199,7 +213,7 @@ export const createGame = mutation({
   },
 });
 
-// Update game status (owner only)
+// Update game status (owner or banker)
 export const updateGameStatus = mutation({
   args: {
     gameId: v.id("games"),
@@ -217,8 +231,15 @@ export const updateGameStatus = mutation({
     }
 
     const group = await ctx.db.get(game.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Only group owners can update game status");
+    if (!group) {
+      throw new Error("Group not found");
+    }
+
+    const isOwner = group.ownerId === args.userId;
+    const isBanker = game.createdById === args.userId;
+
+    if (!isOwner && !isBanker) {
+      throw new Error("Only the group owner or session banker can update the game status");
     }
 
     await ctx.db.patch(args.gameId, { status: args.status });
@@ -226,7 +247,7 @@ export const updateGameStatus = mutation({
   },
 });
 
-// Update game details (owner only)
+// Update game details (owner or banker)
 export const updateGame = mutation({
   args: {
     gameId: v.id("games"),
@@ -242,8 +263,15 @@ export const updateGame = mutation({
     }
 
     const group = await ctx.db.get(game.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Only group owners can edit games");
+    if (!group) {
+      throw new Error("Group not found");
+    }
+
+    const isOwner = group.ownerId === args.userId;
+    const isBanker = game.createdById === args.userId;
+
+    if (!isOwner && !isBanker) {
+      throw new Error("Only the group owner or session banker can edit games");
     }
 
     const { gameId, userId, ...updates } = args;

@@ -47,10 +47,10 @@ export function NewGameClient() {
     return <NewGameSkeleton />;
   }
 
-  // Filter to only groups where user is owner
-  const ownedGroups = groups.filter((g) => g?.role === "OWNER");
+  // Allow any group member to create sessions (they become the banker)
+  const memberGroups = groups.filter((g) => g != null);
 
-  if (ownedGroups.length === 0) {
+  if (memberGroups.length === 0) {
     return (
       <div className="space-y-8">
         <div>
@@ -61,8 +61,8 @@ export function NewGameClient() {
         </div>
         <div className="rounded border bg-muted p-4">
           <p className="text-muted-foreground text-sm">
-            You need to be a group owner to create sessions. Create a group
-            first or ask a group owner to make you an owner.
+            You need to be a member of a group to create sessions. Join or
+            create a group first.
           </p>
         </div>
       </div>
@@ -100,7 +100,7 @@ export function NewGameClient() {
       </div>
       <GameForm
         defaultGroupId={defaultGroupId ?? undefined}
-        groups={ownedGroups.map((g) => ({
+        groups={memberGroups.map((g) => ({
           id: g?._id ?? "",
           name: g?.name ?? "",
           role: g?.role ?? "MEMBER",
