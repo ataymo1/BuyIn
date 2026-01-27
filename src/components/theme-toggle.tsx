@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -9,6 +10,13 @@ export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const { player } = usePlayer();
   const isJoshuaDemo = player?.name === "Joshua Demo";
+
+  // Force light mode if Joshua Demo is in dark mode
+  useEffect(() => {
+    if (isJoshuaDemo && theme === "dark") {
+      setTheme("light");
+    }
+  }, [isJoshuaDemo, theme, setTheme]);
 
   const handleThemeToggle = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
