@@ -199,7 +199,7 @@ export function usePlayer() {
           );
           await getOrCreatePlayer({
             userId,
-            name: user.name || user.email || "Player",
+            name: user.email || "Player",
           });
           hasCreatedRef.current = userId;
           console.log("[usePlayer] Player created successfully");

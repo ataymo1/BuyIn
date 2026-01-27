@@ -17,7 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConvexUser, useUpdateUser } from "@/lib/convex-hooks";
+import { useConvexUser, useUpdateUser, usePlayer } from "@/lib/convex-hooks";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 function ProfileSkeleton() {
   return (
@@ -31,7 +33,7 @@ function ProfileSkeleton() {
         <Skeleton className="h-10 w-28" />
       </div>
 
-      {/* Username Section */}
+      {/* Name Section */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
@@ -93,7 +95,9 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export function ProfileClient() {
   const { user, userId, isLoading: userLoading } = useConvexUser();
+  const { player, isLoading: playerLoading } = usePlayer();
   const updateUser = useUpdateUser();
+  const updatePlayer = useMutation(api.players.updatePlayer);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -107,22 +111,27 @@ export function ProfileClient() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && player) {
       form.reset({
-        name: user.name ?? "",
+        name: player.name ?? "",
         venmo: user.venmo ?? "",
         zelle: user.zelle ?? "",
       });
     }
-  }, [user, form]);
+  }, [user, player, form]);
 
   const handleSubmit = async (data: ProfileFormValues) => {
-    if (!userId) return;
+    if (!userId || !player) return;
 
     try {
+      // Update player name
+      await updatePlayer({
+        playerId: player._id,
+        name: data.name.trim() || undefined,
+      });
+      // Update user payment methods
       await updateUser({
         id: userId,
-        name: data.name.trim() || undefined,
         venmo: data.venmo?.trim() || undefined,
         zelle: data.zelle?.trim() || undefined,
       });
@@ -136,16 +145,16 @@ export function ProfileClient() {
 
   const handleCancel = () => {
     setIsEditing(false);
-    if (user) {
+    if (user && player) {
       form.reset({
-        name: user.name ?? "",
+        name: player.name ?? "",
         venmo: user.venmo ?? "",
         zelle: user.zelle ?? "",
       });
     }
   };
 
-  if (userLoading) {
+  if (userLoading || playerLoading) {
     return <ProfileSkeleton />;
   }
 
@@ -172,24 +181,24 @@ export function ProfileClient() {
       </div>
 
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        {/* Username Section */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <User className="h-5 w-5 text-muted-foreground" />
-              Username
-            </CardTitle>
-            <CardDescription>
-              Your display name shown to other users
-            </CardDescription>
-          </CardHeader>
+      {/* Name Section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <User className="h-5 w-5 text-muted-foreground" />
+            Name
+          </CardTitle>
+          <CardDescription>
+            Your display name shown to other users
+          </CardDescription>
+        </CardHeader>
           <CardContent>
             {isEditing ? (
               <div className="space-y-2">
-                <Label htmlFor="name">Username</Label>
+                <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
-                  placeholder="Your username"
+                  placeholder="Your name"
                   {...form.register("name")}
                   className="max-w-md"
                 />
@@ -202,7 +211,7 @@ export function ProfileClient() {
             ) : (
               <div className="py-1">
                 <p className="text-base font-medium">
-                  {user?.name || (
+                  {player?.name || (
                     <span className="text-muted-foreground italic">Not set</span>
                   )}
                 </p>

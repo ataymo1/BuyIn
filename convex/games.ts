@@ -77,6 +77,13 @@ export const getGames = query({
       games.map(async (game) => {
         const group = await ctx.db.get(game.groupId);
         const createdBy = await ctx.db.get(game.createdById);
+        // Get player record for createdBy
+        const createdByPlayer = createdBy
+          ? await ctx.db
+              .query("players")
+              .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
+              .first()
+          : null;
         const gamePlayers = await ctx.db
           .query("gamePlayers")
           .withIndex("by_gameId", (q) => q.eq("gameId", game._id))
@@ -101,7 +108,7 @@ export const getGames = query({
           createdBy: createdBy
             ? {
                 id: createdBy._id,
-                name: createdBy.name,
+                name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
                 email: createdBy.email,
               }
             : null,
@@ -126,6 +133,13 @@ export const getGame = query({
 
     const group = await ctx.db.get(game.groupId);
     const createdBy = await ctx.db.get(game.createdById);
+    // Get player record for createdBy
+    const createdByPlayer = createdBy
+      ? await ctx.db
+          .query("players")
+          .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
+          .first()
+      : null;
 
     const gamePlayers = await ctx.db
       .query("gamePlayers")
@@ -152,13 +166,23 @@ export const getGame = query({
       transactions.map(async (tx) => {
         const player = await ctx.db.get(tx.playerId);
         const createdByUser = await ctx.db.get(tx.createdById);
+        // Get player record for transaction createdBy
+        const txCreatedByPlayer = createdByUser
+          ? await ctx.db
+              .query("players")
+              .withIndex("by_userId", (q) => q.eq("userId", createdByUser._id))
+              .first()
+          : null;
         return {
           ...tx,
           id: tx._id,
           status: tx.status ?? "APPROVED", // Legacy transactions are considered approved
           player: player ? { id: player._id, name: player.name } : null,
           createdBy: createdByUser
-            ? { id: createdByUser._id, name: createdByUser.name }
+            ? {
+                id: createdByUser._id,
+                name: txCreatedByPlayer?.name ?? createdByUser.name ?? createdByUser.email ?? "Unknown",
+              }
             : null,
         };
       })
@@ -172,7 +196,11 @@ export const getGame = query({
       id: game._id,
       group: group ? { id: group._id, name: group.name } : null,
       createdBy: createdBy
-        ? { id: createdBy._id, name: createdBy.name, email: createdBy.email }
+        ? {
+            id: createdBy._id,
+            name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
+            email: createdBy.email,
+          }
         : null,
       gamePlayers: gamePlayersWithDetails,
       transactions: transactionsWithDetails,

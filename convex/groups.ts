@@ -60,12 +60,19 @@ export const getGroup = query({
     const membersWithUsers = await Promise.all(
       members.map(async (member) => {
         const user = await ctx.db.get(member.userId);
+        // Get player record for this user
+        const player = user
+          ? await ctx.db
+              .query("players")
+              .withIndex("by_userId", (q) => q.eq("userId", user._id))
+              .first()
+          : null;
         return {
           ...member,
           user: user
             ? {
                 id: user._id,
-                name: user.name,
+                name: player?.name ?? user.name ?? user.email ?? "Unknown",
                 email: user.email,
                 image: user.image,
               }
@@ -75,11 +82,22 @@ export const getGroup = query({
     );
 
     const owner = await ctx.db.get(group.ownerId);
+    // Get player record for owner
+    const ownerPlayer = owner
+      ? await ctx.db
+          .query("players")
+          .withIndex("by_userId", (q) => q.eq("userId", owner._id))
+          .first()
+      : null;
 
     return {
       ...group,
       owner: owner
-        ? { id: owner._id, name: owner.name, email: owner.email }
+        ? {
+            id: owner._id,
+            name: ownerPlayer?.name ?? owner.name ?? owner.email ?? "Unknown",
+            email: owner.email,
+          }
         : null,
       members: membersWithUsers,
     };
@@ -405,12 +423,19 @@ export const getPendingRequests = query({
     const enrichedRequests = await Promise.all(
       requests.map(async (request) => {
         const user = await ctx.db.get(request.userId);
+        // Get player record for this user
+        const player = user
+          ? await ctx.db
+              .query("players")
+              .withIndex("by_userId", (q) => q.eq("userId", user._id))
+              .first()
+          : null;
         return {
           ...request,
           user: user
             ? {
                 id: user._id,
-                name: user.name,
+                name: player?.name ?? user.name ?? user.email ?? "Unknown",
                 email: user.email,
                 image: user.image,
               }

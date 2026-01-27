@@ -106,6 +106,13 @@ export const getTransactions = query({
         const player = await ctx.db.get(tx.playerId);
         const game = await ctx.db.get(tx.gameId);
         const createdBy = await ctx.db.get(tx.createdById);
+        // Get player record for createdBy
+        const createdByPlayer = createdBy
+          ? await ctx.db
+              .query("players")
+              .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
+              .first()
+          : null;
 
         let group = null;
         if (game) {
@@ -127,7 +134,7 @@ export const getTransactions = query({
           createdBy: createdBy
             ? {
                 id: createdBy._id,
-                name: createdBy.name,
+                name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
                 email: createdBy.email,
               }
             : null,
@@ -168,12 +175,22 @@ export const getPendingBuyIns = query({
       pendingTxs.map(async (tx) => {
         const player = await ctx.db.get(tx.playerId);
         const createdBy = await ctx.db.get(tx.createdById);
+        // Get player record for createdBy
+        const createdByPlayer = createdBy
+          ? await ctx.db
+              .query("players")
+              .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
+              .first()
+          : null;
         return {
           ...tx,
           id: tx._id,
           player: player ? { id: player._id, name: player.name } : null,
           createdBy: createdBy
-            ? { id: createdBy._id, name: createdBy.name }
+            ? {
+                id: createdBy._id,
+                name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
+              }
             : null,
         };
       })
