@@ -7,16 +7,17 @@ import { useTheme } from "next-themes";
 import { usePlayer } from "@/lib/convex-hooks";
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const { player } = usePlayer();
   const isJoshuaDemo = player?.name === "Joshua Demo";
 
   // Force light mode if Joshua Demo is in dark mode
+  // Check both theme (stored preference) and resolvedTheme (actual applied theme)
   useEffect(() => {
-    if (isJoshuaDemo && theme === "dark") {
+    if (isJoshuaDemo && (theme === "dark" || resolvedTheme === "dark")) {
       setTheme("light");
     }
-  }, [isJoshuaDemo, theme, setTheme]);
+  }, [isJoshuaDemo, theme, resolvedTheme, setTheme]);
 
   const handleThemeToggle = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
