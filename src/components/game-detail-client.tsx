@@ -349,6 +349,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     (sum, tx) => (tx.type === "cashout" ? sum + tx.amount : sum),
     0
   );
+  const bankerLoss = Math.max(0, totalCashedOut - totalBoughtIn);
 
   type GamePlayer = NonNullable<typeof game.gamePlayers>[number];
 
@@ -912,6 +913,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   </div>
                   <div>
                     Total cashed out: ${totalCashedOut.toFixed(2)}
+                  </div>
+                  <div>
+                    Banker loss: ${bankerLoss.toFixed(2)}
                   </div>
                 </div>
                 <Button

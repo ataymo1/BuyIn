@@ -227,6 +227,9 @@ export const createTransaction = mutation({
     createdById: v.id("users"),
   },
   handler: async (ctx, args) => {
+    if (args.amount < 0) {
+      throw new Error("Amount must be non-negative");
+    }
     // Get the game to check if creator
     const game = await ctx.db.get(args.gameId);
     if (!game) {
@@ -351,6 +354,9 @@ export const updateTransaction = mutation({
     const tx = await ctx.db.get(transactionId);
     if (!tx) {
       return null;
+    }
+    if (updates.amount !== undefined && updates.amount < 0) {
+      throw new Error("Amount must be non-negative");
     }
 
     // Check if user is the session creator
