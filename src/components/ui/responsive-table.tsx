@@ -13,7 +13,7 @@ import {
 
 interface Column<T> {
   key: string;
-  header: string;
+  header: React.ReactNode;
   className?: string;
   render?: (item: T) => React.ReactNode;
 }

@@ -42,8 +42,8 @@ async function recalculatePlayerTotals(
 
   await ctx.db.patch(gamePlayer._id, {
     buyIn: totalBuyIn,
-    cashOut: totalCashOut > 0 ? totalCashOut : undefined,
-    profit: totalCashOut > 0 ? totalCashOut - totalBuyIn : undefined,
+    cashOut: totalCashOut,
+    profit: totalCashOut - totalBuyIn,
   });
 }
 
@@ -439,5 +439,104 @@ export const rejectTransaction = mutation({
     await ctx.db.patch(args.transactionId, { status: "REJECTED" });
 
     return await ctx.db.get(args.transactionId);
+  },
+});
+
+// Set player totals (session creator only)
+export const setPlayerTotals = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+    userId: v.id("users"),
+    buyIn: v.number(),
+    cashOut: v.number(),
+  },
+  handler: async (ctx, args) => {
+    if (args.buyIn < 0 || args.cashOut < 0) {
+      throw new Error("Amounts must be non-negative");
+    }
+
+    const game = await ctx.db.get(args.gameId);
+    if (!game) {
+      throw new Error("Game not found");
+    }
+    if (game.createdById !== args.userId) {
+      throw new Error("Only the session creator can edit player totals");
+    }
+
+    let gamePlayer = await ctx.db
+      .query("gamePlayers")
+      .withIndex("by_gameId_playerId", (q) =>
+        q.eq("gameId", args.gameId).eq("playerId", args.playerId)
+      )
+      .first();
+
+    if (!gamePlayer) {
+      const gpId = await ctx.db.insert("gamePlayers", {
+        gameId: args.gameId,
+        playerId: args.playerId,
+        buyIn: 0,
+      });
+      gamePlayer = await ctx.db.get(gpId);
+    }
+
+    async function adjustTransactions(type: "buyin" | "cashout", desiredTotal: number) {
+      const txs = await ctx.db
+        .query("transactions")
+        .withIndex("by_gameId", (q) => q.eq("gameId", args.gameId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("playerId"), args.playerId),
+            q.eq(q.field("type"), type),
+            q.or(
+              q.eq(q.field("status"), "APPROVED"),
+              q.eq(q.field("status"), undefined)
+            )
+          )
+        )
+        .collect();
+
+      const currentTotal = txs.reduce((sum, tx) => sum + tx.amount, 0);
+
+      if (desiredTotal > currentTotal) {
+        const delta = desiredTotal - currentTotal;
+        await ctx.db.insert("transactions", {
+          gameId: args.gameId,
+          playerId: args.playerId,
+          type,
+          amount: delta,
+          createdById: args.userId,
+          status: "APPROVED",
+          description: "Adjustment by session creator",
+        });
+        return;
+      }
+
+      if (desiredTotal < currentTotal) {
+        let remaining = currentTotal - desiredTotal;
+        const sorted = [...txs].sort((a, b) => b._creationTime - a._creationTime);
+        for (const tx of sorted) {
+          if (remaining <= 0) break;
+          if (tx.amount > remaining) {
+            await ctx.db.patch(tx._id, { amount: tx.amount - remaining });
+            remaining = 0;
+          } else {
+            remaining -= tx.amount;
+            await ctx.db.delete(tx._id);
+          }
+        }
+      }
+    }
+
+    await adjustTransactions("buyin", args.buyIn);
+    await adjustTransactions("cashout", args.cashOut);
+    await recalculatePlayerTotals(ctx, args.gameId, args.playerId);
+
+    return await ctx.db
+      .query("gamePlayers")
+      .withIndex("by_gameId_playerId", (q) =>
+        q.eq("gameId", args.gameId).eq("playerId", args.playerId)
+      )
+      .first();
   },
 });

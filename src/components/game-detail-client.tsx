@@ -33,6 +33,7 @@ import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   ArrowLeft,
+  ArrowUpDown,
   Banknote,
   Check,
   ChevronDown,
@@ -43,6 +44,7 @@ import {
   Loader2,
   MoreVertical,
   Pencil,
+  PiggyBank,
   Trash2,
   Users,
   X,
@@ -168,6 +170,10 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [isPlayersExpanded, setIsPlayersExpanded] = useState(false);
   const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false);
   const [isPendingExpanded, setIsPendingExpanded] = useState(false);
+  const [playersSort, setPlayersSort] = useState<{
+    key: "buyIn" | "cashOut" | "profit";
+    direction: "asc" | "desc";
+  }>({ key: "profit", direction: "desc" });
 
   // Edit form state
   const [editLocation, setEditLocation] = useState("");
@@ -183,6 +189,13 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     type: string;
     playerName: string;
   } | null>(null);
+  const [editingPlayerTotals, setEditingPlayerTotals] = useState<{
+    playerId: Id<"players">;
+    playerName: string;
+    buyIn: string;
+    cashOut: string;
+  } | null>(null);
+  const [isUpdatingPlayerTotals, setIsUpdatingPlayerTotals] = useState(false);
   const [isApprovingId, setIsApprovingId] = useState<string | null>(null);
   const [isRejectingId, setIsRejectingId] = useState<string | null>(null);
   const [isDeletingTxId, setIsDeletingTxId] = useState<string | null>(null);
@@ -218,6 +231,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const rejectTransaction = useMutation(api.transactions.rejectTransaction);
   const updateTransaction = useMutation(api.transactions.updateTransaction);
   const deleteTransactionMutation = useMutation(api.transactions.deleteTransaction);
+  const setPlayerTotals = useMutation(api.transactions.setPlayerTotals);
   const joinGame = useMutation(api.games.joinGame);
   const updateGame = useMutation(api.games.updateGame);
   const updateGameStatus = useMutation(api.games.updateGameStatus);
@@ -323,11 +337,81 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     (gp) => gp.playerId === player?._id
   );
   const isJoined = !!userGamePlayer;
+  const playersCount = game.gamePlayers?.length ?? 0;
+  const finalizedTransactions = (transactions ?? []).filter(
+    (tx) => tx.status !== "PENDING" && tx.status !== "REJECTED"
+  );
+  const totalBoughtIn = finalizedTransactions.reduce(
+    (sum, tx) => (tx.type === "buyin" ? sum + tx.amount : sum),
+    0
+  );
+  const totalCashedOut = finalizedTransactions.reduce(
+    (sum, tx) => (tx.type === "cashout" ? sum + tx.amount : sum),
+    0
+  );
+
+  type GamePlayer = NonNullable<typeof game.gamePlayers>[number];
+
+  function getPlayerSortValue(
+    gp: GamePlayer,
+    key: "buyIn" | "cashOut" | "profit"
+  ) {
+    if (key === "buyIn") return gp.buyIn ?? 0;
+    if (key === "cashOut") return gp.cashOut ?? 0;
+    return gp.profit ?? (gp.cashOut ?? 0) - (gp.buyIn ?? 0);
+  }
+
+  const sortedGamePlayers = [...(game.gamePlayers ?? [])].sort((a, b) => {
+    const aValue = getPlayerSortValue(a, playersSort.key);
+    const bValue = getPlayerSortValue(b, playersSort.key);
+    if (aValue === bValue) {
+      return (a.player?.name ?? "").localeCompare(b.player?.name ?? "");
+    }
+    return playersSort.direction === "desc"
+      ? bValue - aValue
+      : aValue - bValue;
+  });
+
+  function togglePlayersSort(key: "buyIn" | "cashOut" | "profit") {
+    setPlayersSort((current) =>
+      current.key === key
+        ? {
+            ...current,
+            direction: current.direction === "desc" ? "asc" : "desc",
+          }
+        : { key, direction: "desc" }
+    );
+  }
+
+  function renderSortableHeader(
+    label: string,
+    key: "buyIn" | "cashOut" | "profit"
+  ) {
+    const isActive = playersSort.key === key;
+    return (
+      <button
+        type="button"
+        onClick={() => togglePlayersSort(key)}
+        className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+      >
+        <span>{label}</span>
+        {isActive ? (
+          playersSort.direction === "desc" ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronUp className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3" />
+        )}
+      </button>
+    );
+  }
 
   function handleJoinClick() {
     // Check if user has payment info (venmo or zelle)
     const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
-    
+
     if (hasPaymentInfo) {
       // User already has payment info, join directly
       performJoinGame();
@@ -426,6 +510,26 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       alert("Failed to update transaction. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleUpdatePlayerTotals() {
+    if (!userId || !editingPlayerTotals) return;
+    setIsUpdatingPlayerTotals(true);
+    try {
+      await setPlayerTotals({
+        gameId: gameId as Id<"games">,
+        playerId: editingPlayerTotals.playerId,
+        userId,
+        buyIn: Number(editingPlayerTotals.buyIn),
+        cashOut: Number(editingPlayerTotals.cashOut),
+      });
+      setEditingPlayerTotals(null);
+    } catch (error) {
+      console.error("Failed to update player totals:", error);
+      alert("Failed to update player totals. Please try again.");
+    } finally {
+      setIsUpdatingPlayerTotals(false);
     }
   }
 
@@ -546,7 +650,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               <>
                 {" • "}
                 <span className="inline-flex items-center gap-1">
-                  <Banknote className="h-3 w-3 text-amber-600" />
+                  <PiggyBank className="h-3 w-3 text-amber-600" />
                   <span>
                     Banker: {game.createdBy.name}
                     {isSessionCreator && (
@@ -641,7 +745,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Players</CardTitle>
-                <CardDescription>Players in this session</CardDescription>
+                <CardDescription>
+                  {playersCount} {playersCount === 1 ? "player" : "players"} in
+                  this session
+                  {game.createdBy && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-amber-600">
+                      <PiggyBank className="h-3 w-3" />
+                      {game.createdBy.name}
+                    </span>
+                  )}
+                </CardDescription>
               </div>
               <Button
                 variant="ghost"
@@ -664,8 +777,8 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               <ResponsiveTable
                 data={
                   isPlayersExpanded
-                    ? game.gamePlayers ?? []
-                    : (game.gamePlayers ?? []).slice(0, 3)
+                    ? sortedGamePlayers
+                    : sortedGamePlayers.slice(0, 3)
                 }
                 keyExtractor={(gp) => gp.id}
                 columns={[
@@ -676,12 +789,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   },
                   {
                     key: "buyIn",
-                    header: "Buy-In",
+                    header: renderSortableHeader("Buy-In", "buyIn"),
                     render: (gp) => `$${gp.buyIn.toFixed(2)}`,
                   },
                   {
                     key: "cashOut",
-                    header: "Cash-Out",
+                    header: renderSortableHeader("Cash-Out", "cashOut"),
                     render: (gp) =>
                       gp.cashOut !== null && gp.cashOut !== undefined
                         ? `$${gp.cashOut.toFixed(2)}`
@@ -689,7 +802,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   },
                   {
                     key: "profit",
-                    header: "Profit",
+                    header: renderSortableHeader("Profit", "profit"),
                     render: (gp) =>
                       gp.profit !== null && gp.profit !== undefined ? (
                         <span
@@ -703,10 +816,51 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                         "—"
                       ),
                   },
+                  {
+                    key: "actions",
+                    header: "",
+                    className: "w-10 text-right",
+                    render: (gp) =>
+                      isSessionCreator ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setEditingPlayerTotals({
+                              playerId: gp.playerId as Id<"players">,
+                              playerName: gp.player?.name ?? "Unknown",
+                              buyIn: gp.buyIn.toFixed(2),
+                              cashOut: (gp.cashOut ?? 0).toFixed(2),
+                            })
+                          }
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      ) : null,
+                  },
                 ]}
                 renderCard={(gp) => (
                   <div className="rounded-lg border bg-card p-4">
-                    <div className="mb-2 font-medium">{gp.player?.name}</div>
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div className="font-medium">{gp.player?.name}</div>
+                      {isSessionCreator && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setEditingPlayerTotals({
+                              playerId: gp.playerId as Id<"players">,
+                              playerName: gp.player?.name ?? "Unknown",
+                              buyIn: gp.buyIn.toFixed(2),
+                              cashOut: (gp.cashOut ?? 0).toFixed(2),
+                            })
+                          }
+                          className="h-7 w-7 p-0"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-3 gap-2 text-sm">
                       <div>
                         <p className="text-muted-foreground">Buy-In</p>
@@ -751,18 +905,30 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <CardTitle>All Transactions</CardTitle>
                 <CardDescription>Buy-ins and cash-outs</CardDescription>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsTransactionsExpanded(!isTransactionsExpanded)}
-                className="h-8 w-8 p-0"
-              >
-                {isTransactionsExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </Button>
+              <div className="flex items-start gap-3">
+                <div className="text-right text-xs text-muted-foreground">
+                  <div>
+                    Total bought in: ${totalBoughtIn.toFixed(2)}
+                  </div>
+                  <div>
+                    Total cashed out: ${totalCashedOut.toFixed(2)}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setIsTransactionsExpanded(!isTransactionsExpanded)
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  {isTransactionsExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -1253,6 +1419,95 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               onClick={handleUpdateTransaction}
             >
               {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Player Totals Dialog */}
+      <Dialog
+        open={!!editingPlayerTotals}
+        onOpenChange={(open) => !open && setEditingPlayerTotals(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Player Totals</DialogTitle>
+            <DialogDescription>
+              Update totals for {editingPlayerTotals?.playerName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-player-buyin">Total buy-in</Label>
+              <div className="relative">
+                <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="edit-player-buyin"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="pl-7"
+                  value={editingPlayerTotals?.buyIn ?? ""}
+                  onChange={(e) =>
+                    setEditingPlayerTotals((prev) =>
+                      prev ? { ...prev, buyIn: e.target.value } : null
+                    )
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-player-cashout">Total cash-out</Label>
+              <div className="relative">
+                <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="edit-player-cashout"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="pl-7"
+                  value={editingPlayerTotals?.cashOut ?? ""}
+                  onChange={(e) =>
+                    setEditingPlayerTotals((prev) =>
+                      prev ? { ...prev, cashOut: e.target.value } : null
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={isUpdatingPlayerTotals}
+              onClick={() => setEditingPlayerTotals(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                isUpdatingPlayerTotals ||
+                !editingPlayerTotals?.buyIn ||
+                Number(editingPlayerTotals?.buyIn) < 0 ||
+                !editingPlayerTotals?.cashOut ||
+                Number(editingPlayerTotals?.cashOut) < 0
+              }
+              onClick={handleUpdatePlayerTotals}
+            >
+              {isUpdatingPlayerTotals ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Saving...
