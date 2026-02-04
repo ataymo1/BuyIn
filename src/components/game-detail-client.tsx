@@ -1140,14 +1140,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       $
                     </span>
                     <Input
-                      className="pl-7"
+                      className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       disabled={isSubmittingTransaction}
                       id="buyin-amount"
                       min="0"
                       onChange={(e) => setBuyInAmount(e.target.value)}
+                      onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                       placeholder="0.00"
                       step="0.01"
                       type="number"
+                      inputMode="decimal"
                       value={buyInAmount}
                       autoFocus
                     />
@@ -1199,14 +1201,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       $
                     </span>
                     <Input
-                      className="pl-7"
+                      className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       disabled={isSubmittingTransaction}
                       id="cashout-amount"
                       min="0"
                       onChange={(e) => setCashOutAmount(e.target.value)}
+                      onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                       placeholder="0.00"
                       step="0.01"
                       type="number"
+                      inputMode="decimal"
                       value={cashOutAmount}
                       autoFocus
                     />
@@ -1392,10 +1396,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <Input
                   id="edit-tx-amount"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  className="pl-7"
+                  className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={editingTransaction?.amount ?? ""}
+                  onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                   onChange={(e) =>
                     setEditingTransaction((prev) =>
                       prev ? { ...prev, amount: e.target.value } : null
@@ -1458,10 +1464,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <Input
                   id="edit-player-buyin"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  className="pl-7"
+                  className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={editingPlayerTotals?.buyIn ?? ""}
+                  onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                   onChange={(e) =>
                     setEditingPlayerTotals((prev) =>
                       prev ? { ...prev, buyIn: e.target.value } : null
@@ -1479,10 +1487,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <Input
                   id="edit-player-cashout"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  className="pl-7"
+                  className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={editingPlayerTotals?.cashOut ?? ""}
+                  onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                   onChange={(e) =>
                     setEditingPlayerTotals((prev) =>
                       prev ? { ...prev, cashOut: e.target.value } : null
