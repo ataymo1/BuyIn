@@ -304,6 +304,54 @@ export const removeMember = mutation({
   },
 });
 
+// Get discoverable groups (groups user is not a member of)
+export const getDiscoverableGroups = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // Get all groups
+    const allGroups = await ctx.db.query("groups").take(50);
+
+    // Get user's existing memberships
+    const memberships = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
+    const memberGroupIds = new Set(memberships.map((m) => m.groupId));
+
+    // Get user's pending requests
+    const pendingRequests = await ctx.db
+      .query("joinRequests")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .filter((q) => q.eq(q.field("status"), "PENDING"))
+      .collect();
+    const pendingGroupIds = new Set(pendingRequests.map((r) => r.groupId));
+
+    // Enrich groups with member count and request status
+    const enrichedGroups = await Promise.all(
+      allGroups.map(async (group) => {
+        const members = await ctx.db
+          .query("groupMembers")
+          .withIndex("by_groupId", (q) => q.eq("groupId", group._id))
+          .collect();
+
+        const owner = await ctx.db.get(group.ownerId);
+
+        return {
+          ...group,
+          memberCount: members.length,
+          ownerName: owner?.name ?? owner?.email ?? "Unknown",
+          isMember: memberGroupIds.has(group._id),
+          hasPendingRequest: pendingGroupIds.has(group._id),
+        };
+      })
+    );
+
+    // Sort by member count and return all groups
+    return enrichedGroups
+      .sort((a, b) => b.memberCount - a.memberCount);
+  },
+});
+
 // Search for groups by name
 export const searchGroups = query({
   args: { searchTerm: v.string(), userId: v.id("users") },

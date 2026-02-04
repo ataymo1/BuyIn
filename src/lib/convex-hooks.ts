@@ -275,6 +275,21 @@ export function useSearchGroups(searchTerm: string) {
   };
 }
 
+// Discoverable groups hook (groups user can join)
+export function useDiscoverableGroups() {
+  const { userId } = useConvexUser();
+
+  const groups = useQuery(
+    api.groups.getDiscoverableGroups,
+    userId ? { userId } : "skip"
+  );
+
+  return {
+    groups: groups ?? [],
+    isLoading: groups === undefined && userId !== undefined,
+  };
+}
+
 // Join request hooks
 export function useRequestToJoin() {
   return useMutation(api.groups.requestToJoin);
