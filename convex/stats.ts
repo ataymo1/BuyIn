@@ -286,6 +286,21 @@ export const getPlayerStats = query({
       return null;
     }
 
+    // Check if profile is private
+    if (user.profilePrivate) {
+      return {
+        playerName: player.name,
+        isPrivate: true,
+        venmo: null,
+        zelle: null,
+        totalBuyIns: 0,
+        totalCashOuts: 0,
+        netProfit: 0,
+        gamesPlayed: 0,
+        recentGames: [],
+      };
+    }
+
     // Get all group memberships
     const memberships = await ctx.db
       .query("groupMembers")
@@ -363,6 +378,7 @@ export const getPlayerStats = query({
 
     return {
       playerName: player.name,
+      isPrivate: false,
       venmo: user.venmo ?? null,
       zelle: user.zelle ?? null,
       totalBuyIns,

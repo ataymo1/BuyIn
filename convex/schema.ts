@@ -11,6 +11,7 @@ export default defineSchema({
     emailVerified: v.optional(v.number()),
     venmo: v.optional(v.string()),
     zelle: v.optional(v.string()),
+    profilePrivate: v.optional(v.boolean()),
   }).index("by_email", ["email"]),
 
   accounts: defineTable({

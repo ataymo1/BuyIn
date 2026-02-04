@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CreditCard, Edit2, LogOut, Loader2, User, X } from "lucide-react";
+import { CreditCard, Edit2, Eye, EyeOff, LogOut, Loader2, User, X } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -151,6 +151,18 @@ export function ProfileClient() {
         venmo: user.venmo ?? "",
         zelle: user.zelle ?? "",
       });
+    }
+  };
+
+  const handlePrivacyToggle = async () => {
+    if (!userId) return;
+    try {
+      await updateUser({
+        id: userId,
+        profilePrivate: !user?.profilePrivate,
+      });
+    } catch (error) {
+      console.error("Failed to toggle privacy:", error);
     }
   };
 
@@ -339,6 +351,44 @@ export function ProfileClient() {
           </div>
         )}
       </form>
+
+      {/* Privacy Settings Section */}
+      {!isEditing && (
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              {user?.profilePrivate ? (
+                <EyeOff className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <Eye className="h-5 w-5 text-muted-foreground" />
+              )}
+              Privacy Settings
+            </CardTitle>
+            <CardDescription>
+              Control who can see your stats and payment methods
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="font-medium">Private Profile</p>
+                <p className="text-sm text-muted-foreground">
+                  {user?.profilePrivate
+                    ? "Your stats and payment info are hidden from other players"
+                    : "Other players in your groups can see your stats and payment info"}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handlePrivacyToggle}
+                className="shrink-0"
+              >
+                {user?.profilePrivate ? "Make Public" : "Make Private"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Sign Out Section */}
       {!isEditing && (

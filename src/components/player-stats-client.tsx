@@ -7,6 +7,7 @@ import {
   Calendar,
   CreditCard,
   DollarSign,
+  Lock,
   TrendingUp,
   UserCog,
 } from "lucide-react";
@@ -87,6 +88,49 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
             Back to Groups
           </Button>
         </Link>
+      </div>
+    );
+  }
+
+  // Handle private profiles
+  if (stats.isPrivate) {
+    return (
+      <div className="space-y-8">
+        {/* Back Button */}
+        <Link href="/groups">
+          <Button size="sm" variant="ghost">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </Link>
+
+        {/* Private Profile Card */}
+        <Card className="overflow-hidden">
+          <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 sm:p-8">
+            <div className="flex flex-col items-center gap-6 text-center">
+              {/* Avatar */}
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 text-3xl font-bold text-primary ring-4 ring-background sm:h-24 sm:w-24 sm:text-4xl">
+                {stats.playerName.charAt(0).toUpperCase()}
+              </div>
+
+              {/* Profile Info */}
+              <div className="space-y-4">
+                <h1 className="font-bold text-2xl sm:text-3xl">
+                  {stats.playerName}
+                </h1>
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <Lock className="h-5 w-5" />
+                  <p className="text-sm sm:text-base">
+                    This profile is private
+                  </p>
+                </div>
+                <p className="mx-auto max-w-md text-muted-foreground text-sm">
+                  This player has chosen to keep their stats and payment methods private.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     );
   }
