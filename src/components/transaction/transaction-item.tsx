@@ -3,6 +3,7 @@
 import { Edit, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useNotification } from "@/components/notification-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,6 +41,7 @@ export function TransactionItem({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
+  const { showNotification } = useNotification();
 
   const handleUpdate = async (data: {
     type: "buyin" | "cashout";
@@ -57,7 +59,7 @@ export function TransactionItem({
 
       if (!response.ok) {
         const error = await response.json();
-        alert(error.error || "Failed to update transaction");
+        showNotification(error.error || "Failed to update transaction", { type: "error" });
         return;
       }
 
@@ -65,7 +67,7 @@ export function TransactionItem({
       router.refresh();
     } catch (error) {
       console.error("Error updating transaction:", error);
-      alert("Failed to update transaction");
+      showNotification("Failed to update transaction", { type: "error" });
     }
   };
 
@@ -82,14 +84,14 @@ export function TransactionItem({
 
       if (!response.ok) {
         const error = await response.json();
-        alert(error.error || "Failed to delete transaction");
+        showNotification(error.error || "Failed to delete transaction", { type: "error" });
         return;
       }
 
       router.refresh();
     } catch (error) {
       console.error("Error deleting transaction:", error);
-      alert("Failed to delete transaction");
+      showNotification("Failed to delete transaction", { type: "error" });
     } finally {
       setIsDeleting(false);
     }
