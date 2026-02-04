@@ -411,8 +411,9 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
         <CardContent>
           <div className="space-y-2">
             {(group.members ?? []).map((member) => (
-              <div
-                className="flex items-center justify-between rounded border p-3"
+              <Link
+                href={`/players/${member.user?.id}`}
+                className="flex items-center justify-between rounded border p-3 transition-colors hover:bg-accent"
                 key={member._id}
               >
                 <div className="flex items-center gap-3">
@@ -426,7 +427,10 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                     </p>
                   </div>
                 </div>
-              </div>
+                <Button size="sm" variant="ghost">
+                  View Profile
+                </Button>
+              </Link>
             ))}
           </div>
         </CardContent>

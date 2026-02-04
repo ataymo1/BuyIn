@@ -363,6 +363,8 @@ export const getPlayerStats = query({
 
     return {
       playerName: player.name,
+      venmo: user.venmo ?? null,
+      zelle: user.zelle ?? null,
       totalBuyIns,
       totalCashOuts,
       netProfit,
