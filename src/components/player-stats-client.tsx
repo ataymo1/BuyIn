@@ -3,7 +3,6 @@
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
-  ArrowLeft,
   Calendar,
   CreditCard,
   DollarSign,
@@ -83,11 +82,6 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
     return (
       <div className="py-12 text-center">
         <p className="text-muted-foreground">Player not found</p>
-        <Link href="/groups">
-          <Button className="mt-4" variant="outline">
-            Back to Groups
-          </Button>
-        </Link>
       </div>
     );
   }
@@ -96,14 +90,6 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
   if (stats.isPrivate) {
     return (
       <div className="space-y-8">
-        {/* Back Button */}
-        <Link href="/groups">
-          <Button size="sm" variant="ghost">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-        </Link>
-
         {/* Private Profile Card */}
         <Card className="overflow-hidden">
           <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 sm:p-8">
@@ -137,13 +123,6 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
 
   return (
     <div className="space-y-8">
-      {/* Back Button */}
-      <Link href="/groups">
-        <Button size="sm" variant="ghost">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      </Link>
 
       {/* Profile Header Card */}
       <Card className="overflow-hidden">
