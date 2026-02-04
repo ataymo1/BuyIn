@@ -2,8 +2,10 @@
 
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
-import { MapPin, Plus, Trophy, UserPlus } from "lucide-react";
+import { MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { DeleteGroupDialog } from "@/components/group/delete-group-dialog";
+import { EditGroupDialog } from "@/components/group/edit-group-dialog";
 import { PendingRequestsList } from "@/components/group/pending-requests-list";
 import { Button } from "@/components/ui/button";
 import {
@@ -429,6 +431,36 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Group Settings - Owner Only */}
+      {isOwner && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              <CardTitle>Group Settings</CardTitle>
+            </div>
+            <EditGroupDialog
+              groupId={groupId as Id<"groups">}
+              currentName={group.name}
+              currentDescription={group.description}
+            />
+          </CardHeader>
+        </Card>
+      )}
+
+      {/* Danger Zone - Owner Only */}
+      {isOwner && (
+        <Card className="border-destructive/50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-destructive">Danger Zone</CardTitle>
+            <DeleteGroupDialog
+              groupId={groupId as Id<"groups">}
+              groupName={group.name}
+            />
+          </CardHeader>
+        </Card>
+      )}
     </div>
   );
 }
