@@ -315,9 +315,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">
-                          {format(new Date(game.date), "MMM dd, yyyy")}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {format(new Date(game.date), "MMM dd, yyyy")}
+                          </p>
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                          </span>
+                        </div>
                         {game.location && (
                           <p className="flex items-center gap-1 text-muted-foreground text-sm">
                             <MapPin className="h-3 w-3" />
@@ -362,9 +367,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">
-                          {format(new Date(game.date), "MMM dd, yyyy")}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {format(new Date(game.date), "MMM dd, yyyy")}
+                          </p>
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                          </span>
+                        </div>
                         {game.location && (
                           <p className="flex items-center gap-1 text-muted-foreground text-sm">
                             <MapPin className="h-3 w-3" />

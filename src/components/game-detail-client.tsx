@@ -188,6 +188,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "COMPLETED">(
     "ACTIVE"
   );
+  const [editGameType, setEditGameType] = useState<"cash" | "tournament">("cash");
 
   // Transaction edit state
   const [editingTransaction, setEditingTransaction] = useState<{
@@ -252,6 +253,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       setEditLocation(game.location ?? "");
       setEditDate(format(new Date(game.date), "yyyy-MM-dd"));
       setEditStatus(game.status === "CANCELLED" ? "ACTIVE" : game.status);
+      setEditGameType(game.gameType ?? "cash");
       setShowEditDialog(true);
       setShowActionsMenu(false);
     }
@@ -268,6 +270,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         userId,
         location: editLocation || undefined,
         date: new Date(editDate).getTime(),
+        gameType: editGameType,
       });
 
       // Update status if changed
@@ -598,6 +601,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
               >
                 {game.status}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-1 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                {game.gameType === "tournament" ? "Tournament" : "Cash Game"}
               </span>
               {isSessionCreator && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
@@ -1330,6 +1336,24 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <SelectContent>
                   <SelectItem value="ACTIVE">Active</SelectItem>
                   <SelectItem value="COMPLETED">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-game-type">Game Type</Label>
+              <Select
+                onValueChange={(val) =>
+                  setEditGameType(val as "cash" | "tournament")
+                }
+                value={editGameType}
+              >
+                <SelectTrigger id="edit-game-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash Game</SelectItem>
+                  <SelectItem value="tournament">Tournament</SelectItem>
                 </SelectContent>
               </Select>
             </div>

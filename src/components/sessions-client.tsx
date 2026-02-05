@@ -303,6 +303,15 @@ export function SessionsClient() {
                     render: (game) => game.gamePlayers?.length ?? 0,
                   },
                   {
+                    key: "gameType",
+                    header: "Type",
+                    render: (game) => (
+                      <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                        {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                      </span>
+                    ),
+                  },
+                  {
                     key: "banker",
                     header: "Banker",
                     render: (game) => {
@@ -365,11 +374,16 @@ export function SessionsClient() {
                           </Link>
                         </div>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-                      >
-                        {game.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                          {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                        </span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                        >
+                          {game.status}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mb-3 flex flex-wrap gap-3 text-sm">
@@ -463,6 +477,15 @@ export function SessionsClient() {
                     render: (game) => game.gamePlayers?.length ?? 0,
                   },
                   {
+                    key: "gameType",
+                    header: "Type",
+                    render: (game) => (
+                      <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                        {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                      </span>
+                    ),
+                  },
+                  {
                     key: "result",
                     header: "Your Result",
                     render: (game) =>
@@ -540,11 +563,16 @@ export function SessionsClient() {
                             </Link>
                           </div>
                         </div>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-                        >
-                          {game.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                          >
+                            {game.status}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="mb-3 flex flex-wrap gap-3 text-sm">

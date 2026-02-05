@@ -107,6 +107,7 @@ export function NewGameClient() {
     groupId: string;
     date: string;
     location?: string;
+    gameType?: "cash" | "tournament";
   }) {
     if (!userId) {
       throw new Error("Unauthorized");
@@ -120,6 +121,7 @@ export function NewGameClient() {
       groupId: data.groupId as Id<"groups">,
       date: new Date(data.date).getTime(),
       location: data.location,
+      gameType: data.gameType,
       createdById: userId,
     });
 

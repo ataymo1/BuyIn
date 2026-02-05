@@ -99,6 +99,7 @@ export default defineSchema({
       v.literal("COMPLETED"),
       v.literal("CANCELLED")
     ),
+    gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
     groupId: v.id("groups"),
     createdById: v.id("users"),
   })

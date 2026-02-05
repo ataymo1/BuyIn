@@ -26,6 +26,7 @@ const gameFormSchema = z.object({
   groupId: z.string().min(1, "Group is required"),
   date: z.string().min(1, "Date is required"),
   location: z.string().optional(),
+  gameType: z.enum(["cash", "tournament"]).optional(),
 });
 
 type GameFormValues = z.infer<typeof gameFormSchema>;
@@ -49,6 +50,7 @@ export function GameForm({
       groupId: defaultGroupId || "",
       date: new Date().toISOString().split("T")[0],
       location: "",
+      gameType: "cash",
     },
   });
 
@@ -58,6 +60,7 @@ export function GameForm({
       groupId: String(data.groupId),
       date: String(data.date),
       location: data.location ? String(data.location) : undefined,
+      gameType: data.gameType,
     });
   };
 
@@ -126,6 +129,23 @@ export function GameForm({
               className="h-12 text-base transition-all focus:ring-2 focus:ring-violet-500/20"
               {...form.register("location")}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="gameType" className="text-sm font-medium">
+              Game Type
+            </Label>
+            <Select
+              onValueChange={(value) => form.setValue("gameType", value as "cash" | "tournament")}
+              value={form.watch("gameType") || "cash"}
+            >
+              <SelectTrigger className="h-12 text-base transition-all focus:ring-2 focus:ring-violet-500/20">
+                <SelectValue placeholder="Select game type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">Cash Game</SelectItem>
+                <SelectItem value="tournament">Tournament</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="flex flex-col gap-3 pt-2">
