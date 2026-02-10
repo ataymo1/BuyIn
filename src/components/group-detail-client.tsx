@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import { MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { VipBadge } from "@/components/icons/vip-badge";
 import { DeleteGroupDialog } from "@/components/group/delete-group-dialog";
 import { EditGroupDialog } from "@/components/group/edit-group-dialog";
 import { PendingRequestsList } from "@/components/group/pending-requests-list";
@@ -207,6 +208,7 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                 ...standing,
                 rank: index + 1,
                 isFirst: index === 0 && (standings ?? []).length > 1,
+                isLast: index === (standings ?? []).length - 1 && (standings ?? []).length > 1,
               }))}
               keyExtractor={(standing) => standing.player?.id ?? ""}
               columns={[
@@ -218,6 +220,9 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                     <div className="flex items-center gap-2">
                       {standing.isFirst && (
                         <Trophy className="h-4 w-4 text-yellow-500" />
+                      )}
+                      {standing.isLast && (
+                        <VipBadge className="h-4 w-4 text-purple-500" />
                       )}
                       <span className="font-bold">#{standing.rank}</span>
                     </div>
@@ -259,11 +264,15 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                       className={`flex h-10 w-10 items-center justify-center rounded-full ${
                         standing.isFirst
                           ? "bg-yellow-100 dark:bg-yellow-900"
-                          : "bg-muted"
+                          : standing.isLast
+                            ? "bg-purple-100 dark:bg-purple-900"
+                            : "bg-muted"
                       }`}
                     >
                       {standing.isFirst ? (
                         <Trophy className="h-5 w-5 text-yellow-500" />
+                      ) : standing.isLast ? (
+                        <VipBadge className="h-5 w-5 text-purple-500" />
                       ) : (
                         <span className="font-bold text-muted-foreground">
                           #{standing.rank}
