@@ -80,7 +80,7 @@ export function TransactionItem({
     try {
       const response = await fetch(`/api/transactions/${id}`, {
         method: "DELETE",
-      });
+      }); 
 
       if (!response.ok) {
         const error = await response.json();
