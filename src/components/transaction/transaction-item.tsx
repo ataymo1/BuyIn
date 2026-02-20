@@ -75,7 +75,7 @@ export function TransactionItem({
     if (!confirm("Are you sure you want to delete this transaction?")) {
       return;
     }
-
+ 
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/transactions/${id}`, {
