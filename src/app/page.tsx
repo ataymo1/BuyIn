@@ -1,9 +1,9 @@
-import { Loader2 } from "lucide-react";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
 import { DashboardClient } from "@/components/dashboard-client";
 import Navbar from "@/components/layout/navbar";
 import { auth } from "@/lib/auth";
+import { Loader2 } from "lucide-react";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 export default async function Home() {
   const session = await auth();
@@ -11,7 +11,7 @@ export default async function Home() {
   if (!session?.user) {
     redirect("/login");
   }
-
+  
   return (
     <div className="min-h-screen">
       <Navbar />

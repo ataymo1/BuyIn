@@ -29,7 +29,7 @@ export function GroupCard({
   activeSessionCount,
 }: GroupCardProps) {
   return (
-    <Card className="transition-shadow hover:shadow-lg">
+    <Card className="flex h-full flex-col transition-shadow hover:shadow-lg">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -45,7 +45,7 @@ export function GroupCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 flex-col">
         <div className="mb-4 flex items-center gap-4 text-muted-foreground text-sm">
           <div className="flex items-center gap-1">
             <Users className="h-4 w-4" />
@@ -61,11 +61,13 @@ export function GroupCard({
             </span>
           </div>
         </div>
-        <Link href={`/groups/${id}`}>
-          <Button className="w-full" variant="outline">
-            View Group
-          </Button>
-        </Link>
+        <div className="mt-auto">
+          <Link href={`/groups/${id}`}>
+            <Button className="w-full" variant="outline">
+              View Group
+            </Button>
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );

@@ -43,6 +43,7 @@ export const updateUser = mutation({
     emailVerified: v.optional(v.number()),
     venmo: v.optional(v.string()),
     zelle: v.optional(v.string()),
+    profilePrivate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;

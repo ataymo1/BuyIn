@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { GroupCardSkeleton } from "@/components/ui/skeleton";
 import {
   useConvexUser,
+  useDiscoverableGroups,
   useRequestToJoin,
   useSearchGroups,
 } from "@/lib/convex-hooks";
@@ -30,9 +31,14 @@ export function GroupSearchClient() {
     null
   );
 
-  const { groups, isLoading } = useSearchGroups(searchTerm);
+  const { groups: searchResults, isLoading: searchLoading } = useSearchGroups(searchTerm);
+  const { groups: discoverableGroups, isLoading: discoverableLoading } = useDiscoverableGroups();
   const { userId, user } = useConvexUser();
   const requestToJoin = useRequestToJoin();
+
+  // Use search results when searching, otherwise show discoverable groups
+  const groups = searchTerm.trim() ? searchResults : discoverableGroups;
+  const isLoading = searchTerm.trim() ? searchLoading : discoverableLoading;
 
   const performJoinRequest = async (groupId: string) => {
     if (!userId) {
@@ -117,19 +123,6 @@ export function GroupSearchClient() {
   };
 
   const renderContent = () => {
-    if (searchTerm.trim() === "") {
-      return (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Search className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="text-muted-foreground">
-              Enter a group name to start searching
-            </p>
-          </CardContent>
-        </Card>
-      );
-    }
-
     if (isLoading) {
       return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -137,6 +130,24 @@ export function GroupSearchClient() {
             <GroupCardSkeleton key={i} />
           ))}
         </div>
+      );
+    }
+
+    if (groups.length === 0 && !searchTerm.trim()) {
+      return (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="text-muted-foreground">
+              No groups available to join yet
+            </p>
+            <p className="text-muted-foreground text-sm mt-2">
+              <Link className="text-primary hover:underline" href="/groups/new">
+                Create your own group
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
       );
     }
 

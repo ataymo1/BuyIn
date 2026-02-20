@@ -214,6 +214,7 @@ export const createGame = mutation({
     date: v.number(),
     location: v.optional(v.string()),
     notes: v.optional(v.string()),
+    gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
     groupId: v.id("groups"),
     createdById: v.id("users"),
   },
@@ -234,6 +235,7 @@ export const createGame = mutation({
       date: args.date,
       location: args.location,
       notes: args.notes,
+      gameType: args.gameType,
       groupId: args.groupId,
       createdById: args.createdById,
       status: "ACTIVE",
@@ -283,6 +285,7 @@ export const updateGame = mutation({
     location: v.optional(v.string()),
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
+    gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
   },
   handler: async (ctx, args) => {
     const game = await ctx.db.get(args.gameId);

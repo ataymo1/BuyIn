@@ -1,11 +1,22 @@
 "use client";
 
+import { useNotification } from "@/components/notification-provider";
 import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { MobileCardSkeleton, Skeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import {
@@ -14,17 +25,20 @@ import {
     useJoinGame,
     usePlayer,
 } from "@/lib/convex-hooks";
+import { useMutation } from "convex/react";
 import { format } from "date-fns";
 import {
     Banknote,
     Calendar,
     History,
+    Loader2,
     LogIn,
     MapPin,
     Users
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
 function getProfitColorClass(profit: number): string {
@@ -104,12 +118,18 @@ function SessionsSkeleton() {
 export function SessionsClient() {
   const { player, isLoading: playerLoading } = usePlayer();
   const { userId, user } = useConvexUser();
+  const { showNotification } = useNotification();
   const joinGame = useJoinGame();
+  const createTransaction = useMutation(api.transactions.createTransaction);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingJoinGameId, setPendingJoinGameId] = useState<string | null>(
     null
   );
   const [isJoining, setIsJoining] = useState<string | null>(null);
+  
+  // Buy-in dialog state
+  const [showBuyInDialog, setShowBuyInDialog] = useState(false);
+  const [initialBuyInAmount, setInitialBuyInAmount] = useState("");
 
   const { games, isLoading: gamesLoading } = useGames({});
 
@@ -152,7 +172,7 @@ export function SessionsClient() {
 
   const handleJoinSession = async (gameId: string) => {
     if (!player?._id) {
-      alert("Please wait, setting up your player profile...");
+      showNotification("Please wait, setting up your player profile...", { type: "info" });
       return;
     }
 
@@ -160,8 +180,10 @@ export function SessionsClient() {
     const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
 
     if (hasPaymentInfo) {
-      // User has payment info, join directly
-      await performJoinGame(gameId);
+      // User has payment info, show buy-in dialog
+      setPendingJoinGameId(gameId);
+      setInitialBuyInAmount("");
+      setShowBuyInDialog(true);
     } else {
       // User needs to add payment info first
       setPendingJoinGameId(gameId);
@@ -171,28 +193,50 @@ export function SessionsClient() {
 
   const handlePaymentSuccess = async () => {
     setShowPaymentModal(false);
-    if (pendingJoinGameId) {
-      await performJoinGame(pendingJoinGameId);
-      setPendingJoinGameId(null);
-    }
+    // After adding payment info, show the buy-in dialog
+    setInitialBuyInAmount("");
+    setShowBuyInDialog(true);
   };
 
-  const performJoinGame = async (gameId: string) => {
-    if (!player?._id) {
+  const handleJoinWithBuyIn = async () => {
+    if (!player?._id || !userId || !pendingJoinGameId) {
       return;
     }
 
-    setIsJoining(gameId);
+    setIsJoining(pendingJoinGameId);
     try {
+      const buyInValue = parseFloat(initialBuyInAmount) || 0;
+      
+      // First, join the game
       await joinGame({
-        gameId: gameId as Id<"games">,
+        gameId: pendingJoinGameId as Id<"games">,
         playerId: player._id,
       });
+      
+      // Then, if there's an initial buy-in amount, create a transaction
+      if (buyInValue > 0) {
+        const result = await createTransaction({
+          gameId: pendingJoinGameId as Id<"games">,
+          playerId: player._id,
+          type: "buyin",
+          amount: buyInValue,
+          description: "Initial buy-in",
+          createdById: userId,
+        });
+        
+        if (result.status === "PENDING") {
+          showNotification("You've joined the session! Your initial buy-in request has been submitted and is awaiting approval from the session host.", { type: "success", title: "Request Submitted" });
+        }
+      }
+      
+      setShowBuyInDialog(false);
+      setInitialBuyInAmount("");
+      setPendingJoinGameId(null);
       // Refresh the page to update the session lists
       window.location.reload();
     } catch (error) {
       console.error("Error joining session:", error);
-      alert("Failed to join session. Please try again.");
+      showNotification("Failed to join session. Please try again.", { type: "error" });
     } finally {
       setIsJoining(null);
     }
@@ -259,6 +303,15 @@ export function SessionsClient() {
                     render: (game) => game.gamePlayers?.length ?? 0,
                   },
                   {
+                    key: "gameType",
+                    header: "Type",
+                    render: (game) => (
+                      <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                        {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                      </span>
+                    ),
+                  },
+                  {
                     key: "banker",
                     header: "Banker",
                     render: (game) => {
@@ -321,11 +374,16 @@ export function SessionsClient() {
                           </Link>
                         </div>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-                      >
-                        {game.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                          {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                        </span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                        >
+                          {game.status}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mb-3 flex flex-wrap gap-3 text-sm">
@@ -419,6 +477,15 @@ export function SessionsClient() {
                     render: (game) => game.gamePlayers?.length ?? 0,
                   },
                   {
+                    key: "gameType",
+                    header: "Type",
+                    render: (game) => (
+                      <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                        {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                      </span>
+                    ),
+                  },
+                  {
                     key: "result",
                     header: "Your Result",
                     render: (game) =>
@@ -496,11 +563,16 @@ export function SessionsClient() {
                             </Link>
                           </div>
                         </div>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
-                        >
-                          {game.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
+                          >
+                            {game.status}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="mb-3 flex flex-wrap gap-3 text-sm">
@@ -569,6 +641,60 @@ export function SessionsClient() {
         open={showPaymentModal}
         onSuccess={handlePaymentSuccess}
       />
+
+      {/* Initial Buy-In Dialog */}
+      <Dialog open={showBuyInDialog} onOpenChange={setShowBuyInDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Join Session</DialogTitle>
+            <DialogDescription>
+              Enter your initial buy-in amount to join this session. You can add more later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="initial-buyin-sessions">Initial Buy-In Amount</Label>
+            <div className="relative mt-2">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+              <Input
+                id="initial-buyin-sessions"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={initialBuyInAmount}
+                onChange={(e) => setInitialBuyInAmount(e.target.value)}
+                className="pl-7"
+                autoFocus
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Leave at $0 if you want to buy in later
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBuyInDialog(false);
+                setPendingJoinGameId(null);
+              }}
+              disabled={isJoining !== null}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleJoinWithBuyIn} disabled={isJoining !== null}>
+              {isJoining !== null ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Joining...
+                </>
+              ) : (
+                "Join Session"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

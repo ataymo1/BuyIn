@@ -3,9 +3,10 @@
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
-  ArrowLeft,
   Calendar,
+  CreditCard,
   DollarSign,
+  Lock,
   TrendingUp,
   UserCog,
 } from "lucide-react";
@@ -81,33 +82,103 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
     return (
       <div className="py-12 text-center">
         <p className="text-muted-foreground">Player not found</p>
-        <Link href="/groups">
-          <Button className="mt-4" variant="outline">
-            Back to Groups
-          </Button>
-        </Link>
+      </div>
+    );
+  }
+
+  // Handle private profiles
+  if (stats.isPrivate) {
+    return (
+      <div className="space-y-8">
+        {/* Private Profile Card */}
+        <Card className="overflow-hidden">
+          <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 sm:p-8">
+            <div className="flex flex-col items-center gap-6 text-center">
+              {/* Avatar */}
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 text-3xl font-bold text-primary ring-4 ring-background sm:h-24 sm:w-24 sm:text-4xl">
+                {stats.playerName.charAt(0).toUpperCase()}
+              </div>
+
+              {/* Profile Info */}
+              <div className="space-y-4">
+                <h1 className="font-bold text-2xl sm:text-3xl">
+                  {stats.playerName}
+                </h1>
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <Lock className="h-5 w-5" />
+                  <p className="text-sm sm:text-base">
+                    This profile is private
+                  </p>
+                </div>
+                <p className="mx-auto max-w-md text-muted-foreground text-sm">
+                  This player has chosen to keep their stats and payment methods private.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Link href="/groups">
-            <Button size="sm" variant="ghost">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="font-bold text-3xl">{stats.playerName}'s Stats</h1>
-            <p className="text-muted-foreground">
-              Personal statistics across all groups
-            </p>
+
+      {/* Profile Header Card */}
+      <Card className="overflow-hidden">
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 sm:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+            {/* Avatar */}
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 text-3xl font-bold text-primary ring-4 ring-background sm:h-24 sm:w-24 sm:text-4xl">
+              {stats.playerName.charAt(0).toUpperCase()}
+            </div>
+
+            {/* Profile Info */}
+            <div className="flex-1 space-y-4">
+              <div>
+                <h1 className="font-bold text-2xl sm:text-3xl">
+                  {stats.playerName}
+                </h1>
+                <p className="text-muted-foreground">
+                  {stats.gamesPlayed} games played •{" "}
+                  <span
+                    className={
+                      stats.netProfit >= 0 ? "text-green-600" : "text-red-600"
+                    }
+                  >
+                    {stats.netProfit >= 0 ? "+" : ""}${stats.netProfit.toFixed(2)} lifetime
+                  </span>
+                </p>
+              </div>
+
+              {/* Payment Methods - Inline */}
+              {(stats.venmo || stats.zelle) && (
+                <div className="flex flex-wrap gap-3">
+                  {stats.venmo && (
+                    <div className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm shadow-sm ring-1 ring-border">
+                      <span className="font-semibold text-blue-600">Venmo</span>
+                      <span className="font-medium">{stats.venmo}</span>
+                    </div>
+                  )}
+                  {stats.zelle && (
+                    <div className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm shadow-sm ring-1 ring-border">
+                      <span className="font-semibold text-purple-600">Zelle</span>
+                      <span className="font-medium">{stats.zelle}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Payment Methods Notice */}
+              {!stats.venmo && !stats.zelle && (
+                <p className="text-sm text-muted-foreground italic">
+                  No payment methods set up
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Overall Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

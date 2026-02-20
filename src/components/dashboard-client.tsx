@@ -130,7 +130,7 @@ export function DashboardClient() {
                     <Play className="h-6 w-6 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <p className="font-semibold">Start New Game</p>
+                    <p className="font-semibold">Start New Session</p>
                   </div>
                 </CardContent>
               </Card>
@@ -227,7 +227,7 @@ export function DashboardClient() {
               <Link href={hasGroups ? "/games/new" : "/groups/new"}>
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
-                  {hasGroups ? "Start New Game" : "Create Your First Group"}
+                  {hasGroups ? "Start New Session" : "Create Your First Group"}
                 </Button>
               </Link>
             </CardContent>

@@ -1,8 +1,10 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import Navbar from "@/components/layout/navbar";
 import { SessionsClient } from "@/components/sessions-client";
+import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 
 export default async function SessionsPage() {
@@ -16,6 +18,15 @@ export default async function SessionsPage() {
     <div className="min-h-screen">
       <Navbar />
       <main className="container mx-auto px-4 pt-6 pb-32 md:py-8 md:pb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Sessions</h1>
+          <Link href="/games/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Session
+            </Button>
+          </Link>
+        </div>
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-12">

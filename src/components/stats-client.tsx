@@ -1,25 +1,25 @@
 "use client";
 
-import { Calendar, DollarSign, TrendingDown, TrendingUp, Users } from "lucide-react";
-import Link from "next/link";
 import { StatsCard } from "@/components/stats/stats-card";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
-  PageHeaderSkeleton,
-  Skeleton,
-  StatsCardSkeleton,
-  SummaryCardSkeleton,
-  TableRowSkeleton,
+    PageHeaderSkeleton,
+    Skeleton,
+    StatsCardSkeleton,
+    SummaryCardSkeleton,
+    TableRowSkeleton,
 } from "@/components/ui/skeleton";
 import { useUserGroups, useUserStats } from "@/lib/convex-hooks";
+import { Calendar, DollarSign, TrendingDown, TrendingUp, Users } from "lucide-react";
+import Link from "next/link";
 
 function StatsSkeleton() {
   return (

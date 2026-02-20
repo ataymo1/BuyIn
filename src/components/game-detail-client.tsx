@@ -1,5 +1,6 @@
 "use client";
 
+import { useNotification } from "@/components/notification-provider";
 import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
@@ -151,6 +152,7 @@ function getStatusColorClass(status: string): string {
 
 export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const router = useRouter();
+  const { showNotification } = useNotification();
   const { userId, user, isLoading: userLoading } = useConvexUser();
   const { player, isLoading: playerLoading } = usePlayer();
 
@@ -159,6 +161,11 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  
+  // Initial buy-in dialog state
+  const [showBuyInDialog, setShowBuyInDialog] = useState(false);
+  const [initialBuyInAmount, setInitialBuyInAmount] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
 
   // Transaction form state
   const [activeAction, setActiveAction] = useState<"buyin" | "cashout" | null>(null);
@@ -181,6 +188,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "COMPLETED">(
     "ACTIVE"
   );
+  const [editGameType, setEditGameType] = useState<"cash" | "tournament">("cash");
 
   // Transaction edit state
   const [editingTransaction, setEditingTransaction] = useState<{
@@ -245,6 +253,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       setEditLocation(game.location ?? "");
       setEditDate(format(new Date(game.date), "yyyy-MM-dd"));
       setEditStatus(game.status === "CANCELLED" ? "ACTIVE" : game.status);
+      setEditGameType(game.gameType ?? "cash");
       setShowEditDialog(true);
       setShowActionsMenu(false);
     }
@@ -261,6 +270,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         userId,
         location: editLocation || undefined,
         date: new Date(editDate).getTime(),
+        gameType: editGameType,
       });
 
       // Update status if changed
@@ -275,7 +285,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       setShowEditDialog(false);
     } catch (error) {
       console.error("Failed to update session:", error);
-      alert("Failed to update session. Please try again.");
+      showNotification("Failed to update session. Please try again.", { type: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -293,7 +303,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       router.push("/sessions");
     } catch (error) {
       console.error("Failed to delete session:", error);
-      alert("Failed to delete session. Please try again.");
+      showNotification("Failed to delete session. Please try again.", { type: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -311,7 +321,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       setShowActionsMenu(false);
     } catch (error) {
       console.error("Failed to update status:", error);
-      alert("Failed to update status. Please try again.");
+      showNotification("Failed to update status. Please try again.", { type: "error" });
     }
   }
 
@@ -414,8 +424,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
 
     if (hasPaymentInfo) {
-      // User already has payment info, join directly
-      performJoinGame();
+      // User already has payment info, show buy-in dialog
+      setInitialBuyInAmount("");
+      setShowBuyInDialog(true);
     } else {
       // User needs to add payment info first
       setShowPaymentModal(true);
@@ -424,25 +435,55 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
 
   async function handlePaymentSuccess() {
     setShowPaymentModal(false);
-    await performJoinGame();
+    // After adding payment info, show the buy-in dialog
+    setInitialBuyInAmount("");
+    setShowBuyInDialog(true);
   }
 
-  async function performJoinGame() {
-    if (!player?._id) {
+  async function handleJoinWithBuyIn() {
+    if (!player?._id || !userId) {
       console.error(
         "[handleJoinGame] No player record - waiting for player sync"
       );
-      alert("Please wait, setting up your player profile...");
+      showNotification("Please wait, setting up your player profile...", { type: "info" });
       return;
     }
+    
+    setIsJoining(true);
     try {
+      const buyInValue = parseFloat(initialBuyInAmount) || 0;
+      
+      // First, join the game
       await joinGame({
         gameId: gameId as Id<"games">,
         playerId: player._id,
       });
+      
+      // Then, if there's an initial buy-in amount, create a transaction
+      // This will go through the approval flow for non-session-creators
+      if (buyInValue > 0) {
+        const result = await createTransaction({
+          gameId: gameId as Id<"games">,
+          playerId: player._id,
+          type: "buyin",
+          amount: buyInValue,
+          description: "Initial buy-in",
+          createdById: userId,
+        });
+        
+        // Show feedback if transaction is pending
+        if (result.status === "PENDING") {
+          showNotification("You've joined the session! Your initial buy-in request has been submitted and is awaiting approval from the session host.", { type: "success", title: "Request Submitted" });
+        }
+      }
+      
+      setShowBuyInDialog(false);
+      setInitialBuyInAmount("");
     } catch (error) {
       console.error("[handleJoinGame] Error joining game:", error);
-      alert("Failed to join session. Please try again.");
+      showNotification("Failed to join session. Please try again.", { type: "error" });
+    } finally {
+      setIsJoining(false);
     }
   }
 
@@ -466,7 +507,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     // Show feedback if transaction is pending
     if (result.status === "PENDING") {
       const transactionType = type === "buyin" ? "buy-in" : "cash-out";
-      alert(`Your ${transactionType} request has been submitted and is awaiting approval from the session host.`);
+      showNotification(`Your ${transactionType} request has been submitted and is awaiting approval from the session host.`, { type: "success", title: "Request Submitted" });
     }
   }
 
@@ -477,7 +518,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       await approveTransaction({ transactionId: txId, userId });
     } catch (error) {
       console.error("Failed to approve transaction:", error);
-      alert("Failed to approve transaction. Please try again.");
+      showNotification("Failed to approve transaction. Please try again.", { type: "error" });
     } finally {
       setIsApprovingId(null);
     }
@@ -490,7 +531,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       await rejectTransaction({ transactionId: txId, userId });
     } catch (error) {
       console.error("Failed to reject transaction:", error);
-      alert("Failed to reject transaction. Please try again.");
+      showNotification("Failed to reject transaction. Please try again.", { type: "error" });
     } finally {
       setIsRejectingId(null);
     }
@@ -508,7 +549,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       setEditingTransaction(null);
     } catch (error) {
       console.error("Failed to update transaction:", error);
-      alert("Failed to update transaction. Please try again.");
+      showNotification("Failed to update transaction. Please try again.", { type: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -528,7 +569,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       setEditingPlayerTotals(null);
     } catch (error) {
       console.error("Failed to update player totals:", error);
-      alert("Failed to update player totals. Please try again.");
+      showNotification("Failed to update player totals. Please try again.", { type: "error" });
     } finally {
       setIsUpdatingPlayerTotals(false);
     }
@@ -543,7 +584,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       await deleteTransactionMutation({ transactionId: txId, userId });
     } catch (error) {
       console.error("Failed to delete transaction:", error);
-      alert("Failed to delete transaction. Please try again.");
+      showNotification("Failed to delete transaction. Please try again.", { type: "error" });
     } finally {
       setIsDeletingTxId(null);
     }
@@ -560,6 +601,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(game.status)}`}
               >
                 {game.status}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-1 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                {game.gameType === "tournament" ? "Tournament" : "Cash Game"}
               </span>
               {isSessionCreator && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
@@ -804,18 +848,18 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   {
                     key: "profit",
                     header: renderSortableHeader("Profit", "profit"),
-                    render: (gp) =>
-                      gp.profit !== null && gp.profit !== undefined ? (
+                    render: (gp) => {
+                      const profit = gp.profit ?? (gp.cashOut ?? 0) - (gp.buyIn ?? 0);
+                      return (
                         <span
                           className={`font-medium ${
-                            gp.profit >= 0 ? "text-green-600" : "text-red-600"
+                            profit >= 0 ? "text-green-600" : "text-red-600"
                           }`}
                         >
-                          {gp.profit >= 0 ? "+" : ""}${gp.profit.toFixed(2)}
+                          {profit >= 0 ? "+" : ""}${profit.toFixed(2)}
                         </span>
-                      ) : (
-                        "—"
-                      ),
+                      );
+                    },
                   },
                   {
                     key: "actions",
@@ -877,19 +921,18 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       </div>
                       <div>
                         <p className="text-muted-foreground">Profit</p>
-                        <p
-                          className={`font-medium ${
-                            gp.profit !== null && gp.profit !== undefined
-                              ? gp.profit >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
-                              : ""
-                          }`}
-                        >
-                          {gp.profit !== null && gp.profit !== undefined
-                            ? `${gp.profit >= 0 ? "+" : ""}$${gp.profit.toFixed(2)}`
-                            : "—"}
-                        </p>
+                        {(() => {
+                          const profit = gp.profit ?? (gp.cashOut ?? 0) - (gp.buyIn ?? 0);
+                          return (
+                            <p
+                              className={`font-medium ${
+                                profit >= 0 ? "text-green-600" : "text-red-600"
+                              }`}
+                            >
+                              {profit >= 0 ? "+" : ""}${profit.toFixed(2)}
+                            </p>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1140,16 +1183,18 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       $
                     </span>
                     <Input
-                      className="pl-7"
+                      className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       disabled={isSubmittingTransaction}
                       id="buyin-amount"
                       inputMode="decimal"
                       min="0"
                       onChange={(e) => setBuyInAmount(e.target.value)}
+                      onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                       placeholder="0.00"
                       pattern="[0-9]*[.]?[0-9]*"
                       step="0.01"
                       type="number"
+                      inputMode="decimal"
                       value={buyInAmount}
                       autoFocus
                     />
@@ -1201,14 +1246,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       $
                     </span>
                     <Input
-                      className="pl-7"
+                      className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       disabled={isSubmittingTransaction}
                       id="cashout-amount"
                       min="0"
                       onChange={(e) => setCashOutAmount(e.target.value)}
+                      onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                       placeholder="0.00"
                       step="0.01"
                       type="number"
+                      inputMode="decimal"
                       value={cashOutAmount}
                       autoFocus
                     />
@@ -1244,16 +1291,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         </Card>
       )}
 
-      {game.status === "ACTIVE" && !isJoined && (
-        <Card>
-          <CardContent className="py-6 text-center">
-            <p className="mb-4 text-muted-foreground">
-              Join this session to start adding your transactions
-            </p>
-            <Button onClick={handleJoinClick}>Join Session</Button>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Edit Session Dialog */}
       <Dialog onOpenChange={setShowEditDialog} open={showEditDialog}>
@@ -1300,6 +1338,24 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <SelectContent>
                   <SelectItem value="ACTIVE">Active</SelectItem>
                   <SelectItem value="COMPLETED">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-game-type">Game Type</Label>
+              <Select
+                onValueChange={(val) =>
+                  setEditGameType(val as "cash" | "tournament")
+                }
+                value={editGameType}
+              >
+                <SelectTrigger id="edit-game-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash Game</SelectItem>
+                  <SelectItem value="tournament">Tournament</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1371,6 +1427,57 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         onSuccess={handlePaymentSuccess}
       />
 
+      {/* Initial Buy-In Dialog */}
+      <Dialog open={showBuyInDialog} onOpenChange={setShowBuyInDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Join Session</DialogTitle>
+            <DialogDescription>
+              Enter your initial buy-in amount to join this session. You can add more later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="initial-buyin">Initial Buy-In Amount</Label>
+            <div className="relative mt-2">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+              <Input
+                id="initial-buyin"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={initialBuyInAmount}
+                onChange={(e) => setInitialBuyInAmount(e.target.value)}
+                className="pl-7"
+                autoFocus
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Leave at $0 if you want to buy in later
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowBuyInDialog(false)}
+              disabled={isJoining}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleJoinWithBuyIn} disabled={isJoining}>
+              {isJoining ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Joining...
+                </>
+              ) : (
+                "Join Session"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Transaction Dialog */}
       <Dialog
         open={!!editingTransaction}
@@ -1394,10 +1501,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <Input
                   id="edit-tx-amount"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  className="pl-7"
+                  className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={editingTransaction?.amount ?? ""}
+                  onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                   onChange={(e) =>
                     setEditingTransaction((prev) =>
                       prev ? { ...prev, amount: e.target.value } : null
@@ -1460,10 +1569,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <Input
                   id="edit-player-buyin"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  className="pl-7"
+                  className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={editingPlayerTotals?.buyIn ?? ""}
+                  onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                   onChange={(e) =>
                     setEditingPlayerTotals((prev) =>
                       prev ? { ...prev, buyIn: e.target.value } : null
@@ -1481,10 +1592,12 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 <Input
                   id="edit-player-cashout"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  className="pl-7"
+                  className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={editingPlayerTotals?.cashOut ?? ""}
+                  onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
                   onChange={(e) =>
                     setEditingPlayerTotals((prev) =>
                       prev ? { ...prev, cashOut: e.target.value } : null

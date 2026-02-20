@@ -2,8 +2,11 @@
 
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
-import { MapPin, Plus, Trophy, UserPlus } from "lucide-react";
+import { MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { VipBadge } from "@/components/icons/vip-badge";
+import { DeleteGroupDialog } from "@/components/group/delete-group-dialog";
+import { EditGroupDialog } from "@/components/group/edit-group-dialog";
 import { PendingRequestsList } from "@/components/group/pending-requests-list";
 import { Button } from "@/components/ui/button";
 import {
@@ -205,6 +208,7 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                 ...standing,
                 rank: index + 1,
                 isFirst: index === 0 && (standings ?? []).length > 1,
+                isLast: index === (standings ?? []).length - 1 && (standings ?? []).length > 1,
               }))}
               keyExtractor={(standing) => standing.player?.id ?? ""}
               columns={[
@@ -216,6 +220,9 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                     <div className="flex items-center gap-2">
                       {standing.isFirst && (
                         <Trophy className="h-4 w-4 text-yellow-500" />
+                      )}
+                      {standing.isLast && (
+                        <VipBadge className="h-4 w-4 text-purple-500" />
                       )}
                       <span className="font-bold">#{standing.rank}</span>
                     </div>
@@ -257,11 +264,15 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                       className={`flex h-10 w-10 items-center justify-center rounded-full ${
                         standing.isFirst
                           ? "bg-yellow-100 dark:bg-yellow-900"
-                          : "bg-muted"
+                          : standing.isLast
+                            ? "bg-purple-100 dark:bg-purple-900"
+                            : "bg-muted"
                       }`}
                     >
                       {standing.isFirst ? (
                         <Trophy className="h-5 w-5 text-yellow-500" />
+                      ) : standing.isLast ? (
+                        <VipBadge className="h-5 w-5 text-purple-500" />
                       ) : (
                         <span className="font-bold text-muted-foreground">
                           #{standing.rank}
@@ -313,9 +324,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">
-                          {format(new Date(game.date), "MMM dd, yyyy")}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {format(new Date(game.date), "MMM dd, yyyy")}
+                          </p>
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                          </span>
+                        </div>
                         {game.location && (
                           <p className="flex items-center gap-1 text-muted-foreground text-sm">
                             <MapPin className="h-3 w-3" />
@@ -360,9 +376,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">
-                          {format(new Date(game.date), "MMM dd, yyyy")}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {format(new Date(game.date), "MMM dd, yyyy")}
+                          </p>
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                          </span>
+                        </div>
                         {game.location && (
                           <p className="flex items-center gap-1 text-muted-foreground text-sm">
                             <MapPin className="h-3 w-3" />
@@ -409,8 +430,9 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
         <CardContent>
           <div className="space-y-2">
             {(group.members ?? []).map((member) => (
-              <div
-                className="flex items-center justify-between rounded border p-3"
+              <Link
+                href={`/players/${member.user?.id}`}
+                className="flex items-center justify-between rounded border p-3 transition-colors hover:bg-accent"
                 key={member._id}
               >
                 <div className="flex items-center gap-3">
@@ -424,11 +446,44 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                     </p>
                   </div>
                 </div>
-              </div>
+                <Button size="sm" variant="ghost">
+                  View Profile
+                </Button>
+              </Link>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Group Settings - Owner Only */}
+      {isOwner && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              <CardTitle>Group Settings</CardTitle>
+            </div>
+            <EditGroupDialog
+              groupId={groupId as Id<"groups">}
+              currentName={group.name}
+              currentDescription={group.description}
+            />
+          </CardHeader>
+        </Card>
+      )}
+
+      {/* Danger Zone - Owner Only */}
+      {isOwner && (
+        <Card className="border-destructive/50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-destructive">Danger Zone</CardTitle>
+            <DeleteGroupDialog
+              groupId={groupId as Id<"groups">}
+              groupName={group.name}
+            />
+          </CardHeader>
+        </Card>
+      )}
     </div>
   );
 }
