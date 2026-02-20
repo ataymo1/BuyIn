@@ -113,6 +113,38 @@ export function useUserStats() {
   };
 }
 
+// Hook to get detailed stats including timeline data
+export function useDetailedStats() {
+  const { userId } = useConvexUser();
+  const { groupIds, isLoading: groupsLoading } = useUserGroups();
+
+  const shouldSkip = !userId || groupIds.length === 0;
+
+  const detailedStats = useQuery(
+    api.stats.getDetailedStats,
+    shouldSkip || !userId ? "skip" : { userId, groupIds }
+  );
+
+  return {
+    detailedStats: detailedStats ?? {
+      overview: {
+        totalBuyIns: 0,
+        totalCashOuts: 0,
+        netProfit: 0,
+        gamesPlayed: 0,
+        avgBuyIn: 0,
+        avgProfit: 0,
+        winRate: 0,
+      },
+      earningsOverTime: [],
+      recentGames: [],
+    },
+    isLoading:
+      groupsLoading ||
+      (detailedStats === undefined && !shouldSkip && userId !== undefined),
+  };
+}
+
 // Hook to get a single group
 export function useGroup(groupId: Id<"groups"> | undefined) {
   const group = useQuery(api.groups.getGroup, groupId ? { groupId } : "skip");

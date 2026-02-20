@@ -1,5 +1,6 @@
 "use client";
 
+import { EarningsOverTimeChart } from "@/components/stats/earnings-over-time-chart";
 import { StatsCard } from "@/components/stats/stats-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,10 +15,9 @@ import {
     PageHeaderSkeleton,
     Skeleton,
     StatsCardSkeleton,
-    SummaryCardSkeleton,
     TableRowSkeleton,
 } from "@/components/ui/skeleton";
-import { useUserGroups, useUserStats } from "@/lib/convex-hooks";
+import { useDetailedStats, useUserGroups } from "@/lib/convex-hooks";
 import { Calendar, DollarSign, TrendingDown, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 
@@ -33,11 +33,15 @@ function StatsSkeleton() {
         ))}
       </div>
 
-      {/* Summary Cards Skeleton */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <SummaryCardSkeleton />
-        <SummaryCardSkeleton />
-      </div>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-44" />
+          <Skeleton className="h-4 w-56" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-72 w-full" />
+        </CardContent>
+      </Card>
 
       {/* Stats by Group Skeleton */}
       <Card>
@@ -57,7 +61,7 @@ function StatsSkeleton() {
 
 export function StatsClient() {
   const { groups, isLoading: groupsLoading } = useUserGroups();
-  const { stats, isLoading: statsLoading } = useUserStats();
+  const { detailedStats, isLoading: statsLoading } = useDetailedStats();
 
   const isLoading = groupsLoading || statsLoading;
 
@@ -77,71 +81,41 @@ export function StatsClient() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           description="Across all groups"
-          icon={stats.netProfit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+          icon={detailedStats.overview.netProfit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
           title="Net Profit"
           trend={{
-            value: stats.netProfit >= 0 ? "Positive" : "Negative",
-            isPositive: stats.netProfit >= 0,
+            value: detailedStats.overview.netProfit >= 0 ? "Positive" : "Negative",
+            isPositive: detailedStats.overview.netProfit >= 0,
           }}
-          value={`${stats.netProfit >= 0 ? "+" : ""}$${stats.netProfit.toFixed(2)}`}
+          value={`${detailedStats.overview.netProfit >= 0 ? "+" : ""}$${detailedStats.overview.netProfit.toFixed(2)}`}
           valueColorMode="profit"
-          numericValue={stats.netProfit}
+          numericValue={detailedStats.overview.netProfit}
         />
         <StatsCard
           description="All time"
           icon={<DollarSign className="h-4 w-4" />}
           title="Total Buy-Ins"
-          value={`$${stats.totalBuyIns.toFixed(2)}`}
+          value={`$${detailedStats.overview.totalBuyIns.toFixed(2)}`}
         />
         <StatsCard
           description="All time"
           icon={<DollarSign className="h-4 w-4" />}
           title="Total Cash-Outs"
-          value={`$${stats.totalCashOuts.toFixed(2)}`}
+          value={`$${detailedStats.overview.totalCashOuts.toFixed(2)}`}
         />
         <StatsCard
           description="Sessions participated"
           icon={<Calendar className="h-4 w-4" />}
           title="Games Played"
-          value={stats.gamesPlayed}
+          value={detailedStats.overview.gamesPlayed}
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Buy-In Summary</CardTitle>
-            <CardDescription>
-              Total buy-ins across all your groups
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-3xl">
-              ${stats.totalBuyIns.toFixed(2)}
-            </div>
-            <p className="mt-2 text-muted-foreground text-sm">
-              Total amount invested in games
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Cash-Out Summary</CardTitle>
-            <CardDescription>
-              Total cash-outs across all your groups
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-3xl">
-              ${stats.totalCashOuts.toFixed(2)}
-            </div>
-            <p className="mt-2 text-muted-foreground text-sm">
-              Total amount cashed out
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <EarningsOverTimeChart
+        data={detailedStats.earningsOverTime}
+        description="Net profit progression by session date"
+        title="Earnings Over Time"
+      />
 
       {/* Stats by Group */}
       <Card>

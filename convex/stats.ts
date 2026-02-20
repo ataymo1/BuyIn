@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 
 // Get user stats across all their groups
@@ -181,8 +181,8 @@ export const getDetailedStats = query({
           avgProfit: 0,
           winRate: 0,
         },
+        earningsOverTime: [],
         recentGames: [],
-        monthlyStats: [],
       };
     }
 
@@ -225,6 +225,18 @@ export const getDetailedStats = query({
     ).length;
     const winRate = gamesPlayed > 0 ? (wins / gamesPlayed) * 100 : 0;
 
+    const earningsOverTime = [...filteredGamePlayers]
+      .sort((a, b) => {
+        const gameA = gameMap.get(a.gameId);
+        const gameB = gameMap.get(b.gameId);
+        return (gameA?.date ?? 0) - (gameB?.date ?? 0);
+      })
+      .map((gp) => ({
+        gameId: gp.gameId,
+        date: gameMap.get(gp.gameId)?.date ?? 0,
+        profit: gp.profit ?? (gp.cashOut ?? 0) - gp.buyIn,
+      }));
+
     // Recent games with profit
     const recentGamePlayers = [...filteredGamePlayers]
       .sort((a, b) => {
@@ -259,6 +271,7 @@ export const getDetailedStats = query({
         avgProfit,
         winRate,
       },
+      earningsOverTime,
       recentGames,
     };
   },
@@ -268,26 +281,31 @@ export const getDetailedStats = query({
 export const getPlayerStats = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
-    // Find user by ID
+    // Find user by ID first (existing behavior), then fallback to player ID
     const users = await ctx.db.query("users").collect();
-    const user = users.find((u) => u._id === args.userId);
+    let user = users.find((u) => u._id === args.userId) ?? null;
+    let player = null;
 
-    if (!user) {
-      return null;
+    if (user) {
+      const userId = user._id;
+      player = await ctx.db
+        .query("players")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .first();
+    } else {
+      const players = await ctx.db.query("players").collect();
+      player = players.find((p) => p._id === args.userId) ?? null;
+      if (player?.userId) {
+        user = await ctx.db.get(player.userId);
+      }
     }
-
-    // Get player
-    const player = await ctx.db
-      .query("players")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
 
     if (!player) {
       return null;
     }
 
     // Check if profile is private
-    if (user.profilePrivate) {
+    if (user?.profilePrivate) {
       return {
         playerName: player.name,
         isPrivate: true,
@@ -297,39 +315,10 @@ export const getPlayerStats = query({
         totalCashOuts: 0,
         netProfit: 0,
         gamesPlayed: 0,
+        earningsOverTime: [],
         recentGames: [],
       };
     }
-
-    // Get all group memberships
-    const memberships = await ctx.db
-      .query("groupMembers")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .collect();
-    const groupIds = memberships.map((m) => m.groupId);
-
-    if (groupIds.length === 0) {
-      return {
-        playerName: player.name,
-        totalBuyIns: 0,
-        totalCashOuts: 0,
-        netProfit: 0,
-        gamesPlayed: 0,
-        recentGames: [],
-      };
-    }
-
-    // Get all games from groups
-    const gamesInGroups = await Promise.all(
-      groupIds.map((gId) =>
-        ctx.db
-          .query("games")
-          .withIndex("by_groupId", (q) => q.eq("groupId", gId))
-          .collect()
-      )
-    );
-    const games = gamesInGroups.flat();
-    const gameMap = new Map(games.map((g) => [g._id, g]));
 
     // Get game players
     const gamePlayers = await ctx.db
@@ -337,9 +326,40 @@ export const getPlayerStats = query({
       .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
       .collect();
 
-    const filteredGamePlayers = gamePlayers.filter((gp) =>
-      gameMap.has(gp.gameId)
-    );
+    // Scope to groups the user belongs to when possible; otherwise include all games for this player
+    let gameMap = new Map<Id<"games">, Doc<"games">>();
+    let filteredGamePlayers = gamePlayers;
+    if (user) {
+      const memberships = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_userId", (q) => q.eq("userId", user._id))
+        .collect();
+      const groupIds = memberships.map((m) => m.groupId);
+
+      if (groupIds.length > 0) {
+        const gamesInGroups = await Promise.all(
+          groupIds.map((gId) =>
+            ctx.db
+              .query("games")
+              .withIndex("by_groupId", (q) => q.eq("groupId", gId))
+              .collect()
+          )
+        );
+        const games = gamesInGroups.flat();
+        gameMap = new Map(games.map((g) => [g._id, g]));
+        filteredGamePlayers = gamePlayers.filter((gp) => gameMap.has(gp.gameId));
+      }
+    }
+    if (gameMap.size === 0) {
+      const games = await Promise.all(
+        filteredGamePlayers.map((gp) => ctx.db.get(gp.gameId))
+      );
+      gameMap = new Map(
+        games
+          .filter((game): game is Doc<"games"> => game !== null)
+          .map((game) => [game._id, game])
+      );
+    }
 
     const gamesPlayed = filteredGamePlayers.length;
     const totalBuyIns = filteredGamePlayers.reduce(
@@ -351,6 +371,18 @@ export const getPlayerStats = query({
       0
     );
     const netProfit = totalCashOuts - totalBuyIns;
+
+    const earningsOverTime = [...filteredGamePlayers]
+      .sort((a, b) => {
+        const gameA = gameMap.get(a.gameId);
+        const gameB = gameMap.get(b.gameId);
+        return (gameA?.date ?? 0) - (gameB?.date ?? 0);
+      })
+      .map((gp) => ({
+        gameId: gp.gameId as string,
+        date: gameMap.get(gp.gameId)?.date ?? 0,
+        profit: gp.profit ?? (gp.cashOut ?? 0) - gp.buyIn,
+      }));
 
     // Recent games
     const recentGamePlayers = [...filteredGamePlayers]
@@ -379,12 +411,13 @@ export const getPlayerStats = query({
     return {
       playerName: player.name,
       isPrivate: false,
-      venmo: user.venmo ?? null,
-      zelle: user.zelle ?? null,
+      venmo: user?.venmo ?? null,
+      zelle: user?.zelle ?? null,
       totalBuyIns,
       totalCashOuts,
       netProfit,
       gamesPlayed,
+      earningsOverTime,
       recentGames,
     };
   },

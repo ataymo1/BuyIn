@@ -4,15 +4,14 @@ import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   Calendar,
-  CreditCard,
   DollarSign,
   Lock,
   TrendingUp,
   UserCog,
 } from "lucide-react";
 import Link from "next/link";
+import { EarningsOverTimeChart } from "@/components/stats/earnings-over-time-chart";
 import { StatsCard } from "@/components/stats/stats-card";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -112,6 +111,7 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
                 </div>
                 <p className="mx-auto max-w-md text-muted-foreground text-sm">
                   This player has chosen to keep their stats and payment methods private.
+                  Request to view their profile to access this information.
                 </p>
               </div>
             </div>
@@ -213,6 +213,12 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
           value={stats.gamesPlayed}
         />
       </div>
+
+      <EarningsOverTimeChart
+        data={stats.earningsOverTime}
+        description="Net profit progression by session date"
+        title="Earnings Over Time"
+      />
 
       {/* Recent Games */}
       <Card>

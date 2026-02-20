@@ -179,7 +179,9 @@ export const getGroupStandings = query({
       Object.values(playerStats).map(async (stat) => {
         const player = await ctx.db.get(stat.playerId);
         return {
-          player: player ? { id: player._id, name: player.name } : null,
+          player: player
+            ? { id: player._id, name: player.name, userId: player.userId ?? null }
+            : null,
           totalProfit: stat.totalProfit,
           gamesPlayed: stat.gamesPlayed,
         };

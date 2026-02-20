@@ -92,7 +92,12 @@ export const getGames = query({
         const gamePlayersWithDetails = await Promise.all(
           gamePlayers.map(async (gp) => {
             const player = await ctx.db.get(gp.playerId);
-            return { ...gp, player };
+            return {
+              ...gp,
+              player: player
+                ? { id: player._id, name: player.name, userId: player.userId ?? null }
+                : null,
+            };
           })
         );
 
@@ -152,7 +157,9 @@ export const getGame = query({
         return {
           ...gp,
           id: gp._id,
-          player: player ? { id: player._id, name: player.name } : null,
+          player: player
+            ? { id: player._id, name: player.name, userId: player.userId ?? null }
+            : null,
         };
       })
     );

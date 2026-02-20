@@ -830,7 +830,17 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                   {
                     key: "player",
                     header: "Player",
-                    render: (gp) => gp.player?.name,
+                    render: (gp) =>
+                      gp.player?.id ? (
+                        <Link
+                          className="font-medium transition-colors hover:text-primary hover:underline"
+                          href={`/players/${gp.player.id}`}
+                        >
+                          {gp.player?.name}
+                        </Link>
+                      ) : (
+                        gp.player?.name
+                      ),
                   },
                   {
                     key: "buyIn",
@@ -887,7 +897,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                 renderCard={(gp) => (
                   <div className="rounded-lg border bg-card p-4">
                     <div className="mb-2 flex items-start justify-between gap-2">
-                      <div className="font-medium">{gp.player?.name}</div>
+                      {gp.player?.id ? (
+                        <Link
+                          className="font-medium transition-colors hover:text-primary hover:underline"
+                          href={`/players/${gp.player.id}`}
+                        >
+                          {gp.player?.name}
+                        </Link>
+                      ) : (
+                        <div className="font-medium">{gp.player?.name}</div>
+                      )}
                       {isSessionCreator && (
                         <Button
                           size="sm"
@@ -1194,7 +1213,6 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       pattern="[0-9]*[.]?[0-9]*"
                       step="0.01"
                       type="number"
-                      inputMode="decimal"
                       value={buyInAmount}
                       autoFocus
                     />

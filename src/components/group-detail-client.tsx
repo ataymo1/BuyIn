@@ -232,7 +232,16 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   key: "player",
                   header: "Player",
                   render: (standing) => (
-                    <span className="font-medium">{standing.player?.name}</span>
+                    standing.player?.id ? (
+                      <Link
+                        className="font-medium transition-colors hover:text-primary hover:underline"
+                        href={`/players/${standing.player.id}`}
+                      >
+                        {standing.player?.name}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">{standing.player?.name}</span>
+                    )
                   ),
                 },
                 {
@@ -280,7 +289,16 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                       )}
                     </div>
                     <div>
-                      <p className="font-medium">{standing.player?.name}</p>
+                      {standing.player?.id ? (
+                        <Link
+                          className="font-medium transition-colors hover:text-primary hover:underline"
+                          href={`/players/${standing.player.id}`}
+                        >
+                          {standing.player?.name}
+                        </Link>
+                      ) : (
+                        <p className="font-medium">{standing.player?.name}</p>
+                      )}
                       <p className="text-muted-foreground text-sm">
                         {standing.gamesPlayed} games played
                       </p>
