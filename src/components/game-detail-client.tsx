@@ -1143,9 +1143,11 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
                       className="pl-7"
                       disabled={isSubmittingTransaction}
                       id="buyin-amount"
+                      inputMode="decimal"
                       min="0"
                       onChange={(e) => setBuyInAmount(e.target.value)}
                       placeholder="0.00"
+                      pattern="[0-9]*[.]?[0-9]*"
                       step="0.01"
                       type="number"
                       value={buyInAmount}

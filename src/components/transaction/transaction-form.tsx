@@ -91,7 +91,9 @@ export function TransactionForm({
             <Label htmlFor="amount">Amount</Label>
             <Input
               id="amount"
+              inputMode="decimal"
               placeholder="0.00"
+              pattern="[0-9]*[.]?[0-9]*"
               step="0.01"
               type="number"
               {...form.register("amount")}
