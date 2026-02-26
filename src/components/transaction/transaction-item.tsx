@@ -87,7 +87,7 @@ export function TransactionItem({
         showNotification(error.error || "Failed to delete transaction", { type: "error" });
         return;
       }
-
+ 
       router.refresh();
     } catch (error) {
       console.error("Error deleting transaction:", error);
