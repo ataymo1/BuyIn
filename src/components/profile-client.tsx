@@ -172,8 +172,8 @@ export function ProfileClient() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Edit Button */}
-      <div className="flex items-start justify-between">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="font-bold text-2xl sm:text-3xl">Profile</h1>
           <p className="text-muted-foreground text-sm sm:text-base mt-1">
@@ -184,7 +184,8 @@ export function ProfileClient() {
           <Button
             variant="outline"
             onClick={() => setIsEditing(true)}
-            className="shrink-0"
+            className="w-full sm:w-auto sm:shrink-0"
+            type="button"
           >
             <Edit2 className="mr-2 h-4 w-4" />
             Edit Profile
