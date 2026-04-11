@@ -1461,12 +1461,15 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
               <Input
                 id="initial-buyin"
                 type="number"
+                inputMode="decimal"
                 min="0"
                 step="0.01"
                 placeholder="0.00"
                 value={initialBuyInAmount}
                 onChange={(e) => setInitialBuyInAmount(e.target.value)}
-                className="pl-7"
+                onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
+                pattern="[0-9]*[.]?[0-9]*"
+                className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 autoFocus
               />
             </div>
