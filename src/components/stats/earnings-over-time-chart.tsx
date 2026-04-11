@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import { useMemo } from "react";
 import {
+  Area,
   AreaChart,
   CartesianGrid,
   Line,
@@ -36,6 +37,8 @@ type ChartRow = {
   dateLabel: string;
   sessionProfit: number;
   netProfit: number;
+  positiveNetProfit: number | null;
+  negativeNetProfit: number | null;
 };
 
 const chartConfig = {
@@ -48,6 +51,22 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+function getNiceStep(value: number) {
+  if (value <= 0) {
+    return 1;
+  }
+
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+
+  if (normalized <= 1) return magnitude;
+  if (normalized <= 2) return 2 * magnitude;
+  if (normalized <= 2.5) return 2.5 * magnitude;
+  if (normalized <= 5) return 5 * magnitude;
+
+  return 10 * magnitude;
+}
+
 export function EarningsOverTimeChart({
   data,
   title = "Earnings Over Time",
@@ -56,7 +75,7 @@ export function EarningsOverTimeChart({
   const chartData = useMemo<ChartRow[]>(() => {
     const sorted = [...data].sort((a, b) => a.date - b.date);
     let runningNetProfit = 0;
-    return sorted.map((point) => {
+    const points = sorted.map((point) => {
       runningNetProfit += point.profit;
       return {
         gameId: point.gameId,
@@ -64,8 +83,49 @@ export function EarningsOverTimeChart({
         dateLabel: format(new Date(point.date), "MMM d"),
         sessionProfit: point.profit,
         netProfit: runningNetProfit,
+        positiveNetProfit: runningNetProfit >= 0 ? runningNetProfit : null,
+        negativeNetProfit: runningNetProfit <= 0 ? runningNetProfit : null,
       };
     });
+
+    if (points.length <= 1) {
+      return points;
+    }
+
+    const rows: ChartRow[] = [];
+
+    for (let index = 0; index < points.length; index += 1) {
+      const current = points[index];
+      const next = points[index + 1];
+
+      rows.push(current);
+
+      if (!next) {
+        continue;
+      }
+
+      if (
+        current.netProfit !== 0 &&
+        next.netProfit !== 0 &&
+        Math.sign(current.netProfit) !== Math.sign(next.netProfit)
+      ) {
+        const distanceToZero = Math.abs(current.netProfit);
+        const totalDistance = Math.abs(current.netProfit - next.netProfit);
+        const ratio = totalDistance === 0 ? 0 : distanceToZero / totalDistance;
+        const crossingDate = current.date + (next.date - current.date) * ratio;
+
+        rows.push({
+          date: crossingDate,
+          dateLabel: format(new Date(crossingDate), "MMM d"),
+          sessionProfit: 0,
+          netProfit: 0,
+          positiveNetProfit: 0,
+          negativeNetProfit: 0,
+        });
+      }
+    }
+
+    return rows;
   }, [data]);
 
   if (chartData.length === 0) {
@@ -82,19 +142,14 @@ export function EarningsOverTimeChart({
     );
   }
 
-  const minNet = Math.min(0, ...chartData.map((d) => d.netProfit));
-  const maxNet = Math.max(0, ...chartData.map((d) => d.netProfit));
-  const range = Math.max(1, maxNet - minNet);
-  const yDomain = [minNet - range * 0.12, maxNet + range * 0.12] as const;
+  const peakMagnitude = Math.max(1, ...chartData.map((d) => Math.abs(d.netProfit)));
+  const targetOuterTick = peakMagnitude / 2;
+  const tickStep = getNiceStep(targetOuterTick);
+  const yTicks = [-2 * tickStep, -tickStep, 0, tickStep, 2 * tickStep];
+  const yDomain = [yTicks[0], yTicks[yTicks.length - 1]] as const;
   const latestNetProfit = chartData[chartData.length - 1]?.netProfit ?? 0;
-  const chartBackground =
-    latestNetProfit >= 0
-      ? "linear-gradient(to bottom, hsl(var(--chart-profit-positive) / 0.24), hsl(var(--chart-profit-positive) / 0.12))"
-      : "linear-gradient(to bottom, hsl(var(--chart-profit-negative) / 0.24), hsl(var(--chart-profit-negative) / 0.12))";
-  const lineColor =
-    latestNetProfit >= 0
-      ? "hsl(var(--chart-profit-positive))"
-      : "hsl(var(--chart-profit-negative))";
+  const positiveLineColor = "hsl(var(--chart-profit-positive))";
+  const negativeLineColor = "hsl(var(--chart-profit-negative))";
 
   return (
     <Card>
@@ -104,35 +159,54 @@ export function EarningsOverTimeChart({
       </CardHeader>
       <CardContent>
         <ChartContainer
-          className="h-[320px] w-full aspect-auto overflow-hidden rounded-md"
+          className="aspect-auto h-[320px] w-full overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-b from-muted/40 via-background to-background px-2 pt-3 shadow-sm"
           config={chartConfig}
-          style={{ background: chartBackground }}
         >
           <AreaChart
             data={chartData}
-            margin={{ top: 12, right: 12, bottom: 12, left: 8 }}
+            margin={{ top: 14, right: 16, bottom: 8, left: 2 }}
           >
-            <CartesianGrid strokeDasharray="0" vertical={false} />
+            <defs>
+              <linearGradient id="earningsPositiveFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--chart-profit-positive) / 0.24)" />
+                <stop offset="100%" stopColor="hsl(var(--chart-profit-positive) / 0.02)" />
+              </linearGradient>
+              <linearGradient id="earningsNegativeFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--chart-profit-negative) / 0.02)" />
+                <stop offset="100%" stopColor="hsl(var(--chart-profit-negative) / 0.24)" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              stroke="hsl(var(--border) / 0.35)"
+              strokeDasharray="3 6"
+              vertical={false}
+            />
             <XAxis
               axisLine={false}
               dataKey="dateLabel"
               minTickGap={24}
-              padding={{ left: 20, right: 20 }}
+              padding={{ left: 12, right: 12 }}
               tickLine={false}
-              tickMargin={10}
+              tickMargin={12}
             />
             <YAxis
               axisLine={false}
               domain={yDomain}
-              tickFormatter={(value) => `$${Math.round(value)}`}
+              ticks={yTicks}
+              tickFormatter={(value) => `${value < 0 ? "-" : ""}$${Math.abs(Math.round(value))}`}
               tickLine={false}
-              tickMargin={8}
-              width={52}
+              tickMargin={10}
+              width={64}
             />
-            <ReferenceLine stroke="hsl(var(--muted-foreground) / 0.35)" strokeDasharray="4 4" y={0} />
+            <ReferenceLine
+              stroke="hsl(var(--muted-foreground) / 0.28)"
+              strokeDasharray="4 6"
+              y={0}
+            />
             <ChartTooltip
               content={
                 <ChartTooltipContent
+                  className="border-border/60 bg-background/95 shadow-2xl backdrop-blur"
                   formatter={(value, name) => {
                     const numericValue = Number(value ?? 0);
                     return (
@@ -153,6 +227,20 @@ export function EarningsOverTimeChart({
               cursor={{ stroke: "hsl(var(--muted-foreground) / 0.25)", strokeDasharray: "3 3" }}
               isAnimationActive={false}
             />
+            <Area
+              dataKey="positiveNetProfit"
+              fill="url(#earningsPositiveFill)"
+              isAnimationActive={false}
+              stroke="none"
+              type="monotone"
+            />
+            <Area
+              dataKey="negativeNetProfit"
+              fill="url(#earningsNegativeFill)"
+              isAnimationActive={false}
+              stroke="none"
+              type="monotone"
+            />
             <Line
               dataKey="sessionProfit"
               activeDot={false}
@@ -169,18 +257,40 @@ export function EarningsOverTimeChart({
                 <circle
                   cx={dotProps.cx}
                   cy={dotProps.cy}
-                  fill={lineColor}
-                  r={6}
+                  fill={latestNetProfit >= 0 ? positiveLineColor : negativeLineColor}
+                  r={5}
                   stroke="hsl(var(--background))"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                 />
               )}
-              dataKey="netProfit"
+              dataKey="positiveNetProfit"
               dot={false}
               isAnimationActive={false}
-              stroke={lineColor}
-              strokeWidth={3}
-              type="linear"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              stroke={positiveLineColor}
+              strokeWidth={3.25}
+              type="monotone"
+            />
+            <Line
+              activeDot={(dotProps) => (
+                <circle
+                  cx={dotProps.cx}
+                  cy={dotProps.cy}
+                  fill={latestNetProfit >= 0 ? positiveLineColor : negativeLineColor}
+                  r={5}
+                  stroke="hsl(var(--background))"
+                  strokeWidth={2.5}
+                />
+              )}
+              dataKey="negativeNetProfit"
+              dot={false}
+              isAnimationActive={false}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              stroke={negativeLineColor}
+              strokeWidth={3.25}
+              type="monotone"
             />
           </AreaChart>
         </ChartContainer>
