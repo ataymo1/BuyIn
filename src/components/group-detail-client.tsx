@@ -35,6 +35,29 @@ function GroupDetailSkeleton() {
         <Skeleton className="h-10 w-32" />
       </div>
 
+      {/* Active Sessions Skeleton */}
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded border p-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                  <Skeleton className="h-8 w-12" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Standings Card Skeleton */}
       <Card>
         <CardHeader>
@@ -51,69 +74,22 @@ function GroupDetailSkeleton() {
         </CardContent>
       </Card>
 
-      {/* Active and Recent Sessions */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-            <Skeleton className="h-4 w-48" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="rounded border p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-28" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                    <Skeleton className="h-8 w-12" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-36" />
-            <Skeleton className="h-4 w-44" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="rounded border p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-28" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                    <Skeleton className="h-8 w-12" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Members Section Skeleton */}
+      {/* Recent Sessions Skeleton */}
       <Card>
         <CardHeader>
-          <Skeleton className="h-6 w-28" />
-          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-6 w-36" />
+          <Skeleton className="h-4 w-44" />
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center justify-between rounded border p-3">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="space-y-1">
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-3 w-16" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded border p-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-20" />
                   </div>
+                  <Skeleton className="h-8 w-12" />
                 </div>
               </div>
             ))}
@@ -188,6 +164,54 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
           </Link>
         )}
       </div>
+
+      {activeGames.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Sessions</CardTitle>
+            <CardDescription>Currently active game sessions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {activeGames.map((game) => (
+                <Link
+                  className="block rounded border p-3 transition-colors hover:bg-accent"
+                  href={`/games/${game.id}`}
+                  key={game.id}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">
+                          {format(new Date(game.date), "MMM dd, yyyy")}
+                        </p>
+                        <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                          {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                        </span>
+                      </div>
+                      {game.location && (
+                        <p className="flex items-center gap-1 text-muted-foreground text-sm">
+                          <MapPin className="h-3 w-3" />
+                          {game.location}
+                        </p>
+                      )}
+                      <p className="text-muted-foreground text-sm">
+                        {game.gamePlayers?.length ?? 0}{" "}
+                        {(game.gamePlayers?.length ?? 0) === 1
+                          ? "player"
+                          : "players"}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="ghost">
+                      View
+                    </Button>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Standings/Leaderboard */}
       <Card>
@@ -282,46 +306,46 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   : null;
                 const cardContent = (
                   <div className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                        standing.isFirst
-                          ? "bg-yellow-100 dark:bg-yellow-900"
-                          : standing.isLast
-                            ? "bg-purple-100 dark:bg-purple-900"
-                            : "bg-muted"
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                          standing.isFirst
+                            ? "bg-yellow-100 dark:bg-yellow-900"
+                            : standing.isLast
+                              ? "bg-purple-100 dark:bg-purple-900"
+                              : "bg-muted"
+                        }`}
+                      >
+                        {standing.isFirst ? (
+                          <Trophy className="h-5 w-5 text-yellow-500" />
+                        ) : standing.isLast ? (
+                          <VipBadge className="h-5 w-5 text-purple-500" />
+                        ) : (
+                          <span className="font-bold text-muted-foreground">
+                            #{standing.rank}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium" title={playerName}>
+                          {playerName}
+                        </p>
+                        <p className="truncate text-muted-foreground text-sm">
+                          {standing.gamesPlayed} games played
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`ml-3 shrink-0 font-bold text-lg ${
+                        standing.totalProfit >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
                       }`}
                     >
-                      {standing.isFirst ? (
-                        <Trophy className="h-5 w-5 text-yellow-500" />
-                      ) : standing.isLast ? (
-                        <VipBadge className="h-5 w-5 text-purple-500" />
-                      ) : (
-                        <span className="font-bold text-muted-foreground">
-                          #{standing.rank}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium" title={playerName}>
-                        {playerName}
-                      </p>
-                      <p className="truncate text-muted-foreground text-sm">
-                        {standing.gamesPlayed} games played
-                      </p>
-                    </div>
+                      {standing.totalProfit >= 0 ? "+" : ""}$
+                      {standing.totalProfit.toFixed(2)}
+                    </span>
                   </div>
-                  <span
-                    className={`ml-3 shrink-0 font-bold text-lg ${
-                      standing.totalProfit >= 0
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {standing.totalProfit >= 0 ? "+" : ""}$
-                    {standing.totalProfit.toFixed(2)}
-                  </span>
-                </div>
                 );
 
                 return playerHref ? (
@@ -334,106 +358,6 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
           )}
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Sessions</CardTitle>
-            <CardDescription>Currently active game sessions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {activeGames.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                No active sessions
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {activeGames.map((game) => (
-                  <Link
-                    className="block rounded border p-3 transition-colors hover:bg-accent"
-                    href={`/games/${game.id}`}
-                    key={game.id}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">
-                            {format(new Date(game.date), "MMM dd, yyyy")}
-                          </p>
-                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
-                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
-                          </span>
-                        </div>
-                        {game.location && (
-                          <p className="flex items-center gap-1 text-muted-foreground text-sm">
-                            <MapPin className="h-3 w-3" />
-                            {game.location}
-                          </p>
-                        )}
-                        <p className="text-muted-foreground text-sm">
-                          {game.gamePlayers?.length ?? 0}{" "}
-                          {(game.gamePlayers?.length ?? 0) === 1
-                            ? "player"
-                            : "players"}
-                        </p>
-                      </div>
-                      <Button size="sm" variant="ghost">
-                        View
-                      </Button>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Sessions</CardTitle>
-            <CardDescription>Completed game sessions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {completedGames.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                No completed sessions
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {completedGames.slice(0, 5).map((game) => (
-                  <Link
-                    className="block rounded border p-3 transition-colors hover:bg-accent"
-                    href={`/games/${game.id}`}
-                    key={game.id}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">
-                            {format(new Date(game.date), "MMM dd, yyyy")}
-                          </p>
-                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
-                            {game.gameType === "tournament" ? "Tournament" : "Cash"}
-                          </span>
-                        </div>
-                        {game.location && (
-                          <p className="flex items-center gap-1 text-muted-foreground text-sm">
-                            <MapPin className="h-3 w-3" />
-                            {game.location}
-                          </p>
-                        )}
-                      </div>
-                      <Button size="sm" variant="ghost">
-                        View
-                      </Button>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Pending Join Requests section (owner only) */}
       {isOwner && (
@@ -452,6 +376,52 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Sessions</CardTitle>
+          <CardDescription>Completed game sessions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {completedGames.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No completed sessions
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {completedGames.slice(0, 5).map((game) => (
+                <Link
+                  className="block rounded border p-3 transition-colors hover:bg-accent"
+                  href={`/games/${game.id}`}
+                  key={game.id}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">
+                          {format(new Date(game.date), "MMM dd, yyyy")}
+                        </p>
+                        <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+                          {game.gameType === "tournament" ? "Tournament" : "Cash"}
+                        </span>
+                      </div>
+                      {game.location && (
+                        <p className="flex items-center gap-1 text-muted-foreground text-sm">
+                          <MapPin className="h-3 w-3" />
+                          {game.location}
+                        </p>
+                      )}
+                    </div>
+                    <Button size="sm" variant="ghost">
+                      View
+                    </Button>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
       {/* Group Settings - Owner Only */}
       {isOwner && (
         <Card>
