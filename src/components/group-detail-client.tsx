@@ -19,6 +19,7 @@ import {
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Skeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { useConvexUser } from "@/lib/convex-hooks";
+import { getDisplayName } from "@/lib/utils";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -231,18 +232,23 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                 {
                   key: "player",
                   header: "Player",
-                  render: (standing) => (
-                    standing.player?.id ? (
+                  render: (standing) => {
+                    const playerName = getDisplayName(standing.player?.name);
+
+                    return standing.player?.id ? (
                       <Link
-                        className="font-medium transition-colors hover:text-primary hover:underline"
+                        className="block truncate font-medium transition-colors hover:text-primary hover:underline"
                         href={`/players/${standing.player.id}`}
+                        title={playerName}
                       >
-                        {standing.player?.name}
+                        {playerName}
                       </Link>
                     ) : (
-                      <span className="font-medium">{standing.player?.name}</span>
-                    )
-                  ),
+                      <span className="block truncate font-medium" title={playerName}>
+                        {playerName}
+                      </span>
+                    );
+                  },
                 },
                 {
                   key: "games",
@@ -268,9 +274,9 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
               ]}
               renderCard={(standing) => (
                 <div className="flex items-center justify-between rounded-lg border bg-card p-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
                         standing.isFirst
                           ? "bg-yellow-100 dark:bg-yellow-900"
                           : standing.isLast
@@ -288,24 +294,30 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                         </span>
                       )}
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       {standing.player?.id ? (
                         <Link
-                          className="font-medium transition-colors hover:text-primary hover:underline"
+                          className="block truncate font-medium transition-colors hover:text-primary hover:underline"
                           href={`/players/${standing.player.id}`}
+                          title={getDisplayName(standing.player?.name)}
                         >
-                          {standing.player?.name}
+                          {getDisplayName(standing.player?.name)}
                         </Link>
                       ) : (
-                        <p className="font-medium">{standing.player?.name}</p>
+                        <p
+                          className="truncate font-medium"
+                          title={getDisplayName(standing.player?.name)}
+                        >
+                          {getDisplayName(standing.player?.name)}
+                        </p>
                       )}
-                      <p className="text-muted-foreground text-sm">
+                      <p className="truncate text-muted-foreground text-sm">
                         {standing.gamesPlayed} games played
                       </p>
                     </div>
                   </div>
                   <span
-                    className={`font-bold text-lg ${
+                    className={`ml-3 shrink-0 font-bold text-lg ${
                       standing.totalProfit >= 0
                         ? "text-green-600"
                         : "text-red-600"
@@ -450,21 +462,26 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
             {(group.members ?? []).map((member) => (
               <Link
                 href={`/players/${member.user?.id}`}
-                className="flex items-center justify-between rounded border p-3 transition-colors hover:bg-accent"
+                className="flex items-center justify-between gap-3 rounded border p-3 transition-colors hover:bg-accent"
                 key={member._id}
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                    {member.user?.name?.charAt(0) ?? "?"}
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                    {getDisplayName(member.user?.name, member.user?.email).charAt(0) ?? "?"}
                   </div>
-                  <div>
-                    <p className="font-medium">{member.user?.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="truncate font-medium"
+                      title={getDisplayName(member.user?.name, member.user?.email)}
+                    >
+                      {getDisplayName(member.user?.name, member.user?.email)}
+                    </p>
                     <p className="text-muted-foreground text-sm">
                       {member.role === "OWNER" ? "Owner" : "Member"}
                     </p>
                   </div>
                 </div>
-                <Button size="sm" variant="ghost">
+                <Button className="shrink-0" size="sm" variant="ghost">
                   View Profile
                 </Button>
               </Link>

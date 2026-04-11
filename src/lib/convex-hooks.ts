@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef } from "react";
+import { getDisplayName } from "@/lib/utils";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -231,7 +232,7 @@ export function usePlayer() {
           );
           await getOrCreatePlayer({
             userId,
-            name: user.email || "Player",
+            name: getDisplayName(user.name, user.email) || "Player",
           });
           hasCreatedRef.current = userId;
           console.log("[usePlayer] Player created successfully");

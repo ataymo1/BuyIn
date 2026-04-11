@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getDisplayName } from "@/lib/utils";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 interface JoinRequestCardProps {
@@ -35,6 +36,7 @@ export function JoinRequestCard({
 }: JoinRequestCardProps) {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const displayName = getDisplayName(userName, userEmail);
 
   const handleApprove = async () => {
     setIsApproving(true);
@@ -57,7 +59,9 @@ export function JoinRequestCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">{userName ?? userEmail}</CardTitle>
+        <CardTitle className="truncate text-lg" title={displayName}>
+          {displayName}
+        </CardTitle>
         <CardDescription>
           Requested {formatDistanceToNow(new Date(requestedAt))} ago
         </CardDescription>

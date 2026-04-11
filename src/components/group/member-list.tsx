@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getDisplayName } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -164,10 +165,11 @@ export function MemberList({
                 <TableRow key={member.id}>
                   <TableCell className="font-medium">
                     <Link
-                      className="hover:underline"
+                      className="block max-w-[180px] truncate hover:underline"
                       href={`/players/${member.user.id}`}
+                      title={getDisplayName(member.user.name, member.user.email)}
                     >
-                      {member.user.name || "Unknown"}
+                      {getDisplayName(member.user.name, member.user.email)}
                     </Link>
                   </TableCell>
                   <TableCell>{member.user.email}</TableCell>
