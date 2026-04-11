@@ -234,11 +234,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   header: "Player",
                   render: (standing) => {
                     const playerName = getDisplayName(standing.player?.name);
+                    const playerHref = standing.player?.userId
+                      ? `/players/${standing.player.userId}`
+                      : null;
 
-                    return standing.player?.id ? (
+                    return playerHref ? (
                       <Link
                         className="block truncate font-medium transition-colors hover:text-primary hover:underline"
-                        href={`/players/${standing.player.id}`}
+                        href={playerHref}
                         title={playerName}
                       >
                         {playerName}
@@ -272,8 +275,13 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                   ),
                 },
               ]}
-              renderCard={(standing) => (
-                <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+              renderCard={(standing) => {
+                const playerName = getDisplayName(standing.player?.name);
+                const playerHref = standing.player?.userId
+                  ? `/players/${standing.player.userId}`
+                  : null;
+                const cardContent = (
+                  <div className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
@@ -295,22 +303,9 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      {standing.player?.id ? (
-                        <Link
-                          className="block truncate font-medium transition-colors hover:text-primary hover:underline"
-                          href={`/players/${standing.player.id}`}
-                          title={getDisplayName(standing.player?.name)}
-                        >
-                          {getDisplayName(standing.player?.name)}
-                        </Link>
-                      ) : (
-                        <p
-                          className="truncate font-medium"
-                          title={getDisplayName(standing.player?.name)}
-                        >
-                          {getDisplayName(standing.player?.name)}
-                        </p>
-                      )}
+                      <p className="truncate font-medium" title={playerName}>
+                        {playerName}
+                      </p>
                       <p className="truncate text-muted-foreground text-sm">
                         {standing.gamesPlayed} games played
                       </p>
@@ -327,7 +322,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
                     {standing.totalProfit.toFixed(2)}
                   </span>
                 </div>
-              )}
+                );
+
+                return playerHref ? (
+                  <Link href={playerHref}>{cardContent}</Link>
+                ) : (
+                  cardContent
+                );
+              }}
             />
           )}
         </CardContent>
@@ -450,46 +452,6 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
           </CardContent>
         </Card>
       )}
-
-      {/* Members section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Members ({group.members?.length ?? 0})</CardTitle>
-          <CardDescription>Group members</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {(group.members ?? []).map((member) => (
-              <Link
-                href={`/players/${member.user?.id}`}
-                className="flex items-center justify-between gap-3 rounded border p-3 transition-colors hover:bg-accent"
-                key={member._id}
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                    {getDisplayName(member.user?.name, member.user?.email).charAt(0) ?? "?"}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className="truncate font-medium"
-                      title={getDisplayName(member.user?.name, member.user?.email)}
-                    >
-                      {getDisplayName(member.user?.name, member.user?.email)}
-                    </p>
-                    <p className="text-muted-foreground text-sm">
-                      {member.role === "OWNER" ? "Owner" : "Member"}
-                    </p>
-                  </div>
-                </div>
-                <Button className="shrink-0" size="sm" variant="ghost">
-                  View Profile
-                </Button>
-              </Link>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Group Settings - Owner Only */}
       {isOwner && (
         <Card>

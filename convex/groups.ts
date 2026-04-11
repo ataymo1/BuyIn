@@ -136,6 +136,11 @@ export const isGroupOwner = query({
 export const getGroupStandings = query({
   args: { groupId: v.id("groups") },
   handler: async (ctx, args) => {
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+
     const games = await ctx.db
       .query("games")
       .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
@@ -155,11 +160,33 @@ export const getGroupStandings = query({
 
     const flatGamePlayers = allGamePlayers.flat();
 
-    // Aggregate by player
+    // Seed standings with every member who has a player profile so people with no sessions
+    // still show up at $0.00 on the leaderboard.
     const playerStats: Record<
       string,
-      { playerId: Id<"players">; totalProfit: number; gamesPlayed: number }
+      {
+        playerId: Id<"players">;
+        totalProfit: number;
+        gamesPlayed: number;
+      }
     > = {};
+
+    for (const member of members) {
+      const player = await ctx.db
+        .query("players")
+        .withIndex("by_userId", (q) => q.eq("userId", member.userId))
+        .first();
+
+      if (!player) {
+        continue;
+      }
+
+      playerStats[player._id as string] = {
+        playerId: player._id,
+        totalProfit: 0,
+        gamesPlayed: 0,
+      };
+    }
 
     for (const gp of flatGamePlayers) {
       const key = gp.playerId as string;
@@ -190,7 +217,17 @@ export const getGroupStandings = query({
 
     return standings
       .filter((s) => s.player)
-      .sort((a, b) => b.totalProfit - a.totalProfit);
+      .sort((a, b) => {
+        if (b.totalProfit !== a.totalProfit) {
+          return b.totalProfit - a.totalProfit;
+        }
+
+        if (b.gamesPlayed !== a.gamesPlayed) {
+          return b.gamesPlayed - a.gamesPlayed;
+        }
+
+        return (a.player?.name ?? "").localeCompare(b.player?.name ?? "");
+      });
   },
 });
 
