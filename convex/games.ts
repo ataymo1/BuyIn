@@ -1,16 +1,13 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, type QueryCtx, query } from "./_generated/server";
-
-// Helper to check if user is the owner of a group
-async function isGroupOwner(
-  ctx: QueryCtx,
-  groupId: Id<"groups">,
-  userId: Id<"users">
-): Promise<boolean> {
-  const group = await ctx.db.get(groupId);
-  return group?.ownerId === userId;
-}
+import type { Doc } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import {
+  canUserManageGame,
+  deleteGameCascade,
+  getPlayerDisplaySummary,
+  getUserDisplaySummary,
+  requireGameManager,
+} from "./helpers";
 
 // Query to check if user can manage a game (is group owner or session banker)
 export const canManageGame = query({
@@ -20,9 +17,8 @@ export const canManageGame = query({
     if (!game) {
       return false;
     }
-    const isOwner = await isGroupOwner(ctx, game.groupId, args.userId);
-    const isBanker = game.createdById === args.userId;
-    return isOwner || isBanker;
+
+    return await canUserManageGame(ctx, game, args.userId);
   },
 });
 
@@ -77,14 +73,7 @@ export const getGames = query({
     const gamesWithDetails = await Promise.all(
       games.map(async (game) => {
         const group = await ctx.db.get(game.groupId);
-        const createdBy = await ctx.db.get(game.createdById);
-        // Get player record for createdBy
-        const createdByPlayer = createdBy
-          ? await ctx.db
-              .query("players")
-              .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
-              .first()
-          : null;
+        const createdBy = await getUserDisplaySummary(ctx, game.createdById);
         const gamePlayers = await ctx.db
           .query("gamePlayers")
           .withIndex("by_gameId", (q) => q.eq("gameId", game._id))
@@ -92,16 +81,10 @@ export const getGames = query({
 
         const gamePlayersWithDetails = await Promise.all(
           gamePlayers.map(async (gp) => {
-            const player = await ctx.db.get(gp.playerId);
+            const player = await getPlayerDisplaySummary(ctx, gp.playerId);
             return {
               ...gp,
-              player: player
-                ? {
-                    id: player._id,
-                    name: player.name,
-                    userId: player.userId ?? null,
-                  }
-                : null,
+              player,
             };
           })
         );
@@ -115,17 +98,7 @@ export const getGames = query({
           ...game,
           id: game._id,
           group: group ? { id: group._id, name: group.name } : null,
-          createdBy: createdBy
-            ? {
-                id: createdBy._id,
-                name:
-                  createdByPlayer?.name ??
-                  createdBy.name ??
-                  createdBy.email ??
-                  "Unknown",
-                email: createdBy.email,
-              }
-            : null,
+          createdBy,
           gamePlayers: gamePlayersWithDetails,
           transactions,
         };
@@ -146,14 +119,7 @@ export const getGame = query({
     }
 
     const group = await ctx.db.get(game.groupId);
-    const createdBy = await ctx.db.get(game.createdById);
-    // Get player record for createdBy
-    const createdByPlayer = createdBy
-      ? await ctx.db
-          .query("players")
-          .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
-          .first()
-      : null;
+    const createdBy = await getUserDisplaySummary(ctx, game.createdById);
 
     const gamePlayers = await ctx.db
       .query("gamePlayers")
@@ -162,17 +128,11 @@ export const getGame = query({
 
     const gamePlayersWithDetails = await Promise.all(
       gamePlayers.map(async (gp) => {
-        const player = await ctx.db.get(gp.playerId);
+        const player = await getPlayerDisplaySummary(ctx, gp.playerId);
         return {
           ...gp,
           id: gp._id,
-          player: player
-            ? {
-                id: player._id,
-                name: player.name,
-                userId: player.userId ?? null,
-              }
-            : null,
+          player,
         };
       })
     );
@@ -184,30 +144,14 @@ export const getGame = query({
 
     const transactionsWithDetails = await Promise.all(
       transactions.map(async (tx) => {
-        const player = await ctx.db.get(tx.playerId);
-        const createdByUser = await ctx.db.get(tx.createdById);
-        // Get player record for transaction createdBy
-        const txCreatedByPlayer = createdByUser
-          ? await ctx.db
-              .query("players")
-              .withIndex("by_userId", (q) => q.eq("userId", createdByUser._id))
-              .first()
-          : null;
+        const player = await getPlayerDisplaySummary(ctx, tx.playerId);
+        const createdByUser = await getUserDisplaySummary(ctx, tx.createdById);
         return {
           ...tx,
           id: tx._id,
           status: tx.status ?? "APPROVED", // Legacy transactions are considered approved
-          player: player ? { id: player._id, name: player.name } : null,
-          createdBy: createdByUser
-            ? {
-                id: createdByUser._id,
-                name:
-                  txCreatedByPlayer?.name ??
-                  createdByUser.name ??
-                  createdByUser.email ??
-                  "Unknown",
-              }
-            : null,
+          player,
+          createdBy: createdByUser,
         };
       })
     );
@@ -219,17 +163,7 @@ export const getGame = query({
       ...game,
       id: game._id,
       group: group ? { id: group._id, name: group.name } : null,
-      createdBy: createdBy
-        ? {
-            id: createdBy._id,
-            name:
-              createdByPlayer?.name ??
-              createdBy.name ??
-              createdBy.email ??
-              "Unknown",
-            email: createdBy.email,
-          }
-        : null,
+      createdBy,
       gamePlayers: gamePlayersWithDetails,
       transactions: transactionsWithDetails,
     };
@@ -288,19 +222,12 @@ export const updateGameStatus = mutation({
       throw new Error("Game not found");
     }
 
-    const group = await ctx.db.get(game.groupId);
-    if (!group) {
-      throw new Error("Group not found");
-    }
-
-    const isOwner = group.ownerId === args.userId;
-    const isBanker = game.createdById === args.userId;
-
-    if (!(isOwner || isBanker)) {
-      throw new Error(
-        "Only the group owner or session banker can update the game status"
-      );
-    }
+    await requireGameManager(
+      ctx,
+      game,
+      args.userId,
+      "Only the group owner or session banker can update the game status"
+    );
 
     await ctx.db.patch(args.gameId, { status: args.status });
     return await ctx.db.get(args.gameId);
@@ -323,17 +250,12 @@ export const updateGame = mutation({
       throw new Error("Game not found");
     }
 
-    const group = await ctx.db.get(game.groupId);
-    if (!group) {
-      throw new Error("Group not found");
-    }
-
-    const isOwner = group.ownerId === args.userId;
-    const isBanker = game.createdById === args.userId;
-
-    if (!(isOwner || isBanker)) {
-      throw new Error("Only the group owner or session banker can edit games");
-    }
+    await requireGameManager(
+      ctx,
+      game,
+      args.userId,
+      "Only the group owner or session banker can edit games"
+    );
 
     const { gameId, userId, ...updates } = args;
     await ctx.db.patch(gameId, updates);
@@ -355,25 +277,7 @@ export const deleteGame = mutation({
       throw new Error("Only group owners can delete games");
     }
 
-    // Delete game players
-    const gamePlayers = await ctx.db
-      .query("gamePlayers")
-      .withIndex("by_gameId", (q) => q.eq("gameId", args.gameId))
-      .collect();
-    for (const gp of gamePlayers) {
-      await ctx.db.delete(gp._id);
-    }
-
-    // Delete transactions
-    const transactions = await ctx.db
-      .query("transactions")
-      .withIndex("by_gameId", (q) => q.eq("gameId", args.gameId))
-      .collect();
-    for (const tx of transactions) {
-      await ctx.db.delete(tx._id);
-    }
-
-    await ctx.db.delete(args.gameId);
+    await deleteGameCascade(ctx, args.gameId);
   },
 });
 

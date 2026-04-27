@@ -121,7 +121,7 @@ export default defineSchema({
   transactions: defineTable({
     gameId: v.id("games"),
     playerId: v.id("players"),
-    type: v.string(), // "buyin" or "cashout"
+    type: v.union(v.literal("buyin"), v.literal("cashout")),
     amount: v.number(),
     description: v.optional(v.string()),
     createdById: v.id("users"),

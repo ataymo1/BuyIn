@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
+import { getPlayerDisplaySummary, getUserDisplaySummary } from "./helpers";
+
+const transactionTypeValidator = v.union(
+  v.literal("buyin"),
+  v.literal("cashout")
+);
 
 // Helper to recalculate game player totals from approved transactions
 async function recalculatePlayerTotals(
@@ -116,16 +122,9 @@ export const getTransactions = query({
     // Add details
     const transactionsWithDetails = await Promise.all(
       filteredTransactions.map(async (tx) => {
-        const player = await ctx.db.get(tx.playerId);
+        const player = await getPlayerDisplaySummary(ctx, tx.playerId);
         const game = await ctx.db.get(tx.gameId);
-        const createdBy = await ctx.db.get(tx.createdById);
-        // Get player record for createdBy
-        const createdByPlayer = createdBy
-          ? await ctx.db
-              .query("players")
-              .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
-              .first()
-          : null;
+        const createdBy = await getUserDisplaySummary(ctx, tx.createdById);
 
         const group = game ? await ctx.db.get(game.groupId) : null;
 
@@ -133,7 +132,7 @@ export const getTransactions = query({
           ...tx,
           id: tx._id,
           status: tx.status ?? "APPROVED", // Legacy transactions are considered approved
-          player: player ? { id: player._id, name: player.name } : null,
+          player,
           game: game
             ? {
                 ...game,
@@ -143,12 +142,8 @@ export const getTransactions = query({
             : null,
           createdBy: createdBy
             ? {
-                id: createdBy._id,
-                name:
-                  createdByPlayer?.name ??
-                  createdBy.name ??
-                  createdBy.email ??
-                  "Unknown",
+                id: createdBy.id,
+                name: createdBy.name ?? createdBy.email ?? "Unknown",
                 email: createdBy.email,
               }
             : null,
@@ -187,27 +182,16 @@ export const getPendingBuyIns = query({
     // Add player details
     const txsWithDetails = await Promise.all(
       pendingTxs.map(async (tx) => {
-        const player = await ctx.db.get(tx.playerId);
-        const createdBy = await ctx.db.get(tx.createdById);
-        // Get player record for createdBy
-        const createdByPlayer = createdBy
-          ? await ctx.db
-              .query("players")
-              .withIndex("by_userId", (q) => q.eq("userId", createdBy._id))
-              .first()
-          : null;
+        const player = await getPlayerDisplaySummary(ctx, tx.playerId);
+        const createdBy = await getUserDisplaySummary(ctx, tx.createdById);
         return {
           ...tx,
           id: tx._id,
-          player: player ? { id: player._id, name: player.name } : null,
+          player,
           createdBy: createdBy
             ? {
-                id: createdBy._id,
-                name:
-                  createdByPlayer?.name ??
-                  createdBy.name ??
-                  createdBy.email ??
-                  "Unknown",
+                id: createdBy.id,
+                name: createdBy.name ?? createdBy.email ?? "Unknown",
               }
             : null,
         };
@@ -239,7 +223,7 @@ export const createTransaction = mutation({
   args: {
     gameId: v.id("games"),
     playerId: v.id("players"),
-    type: v.string(),
+    type: transactionTypeValidator,
     amount: v.number(),
     description: v.optional(v.string()),
     createdById: v.id("users"),

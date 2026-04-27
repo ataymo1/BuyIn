@@ -62,9 +62,6 @@ export function NewGroupClient() {
     name: string;
     description?: string;
   }) {
-    console.log("[handleCreateGroup] Starting with data:", data);
-    console.log("[handleCreateGroup] userId:", userId);
-
     if (!userId) {
       console.error(
         "[handleCreateGroup] No userId - user is not authenticated"
@@ -78,13 +75,11 @@ export function NewGroupClient() {
     }
 
     try {
-      console.log("[handleCreateGroup] Calling createGroup mutation...");
       const groupId = await createGroup({
         name: data.name.trim(),
         description: data.description?.trim(),
         ownerId: userId,
       });
-      console.log("[handleCreateGroup] Group created successfully:", groupId);
 
       setPendingGroupId(groupId);
       setShowPaymentModal(true);

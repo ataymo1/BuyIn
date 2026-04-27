@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
+import { deleteGameCascade, getUserDisplaySummary } from "./helpers";
 
 // Get all groups for a user
 export const getUserGroups = query({
@@ -59,46 +60,19 @@ export const getGroup = query({
 
     const membersWithUsers = await Promise.all(
       members.map(async (member) => {
-        const user = await ctx.db.get(member.userId);
-        // Get player record for this user
-        const player = user
-          ? await ctx.db
-              .query("players")
-              .withIndex("by_userId", (q) => q.eq("userId", user._id))
-              .first()
-          : null;
+        const user = await getUserDisplaySummary(ctx, member.userId);
         return {
           ...member,
-          user: user
-            ? {
-                id: user._id,
-                name: player?.name ?? user.name ?? user.email ?? "Unknown",
-                email: user.email,
-                image: user.image,
-              }
-            : null,
+          user,
         };
       })
     );
 
-    const owner = await ctx.db.get(group.ownerId);
-    // Get player record for owner
-    const ownerPlayer = owner
-      ? await ctx.db
-          .query("players")
-          .withIndex("by_userId", (q) => q.eq("userId", owner._id))
-          .first()
-      : null;
+    const owner = await getUserDisplaySummary(ctx, group.ownerId);
 
     return {
       ...group,
-      owner: owner
-        ? {
-            id: owner._id,
-            name: ownerPlayer?.name ?? owner.name ?? owner.email ?? "Unknown",
-            email: owner.email,
-          }
-        : null,
+      owner,
       members: membersWithUsers,
     };
   },
@@ -294,7 +268,15 @@ export const deleteGroup = mutation({
       .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .collect();
     for (const game of games) {
-      await ctx.db.delete(game._id);
+      await deleteGameCascade(ctx, game._id);
+    }
+
+    const joinRequests = await ctx.db
+      .query("joinRequests")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    for (const joinRequest of joinRequests) {
+      await ctx.db.delete(joinRequest._id);
     }
 
     await ctx.db.delete(args.groupId);
@@ -512,24 +494,10 @@ export const getPendingRequests = query({
     // Enrich with user details
     const enrichedRequests = await Promise.all(
       requests.map(async (request) => {
-        const user = await ctx.db.get(request.userId);
-        // Get player record for this user
-        const player = user
-          ? await ctx.db
-              .query("players")
-              .withIndex("by_userId", (q) => q.eq("userId", user._id))
-              .first()
-          : null;
+        const user = await getUserDisplaySummary(ctx, request.userId);
         return {
           ...request,
-          user: user
-            ? {
-                id: user._id,
-                name: player?.name ?? user.name ?? user.email ?? "Unknown",
-                email: user.email,
-                image: user.image,
-              }
-            : null,
+          user,
         };
       })
     );
@@ -559,13 +527,21 @@ export const approveRequest = mutation({
       respondedAt: Date.now(),
     });
 
-    // Add user as member
-    await ctx.db.insert("groupMembers", {
-      groupId: request.groupId,
-      userId: request.userId,
-      role: "MEMBER",
-      joinedAt: Date.now(),
-    });
+    const existingMember = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId_userId", (q) =>
+        q.eq("groupId", request.groupId).eq("userId", request.userId)
+      )
+      .first();
+
+    if (!existingMember) {
+      await ctx.db.insert("groupMembers", {
+        groupId: request.groupId,
+        userId: request.userId,
+        role: "MEMBER",
+        joinedAt: Date.now(),
+      });
+    }
 
     return { success: true };
   },
