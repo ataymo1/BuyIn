@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import {
   Banknote,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { getStatusColorClass } from "./game-detail-utils";
 
 interface SessionHeaderProps {
@@ -131,17 +131,19 @@ export function SessionHeader({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-bold text-2xl sm:text-3xl">Session Details</h1>
+              <h1 className="font-bold text-2xl sm:text-3xl">
+                Session Details
+              </h1>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusColorClass(status)}`}
               >
                 {status}
               </span>
-              <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-1 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+              <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-1 font-medium text-violet-800 text-xs dark:bg-violet-900 dark:text-violet-200">
                 {gameType === "tournament" ? "Tournament" : "Cash Game"}
               </span>
               {isSessionCreator ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 font-medium text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 font-medium text-amber-800 text-xs dark:bg-amber-900 dark:text-amber-200">
                   <Banknote className="h-3 w-3" />
                   Banker
                 </span>
@@ -174,7 +176,9 @@ export function SessionHeader({
 
           <p className="mt-1 text-muted-foreground text-sm sm:text-base">
             {format(new Date(date), "MMMM dd, yyyy")}
-            {location ? <span className="hidden sm:inline"> | {location}</span> : null}
+            {location ? (
+              <span className="hidden sm:inline"> | {location}</span>
+            ) : null}
             {group ? (
               <>
                 {" | "}
@@ -228,7 +232,7 @@ export function SessionHeader({
               </Button>
 
               {showActionsMenu ? (
-                <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border bg-background shadow-lg">
+                <div className="absolute top-full right-0 z-50 mt-1 w-48 rounded-md border bg-background shadow-lg">
                   <ActionsMenu
                     onDeleteClick={handleDeleteClick}
                     onEditClick={handleEditClick}
@@ -243,12 +247,14 @@ export function SessionHeader({
       </div>
 
       {showActionsMenu ? (
-        <div
+        <button
+          aria-label="Close session actions menu"
           className="fixed inset-0 z-40"
           onClick={closeActionsMenu}
           onKeyDown={(event) =>
             event.key === "Escape" ? closeActionsMenu() : undefined
           }
+          type="button"
         />
       ) : null}
     </>

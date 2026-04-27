@@ -1,5 +1,15 @@
 "use client";
 
+import {
+  CreditCard,
+  Eye,
+  EyeOff,
+  Loader2,
+  LogOut,
+  User,
+  X,
+} from "lucide-react";
+import type { UseFormReturn } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,8 +20,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CreditCard, Eye, EyeOff, Loader2, LogOut, User, X } from "lucide-react";
-import type { UseFormReturn } from "react-hook-form";
 import type { ProfileFormValues } from "./profile-form-schema";
 
 interface ProfileNameSectionProps {
@@ -32,7 +40,9 @@ export function ProfileNameSection({
           <User className="h-5 w-5 text-muted-foreground" />
           Name
         </CardTitle>
-        <CardDescription>Your display name shown to other users</CardDescription>
+        <CardDescription>
+          Your display name shown to other users
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {isEditing ? (
@@ -52,9 +62,9 @@ export function ProfileNameSection({
           </div>
         ) : (
           <div className="py-1">
-            <p className="text-base font-medium">
+            <p className="font-medium text-base">
               {playerName || (
-                <span className="italic text-muted-foreground">Not set</span>
+                <span className="text-muted-foreground italic">Not set</span>
               )}
             </p>
           </div>
@@ -81,17 +91,17 @@ function PaymentMethodDisplay({
   if (!value) {
     return (
       <div className="rounded-lg border border-dashed bg-muted/20 p-4">
-        <p className="text-sm text-muted-foreground">No {label} set</p>
+        <p className="text-muted-foreground text-sm">No {label} set</p>
       </div>
     );
   }
 
   return (
     <div className="rounded-lg border bg-muted/30 p-4">
-      <p className="mb-1.5 text-sm font-semibold text-muted-foreground">
+      <p className="mb-1.5 font-semibold text-muted-foreground text-sm">
         {label}
       </p>
-      <p className="break-all text-base font-medium">{value}</p>
+      <p className="break-all font-medium text-base">{value}</p>
     </div>
   );
 }
@@ -171,11 +181,20 @@ export function ProfileActionButtons({
 }: ProfileActionButtonsProps) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
-      <Button className="w-full sm:w-auto" onClick={onCancel} type="button" variant="outline">
+      <Button
+        className="w-full sm:w-auto"
+        onClick={onCancel}
+        type="button"
+        variant="outline"
+      >
         <X className="mr-2 h-4 w-4" />
         Cancel
       </Button>
-      <Button className="w-full sm:w-auto" disabled={isSubmitting} type="submit">
+      <Button
+        className="w-full sm:w-auto"
+        disabled={isSubmitting}
+        type="submit"
+      >
         {isSubmitting ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -192,7 +211,7 @@ export function ProfileActionButtons({
 export function ProfileSaveBanner() {
   return (
     <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
-      <p className="text-sm font-medium text-green-800">
+      <p className="font-medium text-green-800 text-sm">
         Profile updated successfully!
       </p>
     </div>
@@ -227,7 +246,7 @@ export function PrivacySettingsSection({
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1">
             <p className="font-medium">Private Profile</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {isPrivate
                 ? "Your stats and payment info are hidden from other players"
                 : "Other players in your groups can see your stats and payment info"}

@@ -50,7 +50,7 @@ export function SessionFilters({ groups }: SessionFiltersProps) {
       <CardContent>
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center gap-2">
-            <label className="font-medium text-sm">Group:</label>
+            <span className="font-medium text-sm">Group:</span>
             <Select
               defaultValue={searchParams.get("groupId") || "all"}
               onValueChange={handleGroupChange}
@@ -69,7 +69,7 @@ export function SessionFilters({ groups }: SessionFiltersProps) {
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <label className="font-medium text-sm">Status:</label>
+            <span className="font-medium text-sm">Status:</span>
             <Select
               defaultValue={searchParams.get("status") || "all"}
               onValueChange={handleStatusChange}

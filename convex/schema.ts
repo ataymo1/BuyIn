@@ -126,7 +126,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     createdById: v.id("users"),
     status: v.optional(
-      v.union(v.literal("PENDING"), v.literal("APPROVED"), v.literal("REJECTED"))
+      v.union(
+        v.literal("PENDING"),
+        v.literal("APPROVED"),
+        v.literal("REJECTED")
+      )
     ), // Buy-ins require approval from session creator
   })
     .index("by_gameId", ["gameId"])

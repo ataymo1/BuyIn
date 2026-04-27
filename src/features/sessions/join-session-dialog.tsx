@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
 
 interface JoinSessionDialogProps {
   amount: string;
@@ -31,7 +31,7 @@ export function JoinSessionDialog({
   onSubmit,
 }: JoinSessionDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+    <Dialog onOpenChange={(nextOpen) => !nextOpen && onClose()} open={open}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Join Session</DialogTitle>
@@ -43,7 +43,7 @@ export function JoinSessionDialog({
         <div className="py-4">
           <Label htmlFor="initial-buyin-sessions">Initial Buy-In Amount</Label>
           <div className="relative mt-2">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
               $
             </span>
             <Input
@@ -58,7 +58,7 @@ export function JoinSessionDialog({
               value={amount}
             />
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-muted-foreground text-xs">
             Leave at $0 if you want to buy in later
           </p>
         </div>

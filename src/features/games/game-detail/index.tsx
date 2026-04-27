@@ -1,13 +1,13 @@
 "use client";
 
-import { useNotification } from "@/components/providers/notification-provider";
-import { Button } from "@/components/ui/button";
-import { useConvexUser, usePlayer } from "@/lib/convex-hooks";
 import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useNotification } from "@/components/providers/notification-provider";
+import { Button } from "@/components/ui/button";
+import { useConvexUser, usePlayer } from "@/lib/convex-hooks";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { GameDetailDialogs } from "./game-detail-dialogs";
@@ -81,7 +81,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const approveTransaction = useMutation(api.transactions.approveTransaction);
   const rejectTransaction = useMutation(api.transactions.rejectTransaction);
   const updateTransaction = useMutation(api.transactions.updateTransaction);
-  const deleteTransactionMutation = useMutation(api.transactions.deleteTransaction);
+  const deleteTransactionMutation = useMutation(
+    api.transactions.deleteTransaction
+  );
   const setPlayerTotals = useMutation(api.transactions.setPlayerTotals);
   const joinGame = useMutation(api.games.joinGame);
   const updateGame = useMutation(api.games.updateGame);
@@ -91,7 +93,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   const isLoading = userLoading || playerLoading || game === undefined;
 
   function openEditDialog() {
-    if (!game) return;
+    if (!game) {
+      return;
+    }
 
     setEditLocation(game.location ?? "");
     setEditDate(format(new Date(game.date), "yyyy-MM-dd"));
@@ -101,7 +105,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleSaveEdit() {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -133,7 +139,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleDelete() {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -153,7 +161,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleStatusChange(newStatus: "ACTIVE" | "COMPLETED") {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
 
     try {
       await updateGameStatus({
@@ -189,7 +199,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
 
   async function handleJoinWithBuyIn() {
     if (!(player?._id && userId)) {
-      console.error("[handleJoinGame] No player record - waiting for player sync");
+      console.error(
+        "[handleJoinGame] No player record - waiting for player sync"
+      );
       showNotification("Please wait, setting up your player profile...", {
         type: "info",
       });
@@ -198,7 +210,7 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
 
     setIsJoining(true);
     try {
-      const buyInValue = parseFloat(initialBuyInAmount) || 0;
+      const buyInValue = Number.parseFloat(initialBuyInAmount) || 0;
 
       await joinGame({
         gameId: gameId as Id<"games">,
@@ -240,7 +252,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
     amount: number,
     description?: string
   ) {
-    if (!(player?._id && userId)) return;
+    if (!(player?._id && userId)) {
+      return;
+    }
 
     const result = await createTransaction({
       amount,
@@ -261,7 +275,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleApproveTransaction(transactionId: Id<"transactions">) {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
 
     setIsApprovingId(transactionId);
     try {
@@ -277,7 +293,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleRejectTransaction(transactionId: Id<"transactions">) {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
 
     setIsRejectingId(transactionId);
     try {
@@ -293,7 +311,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleUpdateTransaction() {
-    if (!(userId && editingTransaction)) return;
+    if (!(userId && editingTransaction)) {
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -314,7 +334,9 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleUpdatePlayerTotals() {
-    if (!(userId && editingPlayerTotals)) return;
+    if (!(userId && editingPlayerTotals)) {
+      return;
+    }
 
     setIsUpdatingPlayerTotals(true);
     try {
@@ -337,8 +359,13 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
   }
 
   async function handleDeleteTransaction(transactionId: Id<"transactions">) {
-    if (!userId) return;
-    if (!confirm("Are you sure you want to delete this transaction?")) return;
+    if (!userId) {
+      return;
+    }
+    // biome-ignore lint/suspicious/noAlert: This legacy inline confirmation preserves the existing delete flow.
+    if (!confirm("Are you sure you want to delete this transaction?")) {
+      return;
+    }
 
     setIsDeletingTxId(transactionId);
     try {
@@ -439,10 +466,10 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
       <GameDetailDialogs
         editDate={editDate}
         editGameType={editGameType}
-        editLocation={editLocation}
-        editStatus={editStatus}
         editingPlayerTotals={editingPlayerTotals}
         editingTransaction={editingTransaction}
+        editLocation={editLocation}
+        editStatus={editStatus}
         initialBuyInAmount={initialBuyInAmount}
         isJoining={isJoining}
         isSubmitting={isSubmitting}
@@ -454,15 +481,14 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         onEditDateChange={setEditDate}
         onEditDialogChange={setShowEditDialog}
         onEditGameTypeChange={setEditGameType}
-        onEditLocationChange={setEditLocation}
-        onEditStatusChange={setEditStatus}
         onEditingPlayerTotalsChange={setEditingPlayerTotals}
         onEditingTransactionChange={setEditingTransaction}
+        onEditLocationChange={setEditLocation}
+        onEditStatusChange={setEditStatus}
         onJoin={handleJoinWithBuyIn}
         onPaymentSuccess={handlePaymentSuccess}
         onSaveEdit={handleSaveEdit}
         onShowBuyInDialogChange={setShowBuyInDialog}
-        onShowPaymentModalChange={setShowPaymentModal}
         onUpdatePlayerTotals={handleUpdatePlayerTotals}
         onUpdateTransaction={handleUpdateTransaction}
         showBuyInDialog={showBuyInDialog}

@@ -16,7 +16,7 @@ export interface SessionListItem {
   gameType?: "cash" | "tournament" | string | null;
   group?: SessionGroupSummary | null;
   createdBy?: SessionCreatorSummary | null;
-  gamePlayers?: Array<unknown> | null;
+  gamePlayers?: unknown[] | null;
   userProfit: number | null;
   isParticipant: boolean;
 }

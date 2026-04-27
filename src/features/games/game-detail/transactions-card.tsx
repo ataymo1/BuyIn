@@ -1,5 +1,8 @@
 "use client";
 
+import { format } from "date-fns";
+import { ChevronDown, ChevronUp, Loader2, Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,9 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { format } from "date-fns";
-import { ChevronDown, ChevronUp, Loader2, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type {
   EditingTransactionState,
@@ -55,7 +55,7 @@ export function TransactionsCard({
             <CardDescription>Buy-ins and cash-outs</CardDescription>
           </div>
           <div className="flex items-start gap-3">
-            <div className="text-right text-xs text-muted-foreground">
+            <div className="text-right text-muted-foreground text-xs">
               <div>Total bought in: ${totalBoughtIn.toFixed(2)}</div>
               <div>Total cashed out: ${totalCashedOut.toFixed(2)}</div>
               <div>Banker loss: ${bankerLoss.toFixed(2)}</div>
@@ -130,7 +130,9 @@ export function TransactionsCard({
                         <Button
                           disabled={isDeletingTxId === transaction._id}
                           onClick={() =>
-                            onDeleteTransaction(transaction._id as Id<"transactions">)
+                            onDeleteTransaction(
+                              transaction._id as Id<"transactions">
+                            )
                           }
                           size="sm"
                           variant="ghost"

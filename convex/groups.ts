@@ -207,7 +207,11 @@ export const getGroupStandings = query({
         const player = await ctx.db.get(stat.playerId);
         return {
           player: player
-            ? { id: player._id, name: player.name, userId: player.userId ?? null }
+            ? {
+                id: player._id,
+                name: player.name,
+                userId: player.userId ?? null,
+              }
             : null,
           totalProfit: stat.totalProfit,
           gamesPlayed: stat.gamesPlayed,
@@ -386,8 +390,7 @@ export const getDiscoverableGroups = query({
     );
 
     // Sort by member count and return all groups
-    return enrichedGroups
-      .sort((a, b) => b.memberCount - a.memberCount);
+    return enrichedGroups.sort((a, b) => b.memberCount - a.memberCount);
   },
 });
 

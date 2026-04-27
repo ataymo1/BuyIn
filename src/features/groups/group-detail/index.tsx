@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { useConvexUser } from "@/lib/convex-hooks";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { GroupDetailSkeleton } from "./group-detail-skeleton";
 import {
   ActiveSessionsSection,
   GroupHeader,
@@ -15,6 +14,7 @@ import {
   PendingJoinRequestsSection,
   RecentSessionsSection,
 } from "./group-detail-sections";
+import { GroupDetailSkeleton } from "./group-detail-skeleton";
 
 interface GroupDetailClientProps {
   groupId: string;

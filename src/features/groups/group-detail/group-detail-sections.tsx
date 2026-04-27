@@ -1,9 +1,12 @@
 "use client";
 
-import { VipBadge } from "@/components/icons/vip-badge";
+import { format } from "date-fns";
+import { MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
+import Link from "next/link";
 import { DeleteGroupDialog } from "@/components/group/delete-group-dialog";
 import { EditGroupDialog } from "@/components/group/edit-group-dialog";
 import { PendingRequestsList } from "@/components/group/pending-requests-list";
+import { VipBadge } from "@/components/icons/vip-badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,16 +17,92 @@ import {
 } from "@/components/ui/card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { getDisplayName } from "@/lib/utils";
-import { format } from "date-fns";
-import { MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
-import Link from "next/link";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 function GameTypeBadge({ gameType }: { gameType?: string | null }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-xs text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+    <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 font-medium text-violet-800 text-xs dark:bg-violet-900 dark:text-violet-200">
       {gameType === "tournament" ? "Tournament" : "Cash"}
     </span>
+  );
+}
+
+interface StandingWithRank {
+  gamesPlayed: number;
+  isFirst: boolean;
+  isLast: boolean;
+  player: {
+    id?: string | null;
+    name?: string | null;
+    userId?: string | null;
+  } | null;
+  rank: number;
+  totalProfit: number;
+}
+
+function getRankBackgroundClass(standing: StandingWithRank) {
+  if (standing.isFirst) {
+    return "bg-yellow-100 dark:bg-yellow-900";
+  }
+  if (standing.isLast) {
+    return "bg-purple-100 dark:bg-purple-900";
+  }
+  return "bg-muted";
+}
+
+function RankIcon({ standing }: { standing: StandingWithRank }) {
+  if (standing.isFirst) {
+    return <Trophy className="h-5 w-5 text-yellow-500" />;
+  }
+  if (standing.isLast) {
+    return <VipBadge className="h-5 w-5 text-purple-500" />;
+  }
+  return (
+    <span className="font-bold text-muted-foreground">#{standing.rank}</span>
+  );
+}
+
+function StandingCard({ standing }: { standing: StandingWithRank }) {
+  const playerName = getDisplayName(standing.player?.name);
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${getRankBackgroundClass(standing)}`}
+        >
+          <RankIcon standing={standing} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium" title={playerName}>
+            {playerName}
+          </p>
+          <p className="truncate text-muted-foreground text-sm">
+            {standing.gamesPlayed} games played
+          </p>
+        </div>
+      </div>
+      <span
+        className={`ml-3 shrink-0 font-bold text-lg ${
+          standing.totalProfit >= 0 ? "text-green-600" : "text-red-600"
+        }`}
+      >
+        {standing.totalProfit >= 0 ? "+" : ""}${standing.totalProfit.toFixed(2)}
+      </span>
+    </div>
+  );
+}
+
+function renderStandingCard(standing: StandingWithRank) {
+  const playerHref = standing.player?.userId
+    ? `/players/${standing.player.userId}`
+    : null;
+  const cardContent = <StandingCard standing={standing} />;
+
+  return playerHref ? (
+    <Link href={playerHref}>{cardContent}</Link>
+  ) : (
+    cardContent
   );
 }
 
@@ -37,7 +116,7 @@ function SessionListCard({
   emptyMessage?: string;
   games: Array<{
     date: number | string;
-    gamePlayers?: Array<unknown> | null;
+    gamePlayers?: unknown[] | null;
     gameType?: string | null;
     id: string;
     location?: string | null;
@@ -78,7 +157,9 @@ function SessionListCard({
                     {"gamePlayers" in game ? (
                       <p className="text-muted-foreground text-sm">
                         {game.gamePlayers?.length ?? 0}{" "}
-                        {(game.gamePlayers?.length ?? 0) === 1 ? "player" : "players"}
+                        {(game.gamePlayers?.length ?? 0) === 1
+                          ? "player"
+                          : "players"}
                       </p>
                     ) : null}
                   </div>
@@ -110,7 +191,9 @@ export function GroupHeader({
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 className="font-bold text-2xl sm:text-3xl">{name}</h1>
-        {description ? <p className="text-muted-foreground">{description}</p> : null}
+        {description ? (
+          <p className="text-muted-foreground">{description}</p>
+        ) : null}
       </div>
       {isOwner ? (
         <Link href={`/games/new?groupId=${groupId}`}>
@@ -129,13 +212,15 @@ export function ActiveSessionsSection({
 }: {
   games: Array<{
     date: number | string;
-    gamePlayers?: Array<unknown> | null;
+    gamePlayers?: unknown[] | null;
     gameType?: string | null;
     id: string;
     location?: string | null;
   }>;
 }) {
-  if (games.length === 0) return null;
+  if (games.length === 0) {
+    return null;
+  }
 
   return (
     <SessionListCard
@@ -151,13 +236,11 @@ export function GroupStandingsSection({
 }: {
   standings: Array<{
     gamesPlayed: number;
-    player:
-      | {
-          id?: string | null;
-          name?: string | null;
-          userId?: string | null;
-        }
-      | null;
+    player: {
+      id?: string | null;
+      name?: string | null;
+      userId?: string | null;
+    } | null;
     totalProfit: number;
   }>;
 }) {
@@ -182,7 +265,13 @@ export function GroupStandingsSection({
                 key: "rank",
                 header: "Rank",
                 className: "w-12",
-                render: (standing: (typeof standings)[number] & { rank: number; isFirst: boolean; isLast: boolean }) => (
+                render: (
+                  standing: (typeof standings)[number] & {
+                    rank: number;
+                    isFirst: boolean;
+                    isLast: boolean;
+                  }
+                ) => (
                   <div className="flex items-center gap-2">
                     {standing.isFirst ? (
                       <Trophy className="h-4 w-4 text-yellow-500" />
@@ -212,7 +301,10 @@ export function GroupStandingsSection({
                       {playerName}
                     </Link>
                   ) : (
-                    <span className="block truncate font-medium" title={playerName}>
+                    <span
+                      className="block truncate font-medium"
+                      title={playerName}
+                    >
                       {playerName}
                     </span>
                   );
@@ -221,7 +313,8 @@ export function GroupStandingsSection({
               {
                 key: "games",
                 header: "Games",
-                render: (standing: (typeof standings)[number]) => standing.gamesPlayed,
+                render: (standing: (typeof standings)[number]) =>
+                  standing.gamesPlayed,
               },
               {
                 key: "profit",
@@ -229,7 +322,9 @@ export function GroupStandingsSection({
                 render: (standing: (typeof standings)[number]) => (
                   <span
                     className={`font-bold ${
-                      standing.totalProfit >= 0 ? "text-green-600" : "text-red-600"
+                      standing.totalProfit >= 0
+                        ? "text-green-600"
+                        : "text-red-600"
                     }`}
                   >
                     {standing.totalProfit >= 0 ? "+" : ""}$
@@ -245,56 +340,7 @@ export function GroupStandingsSection({
               isLast: index === standings.length - 1 && standings.length > 1,
             }))}
             keyExtractor={(standing) => standing.player?.id ?? ""}
-            renderCard={(standing: (typeof standings)[number] & { rank: number; isFirst: boolean; isLast: boolean }) => {
-              const playerName = getDisplayName(standing.player?.name);
-              const playerHref = standing.player?.userId
-                ? `/players/${standing.player.userId}`
-                : null;
-
-              const cardContent = (
-                <div className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                        standing.isFirst
-                          ? "bg-yellow-100 dark:bg-yellow-900"
-                          : standing.isLast
-                            ? "bg-purple-100 dark:bg-purple-900"
-                            : "bg-muted"
-                      }`}
-                    >
-                      {standing.isFirst ? (
-                        <Trophy className="h-5 w-5 text-yellow-500" />
-                      ) : standing.isLast ? (
-                        <VipBadge className="h-5 w-5 text-purple-500" />
-                      ) : (
-                        <span className="font-bold text-muted-foreground">
-                          #{standing.rank}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium" title={playerName}>
-                        {playerName}
-                      </p>
-                      <p className="truncate text-muted-foreground text-sm">
-                        {standing.gamesPlayed} games played
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    className={`ml-3 shrink-0 font-bold text-lg ${
-                      standing.totalProfit >= 0 ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {standing.totalProfit >= 0 ? "+" : ""}$
-                    {standing.totalProfit.toFixed(2)}
-                  </span>
-                </div>
-              );
-
-              return playerHref ? <Link href={playerHref}>{cardContent}</Link> : cardContent;
-            }}
+            renderCard={renderStandingCard}
           />
         )}
       </CardContent>
@@ -302,7 +348,11 @@ export function GroupStandingsSection({
   );
 }
 
-export function PendingJoinRequestsSection({ groupId }: { groupId: Id<"groups"> }) {
+export function PendingJoinRequestsSection({
+  groupId,
+}: {
+  groupId: Id<"groups">;
+}) {
   return (
     <Card>
       <CardHeader>

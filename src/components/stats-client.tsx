@@ -1,25 +1,39 @@
 "use client";
 
+import {
+  Calendar,
+  DollarSign,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import Link from "next/link";
 import { EarningsOverTimeChart } from "@/components/stats/earnings-over-time-chart";
 import { StatsCard } from "@/components/stats/stats-card";
 import { Button } from "@/components/ui/button";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
-    PageHeaderSkeleton,
-    Skeleton,
-    StatsCardSkeleton,
-    TableRowSkeleton,
+  PageHeaderSkeleton,
+  Skeleton,
+  StatsCardSkeleton,
+  TableRowSkeleton,
 } from "@/components/ui/skeleton";
 import { useDetailedStats, useUserGroups } from "@/lib/convex-hooks";
-import { Calendar, DollarSign, TrendingDown, TrendingUp, Users } from "lucide-react";
-import Link from "next/link";
+
+const statCardSkeletons = [
+  "stat-card-1",
+  "stat-card-2",
+  "stat-card-3",
+  "stat-card-4",
+];
+const groupStatSkeletons = ["group-stat-1", "group-stat-2", "group-stat-3"];
 
 function StatsSkeleton() {
   return (
@@ -28,8 +42,8 @@ function StatsSkeleton() {
 
       {/* Stats Cards Skeleton */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <StatsCardSkeleton key={i} />
+        {statCardSkeletons.map((skeletonKey) => (
+          <StatsCardSkeleton key={skeletonKey} />
         ))}
       </div>
 
@@ -50,8 +64,8 @@ function StatsSkeleton() {
           <Skeleton className="h-4 w-48" />
         </CardHeader>
         <CardContent>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <TableRowSkeleton key={i} columns={2} />
+          {groupStatSkeletons.map((skeletonKey) => (
+            <TableRowSkeleton columns={2} key={skeletonKey} />
           ))}
         </CardContent>
       </Card>
@@ -81,15 +95,22 @@ export function StatsClient() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           description="Across all groups"
-          icon={detailedStats.overview.netProfit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+          icon={
+            detailedStats.overview.netProfit >= 0 ? (
+              <TrendingUp className="h-4 w-4" />
+            ) : (
+              <TrendingDown className="h-4 w-4" />
+            )
+          }
+          numericValue={detailedStats.overview.netProfit}
           title="Net Profit"
           trend={{
-            value: detailedStats.overview.netProfit >= 0 ? "Positive" : "Negative",
+            value:
+              detailedStats.overview.netProfit >= 0 ? "Positive" : "Negative",
             isPositive: detailedStats.overview.netProfit >= 0,
           }}
           value={`${detailedStats.overview.netProfit >= 0 ? "+" : ""}$${detailedStats.overview.netProfit.toFixed(2)}`}
           valueColorMode="profit"
-          numericValue={detailedStats.overview.netProfit}
         />
         <StatsCard
           description="All time"
@@ -130,8 +151,6 @@ export function StatsClient() {
             </p>
           ) : (
             <ResponsiveTable
-              data={groups.filter((g) => g !== null)}
-              keyExtractor={(group) => group?._id ?? ""}
               columns={[
                 {
                   key: "name",
@@ -152,6 +171,8 @@ export function StatsClient() {
                   ),
                 },
               ]}
+              data={groups.filter((g) => g !== null)}
+              keyExtractor={(group) => group?._id ?? ""}
               renderCard={(group) => (
                 <div className="flex items-center justify-between rounded-lg border bg-card p-4">
                   <div className="flex items-center gap-3">

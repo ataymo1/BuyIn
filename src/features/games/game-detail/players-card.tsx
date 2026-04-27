@@ -1,14 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   ArrowUpDown,
   ChevronDown,
@@ -18,6 +9,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type {
   EditingPlayerTotalsState,
@@ -36,13 +36,34 @@ function getPlayerSortValue(
   gamePlayer: GamePlayerRow,
   key: PlayersSortState["key"]
 ) {
-  if (key === "buyIn") return gamePlayer.buyIn ?? 0;
-  if (key === "cashOut") return gamePlayer.cashOut ?? 0;
-  return gamePlayer.profit ?? (gamePlayer.cashOut ?? 0) - (gamePlayer.buyIn ?? 0);
+  if (key === "buyIn") {
+    return gamePlayer.buyIn ?? 0;
+  }
+  if (key === "cashOut") {
+    return gamePlayer.cashOut ?? 0;
+  }
+  return (
+    gamePlayer.profit ?? (gamePlayer.cashOut ?? 0) - (gamePlayer.buyIn ?? 0)
+  );
 }
 
 function getProfit(gamePlayer: GamePlayerRow) {
-  return gamePlayer.profit ?? (gamePlayer.cashOut ?? 0) - (gamePlayer.buyIn ?? 0);
+  return (
+    gamePlayer.profit ?? (gamePlayer.cashOut ?? 0) - (gamePlayer.buyIn ?? 0)
+  );
+}
+
+function getSortIcon(
+  isActive: boolean,
+  direction: PlayersSortState["direction"]
+) {
+  if (!isActive) {
+    return <ArrowUpDown className="h-3 w-3" />;
+  }
+  if (direction === "desc") {
+    return <ChevronDown className="h-3 w-3" />;
+  }
+  return <ChevronUp className="h-3 w-3" />;
 }
 
 export function PlayersCard({
@@ -81,28 +102,17 @@ export function PlayersCard({
     );
   }
 
-  function renderSortableHeader(
-    label: string,
-    key: PlayersSortState["key"]
-  ) {
+  function renderSortableHeader(label: string, key: PlayersSortState["key"]) {
     const isActive = playersSort.key === key;
 
     return (
       <button
-        className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 font-medium text-muted-foreground text-xs uppercase tracking-wide hover:text-foreground"
         onClick={() => toggleSort(key)}
         type="button"
       >
         <span>{label}</span>
-        {isActive ? (
-          playersSort.direction === "desc" ? (
-            <ChevronDown className="h-3 w-3" />
-          ) : (
-            <ChevronUp className="h-3 w-3" />
-          )
-        ) : (
-          <ArrowUpDown className="h-3 w-3" />
-        )}
+        {getSortIcon(isActive, playersSort.direction)}
       </button>
     );
   }
@@ -123,8 +133,8 @@ export function PlayersCard({
           <div>
             <CardTitle>Players</CardTitle>
             <CardDescription>
-              {gamePlayers.length} {gamePlayers.length === 1 ? "player" : "players"} in
-              this session
+              {gamePlayers.length}{" "}
+              {gamePlayers.length === 1 ? "player" : "players"} in this session
               {createdByName ? (
                 <span className="ml-2 inline-flex items-center gap-1 text-amber-600">
                   <PiggyBank className="h-3 w-3" />
@@ -177,7 +187,8 @@ export function PlayersCard({
                 header: renderSortableHeader("Cash-Out", "cashOut"),
                 key: "cashOut",
                 render: (gamePlayer) =>
-                  gamePlayer.cashOut !== null && gamePlayer.cashOut !== undefined
+                  gamePlayer.cashOut !== null &&
+                  gamePlayer.cashOut !== undefined
                     ? `$${gamePlayer.cashOut.toFixed(2)}`
                     : "--",
               },
@@ -212,7 +223,9 @@ export function PlayersCard({
                   ) : null,
               },
             ]}
-            data={isExpanded ? sortedGamePlayers : sortedGamePlayers.slice(0, 3)}
+            data={
+              isExpanded ? sortedGamePlayers : sortedGamePlayers.slice(0, 3)
+            }
             keyExtractor={(gamePlayer) => gamePlayer.id}
             renderCard={(gamePlayer) => {
               const profit = getProfit(gamePlayer);
@@ -228,7 +241,9 @@ export function PlayersCard({
                         {gamePlayer.player?.name}
                       </Link>
                     ) : (
-                      <div className="font-medium">{gamePlayer.player?.name}</div>
+                      <div className="font-medium">
+                        {gamePlayer.player?.name}
+                      </div>
                     )}
 
                     {isSessionCreator ? (
@@ -246,7 +261,9 @@ export function PlayersCard({
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div>
                       <p className="text-muted-foreground">Buy-In</p>
-                      <p className="font-medium">${gamePlayer.buyIn.toFixed(2)}</p>
+                      <p className="font-medium">
+                        ${gamePlayer.buyIn.toFixed(2)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Cash-Out</p>

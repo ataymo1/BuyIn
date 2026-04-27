@@ -1,8 +1,8 @@
 import { Loader2 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { GroupDetailClient } from "@/features/groups/group-detail";
 import Navbar from "@/components/layout/navbar";
+import { GroupDetailClient } from "@/features/groups/group-detail";
 import { auth } from "@/lib/auth";
 
 interface PageProps {

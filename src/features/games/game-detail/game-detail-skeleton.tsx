@@ -1,11 +1,14 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton, TableRowSkeleton } from "@/components/ui/skeleton";
+
+const playerRows = ["player-row-1", "player-row-2", "player-row-3"];
+const transactionRows = [
+  "transaction-row-1",
+  "transaction-row-2",
+  "transaction-row-3",
+];
 
 export function GameDetailSkeleton() {
   return (
@@ -33,8 +36,8 @@ export function GameDetailSkeleton() {
             </div>
           </CardHeader>
           <CardContent>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <TableRowSkeleton key={index} columns={4} />
+            {playerRows.map((rowKey) => (
+              <TableRowSkeleton columns={4} key={rowKey} />
             ))}
           </CardContent>
         </Card>
@@ -51,10 +54,10 @@ export function GameDetailSkeleton() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, index) => (
+              {transactionRows.map((rowKey) => (
                 <div
-                  key={index}
                   className="flex items-center justify-between rounded border p-3"
+                  key={rowKey}
                 >
                   <div className="space-y-2">
                     <Skeleton className="h-4 w-16" />

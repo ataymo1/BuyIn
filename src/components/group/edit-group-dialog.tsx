@@ -91,9 +91,9 @@ export function EditGroupDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button size="sm" variant="outline">
           <Pencil className="mr-2 h-4 w-4" />
           Edit Group
         </Button>
@@ -106,7 +106,7 @@ export function EditGroupDialog({
             you&apos;re done.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
           <div className="space-y-2">
             <Label htmlFor="edit-name">Group Name</Label>
             <Input
@@ -141,14 +141,14 @@ export function EditGroupDialog({
           )}
           <DialogFooter>
             <Button
+              disabled={isSubmitting}
+              onClick={() => setOpen(false)}
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button disabled={isSubmitting} type="submit">
               {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>

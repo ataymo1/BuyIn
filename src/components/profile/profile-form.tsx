@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+const whitespacePattern = /\s+/;
+
 const profileFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z
@@ -22,7 +24,7 @@ const profileFormSchema = z.object({
     .min(1, "Description is required")
     .max(250, "Description must be less than 50 words")
     .refine(
-      (val) => val.trim().split(/\s+/).length <= 50,
+      (val) => val.trim().split(whitespacePattern).length <= 50,
       "Description must be 50 words or less"
     ),
 });
@@ -96,8 +98,11 @@ export function ProfileForm({
               </p>
             )}
             <p className="text-muted-foreground text-xs">
-              {form.watch("description")?.trim().split(/\s+/).filter(Boolean)
-                .length || 0}{" "}
+              {form
+                .watch("description")
+                ?.trim()
+                .split(whitespacePattern)
+                .filter(Boolean).length || 0}{" "}
               / 50 words
             </p>
           </div>

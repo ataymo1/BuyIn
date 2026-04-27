@@ -1,5 +1,8 @@
 "use client";
 
+import { useMutation } from "convex/react";
+import { History, LogIn } from "lucide-react";
+import { useState } from "react";
 import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { useNotification } from "@/components/providers/notification-provider";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,9 +12,6 @@ import {
   useJoinGame,
   usePlayer,
 } from "@/lib/convex-hooks";
-import { useMutation } from "convex/react";
-import { History, LogIn } from "lucide-react";
-import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { JoinSessionDialog } from "./join-session-dialog";
@@ -68,7 +68,7 @@ export function SessionsClient() {
   );
   const userSessions = gamesWithUserProfit.filter((game) => game.isParticipant);
 
-  async function handleJoinSession(gameId: string) {
+  function handleJoinSession(gameId: string) {
     if (!player?._id) {
       showNotification("Please wait, setting up your player profile...", {
         type: "info",
@@ -96,12 +96,14 @@ export function SessionsClient() {
   }
 
   async function handleJoinWithBuyIn() {
-    if (!player?._id || !userId || !pendingJoinGameId) return;
+    if (!(player?._id && userId && pendingJoinGameId)) {
+      return;
+    }
 
     setIsJoining(pendingJoinGameId);
 
     try {
-      const buyInValue = parseFloat(initialBuyInAmount) || 0;
+      const buyInValue = Number.parseFloat(initialBuyInAmount) || 0;
 
       await joinGame({
         gameId: pendingJoinGameId as Id<"games">,
@@ -179,8 +181,8 @@ export function SessionsClient() {
       ) : null}
 
       <PaymentInfoModal
-        open={showPaymentModal}
         onSuccess={handlePaymentSuccess}
+        open={showPaymentModal}
       />
 
       <JoinSessionDialog

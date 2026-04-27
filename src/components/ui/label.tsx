@@ -16,11 +16,7 @@ const Label = forwardRef<
   ElementRef<typeof Root>,
   ComponentPropsWithoutRef<typeof Root> & VariantProps<typeof labelVariants>
 >(({ className, ...props }, ref) => (
-  <Root
-    className={cn(labelVariants(), className)}
-    ref={ref}
-    {...props}
-  />
+  <Root className={cn(labelVariants(), className)} ref={ref} {...props} />
 ));
 Label.displayName = "Label";
 

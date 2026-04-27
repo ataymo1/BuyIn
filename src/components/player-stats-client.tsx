@@ -2,13 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
-import {
-  Calendar,
-  DollarSign,
-  Lock,
-  TrendingUp,
-  UserCog,
-} from "lucide-react";
+import { Calendar, DollarSign, Lock, TrendingUp, UserCog } from "lucide-react";
 import Link from "next/link";
 import { EarningsOverTimeChart } from "@/components/stats/earnings-over-time-chart";
 import { StatsCard } from "@/components/stats/stats-card";
@@ -21,6 +15,20 @@ import {
 } from "@/components/ui/card";
 import { Skeleton, StatsCardSkeleton } from "@/components/ui/skeleton";
 import { api } from "../../convex/_generated/api";
+
+const statCardSkeletons = [
+  "stat-card-1",
+  "stat-card-2",
+  "stat-card-3",
+  "stat-card-4",
+];
+const recentGameSkeletons = [
+  "recent-game-1",
+  "recent-game-2",
+  "recent-game-3",
+  "recent-game-4",
+  "recent-game-5",
+];
 
 function PlayerStatsSkeleton() {
   return (
@@ -37,8 +45,8 @@ function PlayerStatsSkeleton() {
 
       {/* Stats Cards Skeleton */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <StatsCardSkeleton key={i} />
+        {statCardSkeletons.map((skeletonKey) => (
+          <StatsCardSkeleton key={skeletonKey} />
         ))}
       </div>
 
@@ -50,8 +58,8 @@ function PlayerStatsSkeleton() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="rounded border p-3">
+            {recentGameSkeletons.map((skeletonKey) => (
+              <div className="rounded border p-3" key={skeletonKey}>
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-28" />
                   <Skeleton className="h-3 w-20" />
@@ -94,7 +102,7 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
           <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 sm:p-8">
             <div className="flex flex-col items-center gap-6 text-center">
               {/* Avatar */}
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 text-3xl font-bold text-primary ring-4 ring-background sm:h-24 sm:w-24 sm:text-4xl">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-3xl text-primary ring-4 ring-background sm:h-24 sm:w-24 sm:text-4xl">
                 {stats.playerName.charAt(0).toUpperCase()}
               </div>
 
@@ -110,8 +118,9 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
                   </p>
                 </div>
                 <p className="mx-auto max-w-md text-muted-foreground text-sm">
-                  This player has chosen to keep their stats and payment methods private.
-                  Request to view their profile to access this information.
+                  This player has chosen to keep their stats and payment methods
+                  private. Request to view their profile to access this
+                  information.
                 </p>
               </div>
             </div>
@@ -123,13 +132,12 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
 
   return (
     <div className="space-y-8">
-
       {/* Profile Header Card */}
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 sm:p-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
             {/* Avatar */}
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 text-3xl font-bold text-primary ring-4 ring-background sm:h-24 sm:w-24 sm:text-4xl">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-3xl text-primary ring-4 ring-background sm:h-24 sm:w-24 sm:text-4xl">
               {stats.playerName.charAt(0).toUpperCase()}
             </div>
 
@@ -146,7 +154,8 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
                       stats.netProfit >= 0 ? "text-green-600" : "text-red-600"
                     }
                   >
-                    {stats.netProfit >= 0 ? "+" : ""}${stats.netProfit.toFixed(2)} lifetime
+                    {stats.netProfit >= 0 ? "+" : ""}$
+                    {stats.netProfit.toFixed(2)} lifetime
                   </span>
                 </p>
               </div>
@@ -162,7 +171,9 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
                   )}
                   {stats.zelle && (
                     <div className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm shadow-sm ring-1 ring-border">
-                      <span className="font-semibold text-purple-600">Zelle</span>
+                      <span className="font-semibold text-purple-600">
+                        Zelle
+                      </span>
                       <span className="font-medium">{stats.zelle}</span>
                     </div>
                   )}
@@ -170,8 +181,8 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
               )}
 
               {/* No Payment Methods Notice */}
-              {!stats.venmo && !stats.zelle && (
-                <p className="text-sm text-muted-foreground italic">
+              {!(stats.venmo || stats.zelle) && (
+                <p className="text-muted-foreground text-sm italic">
                   No payment methods set up
                 </p>
               )}
@@ -185,6 +196,7 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
         <StatsCard
           description="Across all groups"
           icon={<TrendingUp className="h-4 w-4" />}
+          numericValue={stats.netProfit}
           title="Net Profit"
           trend={{
             value: stats.netProfit >= 0 ? "Positive" : "Negative",
@@ -192,7 +204,6 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
           }}
           value={`${stats.netProfit >= 0 ? "+" : ""}$${stats.netProfit.toFixed(2)}`}
           valueColorMode="profit"
-          numericValue={stats.netProfit}
         />
         <StatsCard
           description="All time"

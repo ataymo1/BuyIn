@@ -14,10 +14,19 @@ interface StatsCardProps {
   numericValue?: number;
 }
 
-function getValueColorClass(mode: "profit" | "none" | undefined, numericValue: number | undefined): string {
-  if (mode !== "profit" || numericValue === undefined) return "";
-  if (numericValue > 0) return "text-green-600";
-  if (numericValue < 0) return "text-red-600";
+function getValueColorClass(
+  mode: "profit" | "none" | undefined,
+  numericValue: number | undefined
+): string {
+  if (mode !== "profit" || numericValue === undefined) {
+    return "";
+  }
+  if (numericValue > 0) {
+    return "text-green-600";
+  }
+  if (numericValue < 0) {
+    return "text-red-600";
+  }
   return "";
 }
 
@@ -31,7 +40,7 @@ export function StatsCard({
   numericValue,
 }: StatsCardProps) {
   const valueColorClass = getValueColorClass(valueColorMode, numericValue);
-  
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

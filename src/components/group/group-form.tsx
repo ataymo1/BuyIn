@@ -79,7 +79,7 @@ export function GroupForm({
   const isLoading = form.formState.isSubmitting || isSubmitting;
 
   return (
-    <Card className="overflow-hidden border-0 shadow-xl shadow-black/5">
+    <Card className="overflow-hidden border-0 shadow-black/5 shadow-xl">
       <CardHeader className="border-b bg-muted/30 pb-6">
         <CardTitle className="text-xl">Group Details</CardTitle>
         <CardDescription>
@@ -94,53 +94,56 @@ export function GroupForm({
           })}
         >
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm font-medium">
+            <Label className="font-medium text-sm" htmlFor="name">
               Group Name <span className="text-destructive">*</span>
             </Label>
             <Input
+              className="h-12 text-base transition-all focus:ring-2 focus:ring-emerald-500/20"
               id="name"
               placeholder="e.g., Friday Night Poker"
-              className="h-12 text-base transition-all focus:ring-2 focus:ring-emerald-500/20"
               {...form.register("name")}
             />
             {form.formState.errors.name && (
-              <p className="text-destructive text-sm flex items-center gap-1">
+              <p className="flex items-center gap-1 text-destructive text-sm">
                 <span className="inline-block h-1 w-1 rounded-full bg-destructive" />
                 {form.formState.errors.name.message}
               </p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="description" className="text-sm font-medium">
-              Description <span className="text-muted-foreground font-normal">(optional)</span>
+            <Label className="font-medium text-sm" htmlFor="description">
+              Description{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
             </Label>
             <Textarea
+              className="resize-none text-base transition-all focus:ring-2 focus:ring-emerald-500/20"
               id="description"
               placeholder="Tell us about this group... (stakes, frequency, house rules, etc.)"
               rows={4}
-              className="resize-none text-base transition-all focus:ring-2 focus:ring-emerald-500/20"
               {...form.register("description")}
             />
             {form.formState.errors.description && (
-              <p className="text-destructive text-sm flex items-center gap-1">
+              <p className="flex items-center gap-1 text-destructive text-sm">
                 <span className="inline-block h-1 w-1 rounded-full bg-destructive" />
                 {form.formState.errors.description.message}
               </p>
             )}
           </div>
-          
+
           {error && (
             <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4">
-              <p className="text-destructive text-sm font-medium">{error}</p>
+              <p className="font-medium text-destructive text-sm">{error}</p>
             </div>
           )}
 
           <div className="flex flex-col gap-3 pt-2">
             <Button
+              className="h-12 w-full bg-gradient-to-r from-emerald-500 to-teal-600 font-semibold text-base shadow-emerald-500/25 shadow-lg transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-emerald-500/30 hover:shadow-xl"
               disabled={isLoading}
-              type="submit"
               size="lg"
-              className="w-full h-12 text-base font-semibold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all hover:shadow-xl hover:shadow-emerald-500/30"
+              type="submit"
             >
               {isLoading ? (
                 <>
@@ -154,7 +157,7 @@ export function GroupForm({
                 </>
               )}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">
+            <p className="text-center text-muted-foreground text-xs">
               You'll be the owner and can invite members after creating
             </p>
           </div>

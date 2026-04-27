@@ -1,7 +1,7 @@
 import { BarChart3, Calendar, Home, LogOut, User, UserCog } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth";
 
 export default function Navbar() {
@@ -73,36 +73,36 @@ export default function Navbar() {
       <nav className="fixed right-0 bottom-0 left-0 z-50 border-t bg-background pb-safe md:hidden">
         <div className="grid h-16 grid-cols-5">
           <Link
-            href="/"
             className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/"
           >
             <Home className="h-5 w-5" />
             <span className="text-xs">Home</span>
           </Link>
           <Link
-            href="/groups"
             className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/groups"
           >
             <UserCog className="h-5 w-5" />
             <span className="text-xs">Groups</span>
           </Link>
           <Link
-            href="/sessions"
             className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/sessions"
           >
             <Calendar className="h-5 w-5" />
             <span className="text-xs">Sessions</span>
           </Link>
           <Link
-            href="/stats"
             className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/stats"
           >
             <BarChart3 className="h-5 w-5" />
             <span className="text-xs">Stats</span>
           </Link>
           <Link
-            href="/profile"
             className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/profile"
           >
             <User className="h-5 w-5" />
             <span className="text-xs">Profile</span>

@@ -1,12 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+const loginLinkPattern = /sign in|login|get started/i;
+const googleSignInPattern = /google|sign in with google/i;
+const loginUrlPattern = /login/;
+
 test.describe("Authentication", () => {
   test("should show login page for unauthenticated users", async ({ page }) => {
     await page.goto("/");
 
     // Check for login-related elements
     const loginButton = page.getByRole("link", {
-      name: /sign in|login|get started/i,
+      name: loginLinkPattern,
     });
     await expect(loginButton).toBeVisible();
   });
@@ -16,7 +20,7 @@ test.describe("Authentication", () => {
 
     // Look for Google sign-in button
     const googleButton = page.getByRole("button", {
-      name: /google|sign in with google/i,
+      name: googleSignInPattern,
     });
     await expect(googleButton).toBeVisible();
   });
@@ -28,6 +32,6 @@ test.describe("Authentication", () => {
     await page.goto("/groups");
 
     // Should be redirected to login
-    await expect(page).toHaveURL(/login/);
+    await expect(page).toHaveURL(loginUrlPattern);
   });
 });

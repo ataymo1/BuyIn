@@ -1,7 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
 import {
   Table,
   TableBody,
@@ -10,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 interface Column<T> {
   key: string;
@@ -44,7 +44,7 @@ export function ResponsiveTable<T>({
           <TableHeader>
             <TableRow>
               {columns.map((column) => (
-                <TableHead key={column.key} className={column.className}>
+                <TableHead className={column.className} key={column.key}>
                   {column.header}
                 </TableHead>
               ))}
@@ -54,10 +54,12 @@ export function ResponsiveTable<T>({
             {data.map((item) => (
               <TableRow key={keyExtractor(item)}>
                 {columns.map((column) => (
-                  <TableCell key={column.key} className={column.className}>
+                  <TableCell className={column.className} key={column.key}>
                     {column.render
                       ? column.render(item)
-                      : ((item as Record<string, unknown>)[column.key] as ReactNode)}
+                      : ((item as Record<string, unknown>)[
+                          column.key
+                        ] as ReactNode)}
                   </TableCell>
                 ))}
               </TableRow>

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type QueryCtx, query } from "./_generated/server";
 
 // Helper to check if user is the owner of a group
@@ -40,24 +40,25 @@ export const getGames = query({
     ),
   },
   handler: async (ctx, args) => {
-    let games;
-
-    if (args.groupId) {
-      if (args.status) {
-        games = await ctx.db
+    const games: Doc<"games">[] = await (async () => {
+      if (args.groupId && args.status) {
+        const { groupId, status } = args;
+        return await ctx.db
           .query("games")
           .withIndex("by_groupId_status", (q) =>
-            q.eq("groupId", args.groupId!).eq("status", args.status!)
+            q.eq("groupId", groupId).eq("status", status)
           )
           .collect();
-      } else {
-        games = await ctx.db
+      }
+
+      if (args.groupId) {
+        const { groupId } = args;
+        return await ctx.db
           .query("games")
-          .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId!))
+          .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
           .collect();
       }
-    } else {
-      // Get games from all user's groups
+
       const allGames = await Promise.all(
         args.groupIds.map((gId) =>
           ctx.db
@@ -66,8 +67,8 @@ export const getGames = query({
             .collect()
         )
       );
-      games = allGames.flat();
-    }
+      return allGames.flat();
+    })();
 
     // Sort by date descending
     games.sort((a, b) => b.date - a.date);
@@ -95,7 +96,11 @@ export const getGames = query({
             return {
               ...gp,
               player: player
-                ? { id: player._id, name: player.name, userId: player.userId ?? null }
+                ? {
+                    id: player._id,
+                    name: player.name,
+                    userId: player.userId ?? null,
+                  }
                 : null,
             };
           })
@@ -113,7 +118,11 @@ export const getGames = query({
           createdBy: createdBy
             ? {
                 id: createdBy._id,
-                name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
+                name:
+                  createdByPlayer?.name ??
+                  createdBy.name ??
+                  createdBy.email ??
+                  "Unknown",
                 email: createdBy.email,
               }
             : null,
@@ -158,7 +167,11 @@ export const getGame = query({
           ...gp,
           id: gp._id,
           player: player
-            ? { id: player._id, name: player.name, userId: player.userId ?? null }
+            ? {
+                id: player._id,
+                name: player.name,
+                userId: player.userId ?? null,
+              }
             : null,
         };
       })
@@ -188,7 +201,11 @@ export const getGame = query({
           createdBy: createdByUser
             ? {
                 id: createdByUser._id,
-                name: txCreatedByPlayer?.name ?? createdByUser.name ?? createdByUser.email ?? "Unknown",
+                name:
+                  txCreatedByPlayer?.name ??
+                  createdByUser.name ??
+                  createdByUser.email ??
+                  "Unknown",
               }
             : null,
         };
@@ -205,7 +222,11 @@ export const getGame = query({
       createdBy: createdBy
         ? {
             id: createdBy._id,
-            name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
+            name:
+              createdByPlayer?.name ??
+              createdBy.name ??
+              createdBy.email ??
+              "Unknown",
             email: createdBy.email,
           }
         : null,
@@ -275,8 +296,10 @@ export const updateGameStatus = mutation({
     const isOwner = group.ownerId === args.userId;
     const isBanker = game.createdById === args.userId;
 
-    if (!isOwner && !isBanker) {
-      throw new Error("Only the group owner or session banker can update the game status");
+    if (!(isOwner || isBanker)) {
+      throw new Error(
+        "Only the group owner or session banker can update the game status"
+      );
     }
 
     await ctx.db.patch(args.gameId, { status: args.status });
@@ -308,7 +331,7 @@ export const updateGame = mutation({
     const isOwner = group.ownerId === args.userId;
     const isBanker = game.createdById === args.userId;
 
-    if (!isOwner && !isBanker) {
+    if (!(isOwner || isBanker)) {
       throw new Error("Only the group owner or session banker can edit games");
     }
 

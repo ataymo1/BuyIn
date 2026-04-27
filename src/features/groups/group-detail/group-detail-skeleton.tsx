@@ -3,6 +3,16 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 
+const requestRows = ["request-row-1", "request-row-2", "request-row-3"];
+const memberRows = [
+  "member-row-1",
+  "member-row-2",
+  "member-row-3",
+  "member-row-4",
+  "member-row-5",
+];
+const sessionRows = ["session-row-1", "session-row-2", "session-row-3"];
+
 export function GroupDetailSkeleton() {
   return (
     <div className="space-y-8">
@@ -21,8 +31,8 @@ export function GroupDetailSkeleton() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div className="rounded border p-3" key={index}>
+            {requestRows.map((rowKey) => (
+              <div className="rounded border p-3" key={rowKey}>
                 <div className="flex items-center justify-between">
                   <div className="space-y-2">
                     <Skeleton className="h-4 w-28" />
@@ -45,8 +55,8 @@ export function GroupDetailSkeleton() {
           <Skeleton className="h-4 w-48" />
         </CardHeader>
         <CardContent>
-          {Array.from({ length: 5 }).map((_, index) => (
-            <TableRowSkeleton columns={4} key={index} />
+          {memberRows.map((rowKey) => (
+            <TableRowSkeleton columns={4} key={rowKey} />
           ))}
         </CardContent>
       </Card>
@@ -58,8 +68,8 @@ export function GroupDetailSkeleton() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div className="rounded border p-3" key={index}>
+            {sessionRows.map((rowKey) => (
+              <div className="rounded border p-3" key={rowKey}>
                 <div className="flex items-center justify-between">
                   <div className="space-y-2">
                     <Skeleton className="h-4 w-28" />

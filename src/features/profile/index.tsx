@@ -1,16 +1,18 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "convex/react";
 import { Edit2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { useConvexUser, useUpdateUser, usePlayer } from "@/lib/convex-hooks";
-import { useMutation } from "convex/react";
+import { useConvexUser, usePlayer, useUpdateUser } from "@/lib/convex-hooks";
 import { api } from "../../../convex/_generated/api";
-import { profileFormSchema, type ProfileFormValues } from "./profile-form-schema";
-import { ProfileSkeleton } from "./profile-skeleton";
+import {
+  type ProfileFormValues,
+  profileFormSchema,
+} from "./profile-form-schema";
 import {
   PaymentMethodsSection,
   PrivacySettingsSection,
@@ -19,6 +21,7 @@ import {
   ProfileSaveBanner,
   SignOutSection,
 } from "./profile-sections";
+import { ProfileSkeleton } from "./profile-skeleton";
 
 export function ProfileClient() {
   const { user, userId, isLoading: userLoading } = useConvexUser();
@@ -48,7 +51,9 @@ export function ProfileClient() {
   }, [user, player, form]);
 
   const handleSubmit = async (data: ProfileFormValues) => {
-    if (!userId || !player) return;
+    if (!(userId && player)) {
+      return;
+    }
 
     try {
       // Update player name
@@ -82,7 +87,9 @@ export function ProfileClient() {
   };
 
   const handlePrivacyToggle = async () => {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
     try {
       await updateUser({
         id: userId,
@@ -102,16 +109,16 @@ export function ProfileClient() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="font-bold text-2xl sm:text-3xl">Profile</h1>
-          <p className="text-muted-foreground text-sm sm:text-base mt-1">
+          <p className="mt-1 text-muted-foreground text-sm sm:text-base">
             Manage your profile information and payment methods
           </p>
         </div>
         {!isEditing && (
           <Button
-            variant="outline"
-            onClick={() => setIsEditing(true)}
             className="w-full sm:w-auto sm:shrink-0"
+            onClick={() => setIsEditing(true)}
             type="button"
+            variant="outline"
           >
             <Edit2 className="mr-2 h-4 w-4" />
             Edit Profile
@@ -143,16 +150,16 @@ export function ProfileClient() {
         {saveSuccess && !isEditing ? <ProfileSaveBanner /> : null}
       </form>
 
-      {!isEditing ? (
+      {isEditing ? null : (
         <PrivacySettingsSection
           isPrivate={Boolean(user?.profilePrivate)}
           onToggle={handlePrivacyToggle}
         />
-      ) : null}
+      )}
 
-      {!isEditing ? (
+      {isEditing ? null : (
         <SignOutSection onSignOut={() => signOut({ callbackUrl: "/login" })} />
-      ) : null}
+      )}
     </div>
   );
 }

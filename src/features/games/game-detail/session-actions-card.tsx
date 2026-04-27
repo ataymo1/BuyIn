@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowLeft, Banknote, HandCoins, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,11 +11,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Banknote, HandCoins, Loader2 } from "lucide-react";
-import { useState } from "react";
 
 interface SessionActionsCardProps {
-  onSubmitTransaction: (type: "buyin" | "cashout", amount: number) => Promise<void>;
+  onSubmitTransaction: (
+    type: "buyin" | "cashout",
+    amount: number
+  ) => Promise<void>;
 }
 
 function AmountInput({
@@ -64,7 +67,9 @@ export function SessionActionsCard({
   const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
 
   async function submitTransaction(type: "buyin" | "cashout", amount: number) {
-    if (amount <= 0) return;
+    if (amount <= 0) {
+      return;
+    }
 
     setIsSubmittingTransaction(true);
     try {
@@ -176,7 +181,9 @@ export function SessionActionsCard({
                   !cashOutAmount ||
                   Number(cashOutAmount) <= 0
                 }
-                onClick={() => submitTransaction("cashout", Number(cashOutAmount))}
+                onClick={() =>
+                  submitTransaction("cashout", Number(cashOutAmount))
+                }
               >
                 {isSubmittingTransaction ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

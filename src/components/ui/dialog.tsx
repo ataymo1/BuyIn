@@ -99,7 +99,10 @@ const DialogTitle = forwardRef<
   ComponentPropsWithoutRef<typeof Title>
 >(({ className, ...props }, ref) => (
   <Title
-    className={cn("font-semibold text-lg leading-none tracking-tight", className)}
+    className={cn(
+      "font-semibold text-lg leading-none tracking-tight",
+      className
+    )}
     ref={ref}
     {...props}
   />

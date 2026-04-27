@@ -1,5 +1,8 @@
 import { cn } from "@/lib/utils";
 
+const createSkeletonKeys = (prefix: string, count: number) =>
+  Array.from({ length: count }, (_, index) => `${prefix}-${index}`);
+
 function Skeleton({
   className,
   ...props
@@ -46,8 +49,8 @@ function StatsCardSkeleton({ className }: { className?: string }) {
 function TableRowSkeleton({ columns = 5 }: { columns?: number }) {
   return (
     <div className="flex items-center justify-between border-b px-4 py-3 last:border-b-0">
-      {Array.from({ length: columns }).map((_, i) => (
-        <Skeleton key={i} className="h-4 w-20" />
+      {createSkeletonKeys("table-cell", columns).map((key) => (
+        <Skeleton className="h-4 w-20" key={key} />
       ))}
     </div>
   );
@@ -130,7 +133,7 @@ function FormFieldSkeleton() {
 function SummaryCardSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn("rounded-lg border bg-card", className)}>
-      <div className="p-6 space-y-1.5">
+      <div className="space-y-1.5 p-6">
         <Skeleton className="h-6 w-32" />
         <Skeleton className="h-4 w-48" />
       </div>

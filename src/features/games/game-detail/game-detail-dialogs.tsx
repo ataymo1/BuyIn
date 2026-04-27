@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { PaymentInfoModal } from "@/components/payment-info-modal";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
 import type {
   EditingPlayerTotalsState,
   EditingTransactionState,
@@ -51,7 +51,6 @@ interface GameDetailDialogsProps {
   onPaymentSuccess: () => void;
   onSaveEdit: () => void;
   onShowBuyInDialogChange: (open: boolean) => void;
-  onShowPaymentModalChange: (open: boolean) => void;
   onUpdatePlayerTotals: () => void;
   onUpdateTransaction: () => void;
   showBuyInDialog: boolean;
@@ -86,7 +85,6 @@ export function GameDetailDialogs({
   onPaymentSuccess,
   onSaveEdit,
   onShowBuyInDialogChange,
-  onShowPaymentModalChange,
   onUpdatePlayerTotals,
   onUpdateTransaction,
   showBuyInDialog,
@@ -142,10 +140,7 @@ export function GameDetailDialogs({
 
             <div className="space-y-2">
               <Label htmlFor="edit-game-type">Game Type</Label>
-              <Select
-                onValueChange={onEditGameTypeChange}
-                value={editGameType}
-              >
+              <Select onValueChange={onEditGameTypeChange} value={editGameType}>
                 <SelectTrigger id="edit-game-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -218,19 +213,19 @@ export function GameDetailDialogs({
 
       <PaymentInfoModal onSuccess={onPaymentSuccess} open={showPaymentModal} />
 
-      <Dialog open={showBuyInDialog} onOpenChange={onShowBuyInDialogChange}>
+      <Dialog onOpenChange={onShowBuyInDialogChange} open={showBuyInDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Join Session</DialogTitle>
             <DialogDescription>
-              Enter your initial buy-in amount to join this session. You can
-              add more later.
+              Enter your initial buy-in amount to join this session. You can add
+              more later.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Label htmlFor="initial-buyin">Initial Buy-In Amount</Label>
             <div className="relative mt-2">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                 $
               </span>
               <Input
@@ -251,7 +246,7 @@ export function GameDetailDialogs({
                 value={initialBuyInAmount}
               />
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-muted-foreground text-xs">
               Leave at $0 if you want to buy in later
             </p>
           </div>
@@ -285,8 +280,9 @@ export function GameDetailDialogs({
           <DialogHeader>
             <DialogTitle>Edit Transaction</DialogTitle>
             <DialogDescription>
-              Edit {editingTransaction?.type === "buyin" ? "buy-in" : "cash-out"}{" "}
-              for {editingTransaction?.playerName}
+              Edit{" "}
+              {editingTransaction?.type === "buyin" ? "buy-in" : "cash-out"} for{" "}
+              {editingTransaction?.playerName}
             </DialogDescription>
           </DialogHeader>
 
@@ -406,7 +402,10 @@ export function GameDetailDialogs({
                   onChange={(event) =>
                     onEditingPlayerTotalsChange(
                       editingPlayerTotals
-                        ? { ...editingPlayerTotals, cashOut: event.target.value }
+                        ? {
+                            ...editingPlayerTotals,
+                            cashOut: event.target.value,
+                          }
                         : null
                     )
                   }

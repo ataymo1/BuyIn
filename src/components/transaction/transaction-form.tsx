@@ -27,7 +27,8 @@ const transactionFormSchema = z.object({
     .string()
     .min(1, "Amount is required")
     .refine(
-      (val) => !isNaN(Number.parseFloat(val)) && Number.parseFloat(val) > 0,
+      (val) =>
+        !Number.isNaN(Number.parseFloat(val)) && Number.parseFloat(val) > 0,
       "Amount must be a positive number"
     ),
   description: z.string().optional(),
@@ -92,8 +93,8 @@ export function TransactionForm({
             <Input
               id="amount"
               inputMode="decimal"
-              placeholder="0.00"
               pattern="[0-9]*[.]?[0-9]*"
+              placeholder="0.00"
               step="0.01"
               type="number"
               {...form.register("amount")}

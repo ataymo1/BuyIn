@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import { mutation, type MutationCtx, query } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { type MutationCtx, mutation, query } from "./_generated/server";
 
 // Helper to recalculate game player totals from approved transactions
 async function recalculatePlayerTotals(
@@ -15,7 +15,9 @@ async function recalculatePlayerTotals(
     )
     .first();
 
-  if (!gamePlayer) return;
+  if (!gamePlayer) {
+    return;
+  }
 
   // Get all approved transactions for this player in this game
   const allTxs = await ctx.db
@@ -53,56 +55,67 @@ export const getTransactions = query({
     gameId: v.optional(v.id("games")),
     groupIds: v.optional(v.array(v.id("groups"))),
     includeStatus: v.optional(
-      v.array(v.union(v.literal("PENDING"), v.literal("APPROVED"), v.literal("REJECTED")))
+      v.array(
+        v.union(
+          v.literal("PENDING"),
+          v.literal("APPROVED"),
+          v.literal("REJECTED")
+        )
+      )
     ),
   },
   handler: async (ctx, args) => {
-    let transactions;
+    const transactions: Doc<"transactions">[] = await (async () => {
+      if (args.gameId) {
+        const { gameId } = args;
+        return await ctx.db
+          .query("transactions")
+          .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+          .collect();
+      }
 
-    if (args.gameId) {
-      transactions = await ctx.db
-        .query("transactions")
-        .withIndex("by_gameId", (q) => q.eq("gameId", args.gameId!))
-        .collect();
-    } else if (args.groupIds && args.groupIds.length > 0) {
-      // Get games from groups first
-      const gamesInGroups = await Promise.all(
-        args.groupIds.map((gId) =>
-          ctx.db
-            .query("games")
-            .withIndex("by_groupId", (q) => q.eq("groupId", gId))
-            .collect()
-        )
-      );
-      const gameIds = gamesInGroups.flat().map((g) => g._id);
+      if (args.groupIds && args.groupIds.length > 0) {
+        const gamesInGroups = await Promise.all(
+          args.groupIds.map((gId) =>
+            ctx.db
+              .query("games")
+              .withIndex("by_groupId", (q) => q.eq("groupId", gId))
+              .collect()
+          )
+        );
+        const gameIds = gamesInGroups.flat().map((g) => g._id);
 
-      const allTransactions = await Promise.all(
-        gameIds.map((gameId) =>
-          ctx.db
-            .query("transactions")
-            .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
-            .collect()
-        )
-      );
-      transactions = allTransactions.flat();
-    } else {
-      transactions = await ctx.db.query("transactions").collect();
-    }
+        const allTransactions = await Promise.all(
+          gameIds.map((gameId) =>
+            ctx.db
+              .query("transactions")
+              .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+              .collect()
+          )
+        );
+        return allTransactions.flat();
+      }
 
-    // Filter by status if specified
+      return await ctx.db.query("transactions").collect();
+    })();
+
+    let filteredTransactions = transactions;
+
     if (args.includeStatus && args.includeStatus.length > 0) {
-      transactions = transactions.filter((tx) => {
+      filteredTransactions = transactions.filter((tx) => {
         const status = tx.status ?? "APPROVED"; // Legacy transactions are considered approved
-        return args.includeStatus!.includes(status as "PENDING" | "APPROVED" | "REJECTED");
+        return args.includeStatus?.includes(
+          status as "PENDING" | "APPROVED" | "REJECTED"
+        );
       });
     }
 
     // Sort by creation time
-    transactions.sort((a, b) => b._creationTime - a._creationTime);
+    filteredTransactions.sort((a, b) => b._creationTime - a._creationTime);
 
     // Add details
     const transactionsWithDetails = await Promise.all(
-      transactions.map(async (tx) => {
+      filteredTransactions.map(async (tx) => {
         const player = await ctx.db.get(tx.playerId);
         const game = await ctx.db.get(tx.gameId);
         const createdBy = await ctx.db.get(tx.createdById);
@@ -114,10 +127,7 @@ export const getTransactions = query({
               .first()
           : null;
 
-        let group = null;
-        if (game) {
-          group = await ctx.db.get(game.groupId);
-        }
+        const group = game ? await ctx.db.get(game.groupId) : null;
 
         return {
           ...tx,
@@ -134,7 +144,11 @@ export const getTransactions = query({
           createdBy: createdBy
             ? {
                 id: createdBy._id,
-                name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
+                name:
+                  createdByPlayer?.name ??
+                  createdBy.name ??
+                  createdBy.email ??
+                  "Unknown",
                 email: createdBy.email,
               }
             : null,
@@ -189,7 +203,11 @@ export const getPendingBuyIns = query({
           createdBy: createdBy
             ? {
                 id: createdBy._id,
-                name: createdByPlayer?.name ?? createdBy.name ?? createdBy.email ?? "Unknown",
+                name:
+                  createdByPlayer?.name ??
+                  createdBy.name ??
+                  createdBy.email ??
+                  "Unknown",
               }
             : null,
         };
@@ -255,7 +273,7 @@ export const createTransaction = mutation({
 
     // Transactions from non-creators are PENDING, session creator's transactions are auto-approved
     const isSessionCreator = game.createdById === args.createdById;
-    const status = !isSessionCreator ? "PENDING" : "APPROVED";
+    const status = isSessionCreator ? "APPROVED" : "PENDING";
 
     // Create transaction
     const txId = await ctx.db.insert("transactions", {
@@ -486,7 +504,10 @@ export const setPlayerTotals = mutation({
       gamePlayer = await ctx.db.get(gpId);
     }
 
-    async function adjustTransactions(type: "buyin" | "cashout", desiredTotal: number) {
+    async function adjustTransactions(
+      type: "buyin" | "cashout",
+      desiredTotal: number
+    ) {
       const txs = await ctx.db
         .query("transactions")
         .withIndex("by_gameId", (q) => q.eq("gameId", args.gameId))
@@ -520,9 +541,13 @@ export const setPlayerTotals = mutation({
 
       if (desiredTotal < currentTotal) {
         let remaining = currentTotal - desiredTotal;
-        const sorted = [...txs].sort((a, b) => b._creationTime - a._creationTime);
+        const sorted = [...txs].sort(
+          (a, b) => b._creationTime - a._creationTime
+        );
         for (const tx of sorted) {
-          if (remaining <= 0) break;
+          if (remaining <= 0) {
+            break;
+          }
           if (tx.amount > remaining) {
             await ctx.db.patch(tx._id, { amount: tx.amount - remaining });
             remaining = 0;

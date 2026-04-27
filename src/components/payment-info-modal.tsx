@@ -57,7 +57,9 @@ export function PaymentInfoModal({ open, onSuccess }: PaymentInfoModalProps) {
   }, [user, form]);
 
   const handleSubmit = async (data: PaymentInfoFormValues) => {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
 
     try {
       await updateUser({
@@ -74,20 +76,20 @@ export function PaymentInfoModal({ open, onSuccess }: PaymentInfoModalProps) {
   return (
     <Dialog open={open}>
       <DialogContent
-        onPointerDownOutside={(e) => e.preventDefault()}
+        className="[&>button]:hidden"
         onEscapeKeyDown={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="[&>button]:hidden"
+        onPointerDownOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Payment Information</DialogTitle>
           <DialogDescription>
-            Add your payment details so group members can settle up with you.
-            At least one payment method is required to continue.
+            Add your payment details so group members can settle up with you. At
+            least one payment method is required to continue.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
           <div className="space-y-2">
             <Label htmlFor="venmo">Venmo Username</Label>
             <Input
@@ -113,7 +115,7 @@ export function PaymentInfoModal({ open, onSuccess }: PaymentInfoModalProps) {
           )}
 
           <DialogFooter>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
+            <Button disabled={form.formState.isSubmitting} type="submit">
               {form.formState.isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

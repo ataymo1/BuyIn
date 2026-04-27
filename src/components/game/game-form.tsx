@@ -67,7 +67,7 @@ export function GameForm({
   const isLoading = form.formState.isSubmitting;
 
   return (
-    <Card className="overflow-hidden border-0 shadow-xl shadow-black/5">
+    <Card className="overflow-hidden border-0 shadow-black/5 shadow-xl">
       <CardHeader className="border-b bg-muted/30 pb-6">
         <CardTitle className="text-xl">Session Details</CardTitle>
         <CardDescription>
@@ -77,7 +77,7 @@ export function GameForm({
       <CardContent className="pt-6">
         <form className="space-y-6" onSubmit={form.handleSubmit(handleSubmit)}>
           <div className="space-y-2">
-            <Label htmlFor="groupId" className="text-sm font-medium">
+            <Label className="font-medium text-sm" htmlFor="groupId">
               Group <span className="text-destructive">*</span>
             </Label>
             <Select
@@ -96,46 +96,51 @@ export function GameForm({
               </SelectContent>
             </Select>
             {form.formState.errors.groupId && (
-              <p className="text-destructive text-sm flex items-center gap-1">
+              <p className="flex items-center gap-1 text-destructive text-sm">
                 <span className="inline-block h-1 w-1 rounded-full bg-destructive" />
                 {form.formState.errors.groupId.message}
               </p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="date" className="text-sm font-medium">
+            <Label className="font-medium text-sm" htmlFor="date">
               Date <span className="text-destructive">*</span>
             </Label>
-            <Input 
-              id="date" 
-              type="date" 
+            <Input
               className="h-12 text-base transition-all focus:ring-2 focus:ring-violet-500/20"
-              {...form.register("date")} 
+              id="date"
+              type="date"
+              {...form.register("date")}
             />
             {form.formState.errors.date && (
-              <p className="text-destructive text-sm flex items-center gap-1">
+              <p className="flex items-center gap-1 text-destructive text-sm">
                 <span className="inline-block h-1 w-1 rounded-full bg-destructive" />
                 {form.formState.errors.date.message}
               </p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="location" className="text-sm font-medium">
-              Location <span className="text-muted-foreground font-normal">(optional)</span>
+            <Label className="font-medium text-sm" htmlFor="location">
+              Location{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
             </Label>
             <Input
+              className="h-12 text-base transition-all focus:ring-2 focus:ring-violet-500/20"
               id="location"
               placeholder="e.g., Home, Casino, Friend's house"
-              className="h-12 text-base transition-all focus:ring-2 focus:ring-violet-500/20"
               {...form.register("location")}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="gameType" className="text-sm font-medium">
+            <Label className="font-medium text-sm" htmlFor="gameType">
               Game Type
             </Label>
             <Select
-              onValueChange={(value) => form.setValue("gameType", value as "cash" | "tournament")}
+              onValueChange={(value) =>
+                form.setValue("gameType", value as "cash" | "tournament")
+              }
               value={form.watch("gameType") || "cash"}
             >
               <SelectTrigger className="h-12 text-base transition-all focus:ring-2 focus:ring-violet-500/20">
@@ -147,13 +152,13 @@ export function GameForm({
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="flex flex-col gap-3 pt-2">
             <Button
+              className="h-12 w-full bg-gradient-to-r from-violet-500 to-purple-600 font-semibold text-base shadow-lg shadow-violet-500/25 transition-all hover:from-violet-600 hover:to-purple-700 hover:shadow-violet-500/30 hover:shadow-xl"
               disabled={isLoading}
-              type="submit"
               size="lg"
-              className="w-full h-12 text-base font-semibold bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30"
+              type="submit"
             >
               {isLoading ? (
                 <>
@@ -167,7 +172,7 @@ export function GameForm({
                 </>
               )}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">
+            <p className="text-center text-muted-foreground text-xs">
               You'll be the banker and can add players after creating
             </p>
           </div>

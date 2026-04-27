@@ -11,12 +11,18 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  type ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
 } from "@/components/ui/chart";
 
 interface EarningsPoint {
@@ -31,7 +37,7 @@ interface EarningsOverTimeChartProps {
   description?: string;
 }
 
-type ChartRow = {
+interface ChartRow {
   gameId?: string;
   date: number;
   dateLabel: string;
@@ -39,7 +45,7 @@ type ChartRow = {
   netProfit: number;
   positiveNetProfit: number | null;
   negativeNetProfit: number | null;
-};
+}
 
 const chartConfig = {
   netProfit: {
@@ -59,10 +65,18 @@ function getNiceStep(value: number) {
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const normalized = value / magnitude;
 
-  if (normalized <= 1) return magnitude;
-  if (normalized <= 2) return 2 * magnitude;
-  if (normalized <= 2.5) return 2.5 * magnitude;
-  if (normalized <= 5) return 5 * magnitude;
+  if (normalized <= 1) {
+    return magnitude;
+  }
+  if (normalized <= 2) {
+    return 2 * magnitude;
+  }
+  if (normalized <= 2.5) {
+    return 2.5 * magnitude;
+  }
+  if (normalized <= 5) {
+    return 5 * magnitude;
+  }
 
   return 10 * magnitude;
 }
@@ -136,18 +150,23 @@ export function EarningsOverTimeChart({
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">No session earnings yet.</p>
+          <p className="text-muted-foreground text-sm">
+            No session earnings yet.
+          </p>
         </CardContent>
       </Card>
     );
   }
 
-  const peakMagnitude = Math.max(1, ...chartData.map((d) => Math.abs(d.netProfit)));
+  const peakMagnitude = Math.max(
+    1,
+    ...chartData.map((d) => Math.abs(d.netProfit))
+  );
   const targetOuterTick = peakMagnitude / 2;
   const tickStep = getNiceStep(targetOuterTick);
   const yTicks = [-2 * tickStep, -tickStep, 0, tickStep, 2 * tickStep];
-  const yDomain = [yTicks[0], yTicks[yTicks.length - 1]] as const;
-  const latestNetProfit = chartData[chartData.length - 1]?.netProfit ?? 0;
+  const yDomain = [yTicks[0] ?? 0, yTicks.at(-1) ?? 0] as const;
+  const latestNetProfit = chartData.at(-1)?.netProfit ?? 0;
   const positiveLineColor = "hsl(var(--chart-profit-positive))";
   const negativeLineColor = "hsl(var(--chart-profit-negative))";
 
@@ -167,13 +186,37 @@ export function EarningsOverTimeChart({
             margin={{ top: 14, right: 16, bottom: 8, left: 2 }}
           >
             <defs>
-              <linearGradient id="earningsPositiveFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--chart-profit-positive) / 0.24)" />
-                <stop offset="100%" stopColor="hsl(var(--chart-profit-positive) / 0.02)" />
+              <linearGradient
+                id="earningsPositiveFill"
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="hsl(var(--chart-profit-positive) / 0.24)"
+                />
+                <stop
+                  offset="100%"
+                  stopColor="hsl(var(--chart-profit-positive) / 0.02)"
+                />
               </linearGradient>
-              <linearGradient id="earningsNegativeFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--chart-profit-negative) / 0.02)" />
-                <stop offset="100%" stopColor="hsl(var(--chart-profit-negative) / 0.24)" />
+              <linearGradient
+                id="earningsNegativeFill"
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="hsl(var(--chart-profit-negative) / 0.02)"
+                />
+                <stop
+                  offset="100%"
+                  stopColor="hsl(var(--chart-profit-negative) / 0.24)"
+                />
               </linearGradient>
             </defs>
             <CartesianGrid
@@ -192,10 +235,12 @@ export function EarningsOverTimeChart({
             <YAxis
               axisLine={false}
               domain={yDomain}
-              ticks={yTicks}
-              tickFormatter={(value) => `${value < 0 ? "-" : ""}$${Math.abs(Math.round(value))}`}
+              tickFormatter={(value) =>
+                `${value < 0 ? "-" : ""}$${Math.abs(Math.round(value))}`
+              }
               tickLine={false}
               tickMargin={10}
+              ticks={yTicks}
               width={64}
             />
             <ReferenceLine
@@ -213,18 +258,24 @@ export function EarningsOverTimeChart({
                       <div className="flex w-full items-center justify-between gap-3">
                         <span className="text-muted-foreground">{name}</span>
                         <span className="font-medium text-foreground">
-                          {numericValue >= 0 ? "+" : ""}${numericValue.toFixed(2)}
+                          {numericValue >= 0 ? "+" : ""}$
+                          {numericValue.toFixed(2)}
                         </span>
                       </div>
                     );
                   }}
                   labelFormatter={(_, payload) => {
                     const point = payload?.[0]?.payload as ChartRow | undefined;
-                    return point ? format(new Date(point.date), "MMM d, yyyy") : "";
+                    return point
+                      ? format(new Date(point.date), "MMM d, yyyy")
+                      : "";
                   }}
                 />
               }
-              cursor={{ stroke: "hsl(var(--muted-foreground) / 0.25)", strokeDasharray: "3 3" }}
+              cursor={{
+                stroke: "hsl(var(--muted-foreground) / 0.25)",
+                strokeDasharray: "3 3",
+              }}
               isAnimationActive={false}
             />
             <Area
@@ -242,8 +293,8 @@ export function EarningsOverTimeChart({
               type="monotone"
             />
             <Line
-              dataKey="sessionProfit"
               activeDot={false}
+              dataKey="sessionProfit"
               dot={false}
               isAnimationActive={false}
               legendType="none"
@@ -257,7 +308,9 @@ export function EarningsOverTimeChart({
                 <circle
                   cx={dotProps.cx}
                   cy={dotProps.cy}
-                  fill={latestNetProfit >= 0 ? positiveLineColor : negativeLineColor}
+                  fill={
+                    latestNetProfit >= 0 ? positiveLineColor : negativeLineColor
+                  }
                   r={5}
                   stroke="hsl(var(--background))"
                   strokeWidth={2.5}
@@ -266,9 +319,9 @@ export function EarningsOverTimeChart({
               dataKey="positiveNetProfit"
               dot={false}
               isAnimationActive={false}
+              stroke={positiveLineColor}
               strokeLinecap="round"
               strokeLinejoin="round"
-              stroke={positiveLineColor}
               strokeWidth={3.25}
               type="monotone"
             />
@@ -277,7 +330,9 @@ export function EarningsOverTimeChart({
                 <circle
                   cx={dotProps.cx}
                   cy={dotProps.cy}
-                  fill={latestNetProfit >= 0 ? positiveLineColor : negativeLineColor}
+                  fill={
+                    latestNetProfit >= 0 ? positiveLineColor : negativeLineColor
+                  }
                   r={5}
                   stroke="hsl(var(--background))"
                   strokeWidth={2.5}
@@ -286,9 +341,9 @@ export function EarningsOverTimeChart({
               dataKey="negativeNetProfit"
               dot={false}
               isAnimationActive={false}
+              stroke={negativeLineColor}
               strokeLinecap="round"
               strokeLinejoin="round"
-              stroke={negativeLineColor}
               strokeWidth={3.25}
               type="monotone"
             />

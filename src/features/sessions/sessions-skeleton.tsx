@@ -7,6 +7,19 @@ import {
   TableRowSkeleton,
 } from "@/components/ui/skeleton";
 
+const activeSessionRows = [
+  "active-session-row-1",
+  "active-session-row-2",
+  "active-session-row-3",
+];
+const historySessionRows = [
+  "history-session-row-1",
+  "history-session-row-2",
+  "history-session-row-3",
+  "history-session-row-4",
+  "history-session-row-5",
+];
+
 export function SessionsSkeleton() {
   return (
     <div className="space-y-8">
@@ -18,13 +31,13 @@ export function SessionsSkeleton() {
         <Card>
           <CardContent className="p-0">
             <div className="hidden md:block">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <TableRowSkeleton key={index} columns={5} />
+              {activeSessionRows.map((rowKey) => (
+                <TableRowSkeleton columns={5} key={rowKey} />
               ))}
             </div>
             <div className="space-y-4 p-4 md:hidden">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <MobileCardSkeleton key={index} />
+              {activeSessionRows.map((rowKey) => (
+                <MobileCardSkeleton key={rowKey} />
               ))}
             </div>
           </CardContent>
@@ -39,13 +52,13 @@ export function SessionsSkeleton() {
         <Card>
           <CardContent className="p-0">
             <div className="hidden md:block">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <TableRowSkeleton key={index} columns={6} />
+              {historySessionRows.map((rowKey) => (
+                <TableRowSkeleton columns={6} key={rowKey} />
               ))}
             </div>
             <div className="space-y-4 p-4 md:hidden">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <MobileCardSkeleton key={index} />
+              {historySessionRows.map((rowKey) => (
+                <MobileCardSkeleton key={rowKey} />
               ))}
             </div>
           </CardContent>

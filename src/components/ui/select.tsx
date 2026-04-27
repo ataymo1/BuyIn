@@ -55,7 +55,10 @@ const SelectScrollUpButton = forwardRef<
   ComponentPropsWithoutRef<typeof ScrollUpButton>
 >(({ className, ...props }, ref) => (
   <ScrollUpButton
-    className={cn("flex cursor-default items-center justify-center py-1", className)}
+    className={cn(
+      "flex cursor-default items-center justify-center py-1",
+      className
+    )}
     ref={ref}
     {...props}
   >
@@ -69,7 +72,10 @@ const SelectScrollDownButton = forwardRef<
   ComponentPropsWithoutRef<typeof ScrollDownButton>
 >(({ className, ...props }, ref) => (
   <ScrollDownButton
-    className={cn("flex cursor-default items-center justify-center py-1", className)}
+    className={cn(
+      "flex cursor-default items-center justify-center py-1",
+      className
+    )}
     ref={ref}
     {...props}
   >

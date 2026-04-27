@@ -1,5 +1,8 @@
 "use client";
 
+import { format } from "date-fns";
+import { Check, ChevronDown, ChevronUp, Clock, Loader2, X } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,9 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { format } from "date-fns";
-import { Check, ChevronDown, ChevronUp, Clock, Loader2, X } from "lucide-react";
-import { useState } from "react";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { GameTransactionRow } from "./game-detail-types";
 
@@ -31,7 +31,9 @@ export function PendingTransactionsCard({
 }: PendingTransactionsCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  if (pendingTransactions.length === 0) return null;
+  if (pendingTransactions.length === 0) {
+    return null;
+  }
 
   return (
     <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">

@@ -1,11 +1,19 @@
 import { expect, test } from "@playwright/test";
 
+const sessionsHeadingPattern = /sessions|games/i;
+const gameDetailUrlPattern = /\/games\/.+/;
+const dateInfoPattern = /date|when/i;
+const buyInPattern = /buy.?in/i;
+const cashOutPattern = /cash.?out/i;
+
 test.describe("Games", () => {
   test("should display games/sessions page", async ({ page }) => {
     await page.goto("/sessions");
 
     // Check for sessions-related content
-    const heading = page.getByRole("heading", { name: /sessions|games/i });
+    const heading = page.getByRole("heading", {
+      name: sessionsHeadingPattern,
+    });
     await expect(heading).toBeVisible();
   });
 
@@ -20,10 +28,10 @@ test.describe("Games", () => {
       await gameLink.click();
 
       // Should be on game detail page
-      await expect(page).toHaveURL(/\/games\/.+/);
+      await expect(page).toHaveURL(gameDetailUrlPattern);
 
       // Check for game details
-      const dateInfo = page.getByText(/date|when/i);
+      const dateInfo = page.getByText(dateInfoPattern);
       await expect(dateInfo).toBeVisible();
     }
   });
@@ -40,8 +48,8 @@ test.describe("Games", () => {
       await gameLink.click();
 
       // Look for transaction buttons
-      const buyInButton = page.getByRole("button", { name: /buy.?in/i });
-      const cashOutButton = page.getByRole("button", { name: /cash.?out/i });
+      const buyInButton = page.getByRole("button", { name: buyInPattern });
+      const cashOutButton = page.getByRole("button", { name: cashOutPattern });
 
       // At least one should be visible for active games
       const hasBuyIn = await buyInButton.isVisible();
