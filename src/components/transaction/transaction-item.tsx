@@ -3,7 +3,7 @@
 import { Edit, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useNotification } from "@/components/notification-provider";
+import { useNotification } from "@/components/providers/notification-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

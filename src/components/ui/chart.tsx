@@ -1,7 +1,15 @@
 "use client";
 
-import * as React from "react";
-import * as RechartsPrimitive from "recharts";
+import {
+  createContext,
+  type ComponentProps,
+  type ComponentType,
+  type ReactNode,
+  forwardRef,
+  useContext,
+  useId,
+} from "react";
+import { Legend, ResponsiveContainer, Tooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -9,8 +17,8 @@ const THEMES = { light: "", dark: ".dark" } as const;
 export type ChartConfig = Record<
   string,
   {
-    label?: React.ReactNode;
-    icon?: React.ComponentType;
+    label?: ReactNode;
+    icon?: ComponentType;
     color?: string;
     theme?: Record<keyof typeof THEMES, string>;
   }
@@ -20,10 +28,10 @@ type ChartContextProps = {
   config: ChartConfig;
 };
 
-const ChartContext = React.createContext<ChartContextProps | null>(null);
+const ChartContext = createContext<ChartContextProps | null>(null);
 
 function useChart() {
-  const context = React.useContext(ChartContext);
+  const context = useContext(ChartContext);
   if (!context) {
     throw new Error("useChart must be used within a <ChartContainer />");
   }
@@ -75,13 +83,11 @@ export function ChartContainer({
   children,
   config,
   ...props
-}: React.ComponentProps<"div"> & {
+}: ComponentProps<"div"> & {
   config: ChartConfig;
-  children: React.ComponentProps<
-    typeof RechartsPrimitive.ResponsiveContainer
-  >["children"];
+  children: ComponentProps<typeof ResponsiveContainer>["children"];
 }) {
-  const uniqueId = React.useId().replace(/:/g, "");
+  const uniqueId = useId().replace(/:/g, "");
   const chartId = `chart-${id || uniqueId}`;
 
   return (
@@ -95,16 +101,14 @@ export function ChartContainer({
         {...props}
       >
         <ChartStyle config={config} id={chartId} />
-        <RechartsPrimitive.ResponsiveContainer>
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
     </ChartContext.Provider>
   );
 }
 
-export const ChartTooltip = RechartsPrimitive.Tooltip;
-export const ChartLegend = RechartsPrimitive.Legend;
+export const ChartTooltip = Tooltip;
+export const ChartLegend = Legend;
 
 type TooltipPayloadItem = {
   dataKey?: string | number;
@@ -114,7 +118,7 @@ type TooltipPayloadItem = {
   payload?: Record<string, unknown>;
 };
 
-export const ChartTooltipContent = React.forwardRef<
+export const ChartTooltipContent = forwardRef<
   HTMLDivElement,
   {
     className?: string;
@@ -123,14 +127,14 @@ export const ChartTooltipContent = React.forwardRef<
     label?: string | number;
     hideLabel?: boolean;
     hideIndicator?: boolean;
-    labelFormatter?: (label: unknown, payload?: TooltipPayloadItem[]) => React.ReactNode;
+    labelFormatter?: (label: unknown, payload?: TooltipPayloadItem[]) => ReactNode;
     formatter?: (
       value: unknown,
       name: string,
       item: TooltipPayloadItem,
       index: number,
       payload: TooltipPayloadItem[]
-    ) => React.ReactNode;
+    ) => ReactNode;
   }
 >(function ChartTooltipContent(
   {
@@ -179,11 +183,7 @@ export const ChartTooltipContent = React.forwardRef<
             if (formatted == null) {
               return null;
             }
-            return (
-              <div key={`${key}-${index}`}>
-                {formatted}
-              </div>
-            );
+            return <div key={`${key}-${index}`}>{formatted}</div>;
           }
 
           return (
@@ -204,7 +204,9 @@ export const ChartTooltipContent = React.forwardRef<
                 <span className="text-muted-foreground">{itemName}</span>
               </div>
               <span className="font-mono font-medium text-foreground">
-                {typeof item.value === "number" ? item.value.toLocaleString() : item.value}
+                {typeof item.value === "number"
+                  ? item.value.toLocaleString()
+                  : item.value}
               </span>
             </div>
           );
@@ -215,9 +217,9 @@ export const ChartTooltipContent = React.forwardRef<
 });
 ChartTooltipContent.displayName = "ChartTooltipContent";
 
-export const ChartLegendContent = React.forwardRef<
+export const ChartLegendContent = forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div"> & {
+  ComponentProps<"div"> & {
     payload?: Array<{ dataKey?: string; color?: string; value?: string }>;
     hideIcon?: boolean;
   }

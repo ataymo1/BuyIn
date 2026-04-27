@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import Navbar from "@/components/layout/navbar";
-import { SessionsClient } from "@/components/sessions-client";
+import { SessionsClient } from "@/features/sessions";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 

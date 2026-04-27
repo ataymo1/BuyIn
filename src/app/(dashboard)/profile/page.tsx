@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { ProfileClient } from "@/components/profile-client";
+import { ProfileClient } from "@/features/profile";
 import { auth } from "@/lib/auth";
 
 export default async function ProfilePage() {
