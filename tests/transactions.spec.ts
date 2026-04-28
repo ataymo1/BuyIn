@@ -5,6 +5,7 @@ const buyInPattern = /buy.?in/i;
 const amountPattern = /amount/i;
 const submitTransactionPattern = /add|submit|confirm/i;
 const transactionErrorPattern = /required|invalid|amount/i;
+const newGameHref = "/games/new";
 
 test.describe("Transactions", () => {
   test("should be able to view transaction history", async ({ page }) => {
@@ -14,7 +15,9 @@ test.describe("Transactions", () => {
     // Look for any completed session to view transactions
     await page.goto("/sessions?status=COMPLETED");
 
-    const gameLink = page.locator("a[href^='/games/']").first();
+    const gameLink = page
+      .locator(`a[href^="/games/"]:not([href="${newGameHref}"])`)
+      .first();
 
     if (await gameLink.isVisible()) {
       await gameLink.click();
@@ -28,7 +31,9 @@ test.describe("Transactions", () => {
   test("buy-in form should have amount field", async ({ page }) => {
     await page.goto("/sessions?status=ACTIVE");
 
-    const gameLink = page.locator("a[href^='/games/']").first();
+    const gameLink = page
+      .locator(`a[href^="/games/"]:not([href="${newGameHref}"])`)
+      .first();
 
     if (await gameLink.isVisible()) {
       await gameLink.click();
@@ -48,7 +53,9 @@ test.describe("Transactions", () => {
   test("should validate transaction amount", async ({ page }) => {
     await page.goto("/sessions?status=ACTIVE");
 
-    const gameLink = page.locator("a[href^='/games/']").first();
+    const gameLink = page
+      .locator(`a[href^="/games/"]:not([href="${newGameHref}"])`)
+      .first();
 
     if (await gameLink.isVisible()) {
       await gameLink.click();

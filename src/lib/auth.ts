@@ -1,4 +1,5 @@
 import { ConvexHttpClient } from "convex/browser";
+import { headers } from "next/headers";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { ConvexAdapter } from "./convex-adapter";
@@ -10,7 +11,7 @@ if (!convexUrl) {
 
 const convex = new ConvexHttpClient(convexUrl);
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+const nextAuth = NextAuth({
   adapter: ConvexAdapter(convex),
   session: {
     strategy: "jwt",
@@ -41,3 +42,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
+
+export const { handlers, signIn, signOut } = nextAuth;
+
+function createE2ESession() {
+  return {
+    user: {
+      id: process.env.E2E_USER_ID ?? "e2e-user",
+      email: process.env.E2E_USER_EMAIL ?? "e2e@example.com",
+      name: "E2E User",
+    },
+    expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+  };
+}
+
+async function shouldBypassAuthForE2E() {
+  if (process.env.E2E_AUTH_BYPASS === "1") {
+    return true;
+  }
+
+  if (process.env.NODE_ENV !== "development") {
+    return false;
+  }
+
+  try {
+    return (await headers()).get("x-e2e-auth") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export async function auth() {
+  if (await shouldBypassAuthForE2E()) {
+    return createE2ESession();
+  }
+
+  return nextAuth.auth();
+}

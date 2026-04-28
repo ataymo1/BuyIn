@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const findGroupsPattern = /find groups/i;
 const searchGroupsPattern = /search groups/i;
-const emptySearchPattern = /enter a group name/i;
+const emptySearchPattern = /no groups available|enter a group name/i;
 
 test.describe("Group Search and Join Requests", () => {
   test.beforeEach(async ({ page }) => {

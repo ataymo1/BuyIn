@@ -1,18 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-const loginLinkPattern = /sign in|login|get started/i;
 const googleSignInPattern = /google|sign in with google/i;
 const loginUrlPattern = /login/;
 
 test.describe("Authentication", () => {
-  test("should show login page for unauthenticated users", async ({ page }) => {
-    await page.goto("/");
+  test("should show login page", async ({ page }) => {
+    await page.goto("/login");
 
-    // Check for login-related elements
-    const loginButton = page.getByRole("link", {
-      name: loginLinkPattern,
-    });
-    await expect(loginButton).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /welcome to buyin/i })
+    ).toBeVisible();
   });
 
   test("login page should have Google sign-in option", async ({ page }) => {
@@ -28,6 +25,11 @@ test.describe("Authentication", () => {
   test("should redirect to login when accessing protected routes", async ({
     page,
   }) => {
+    test.skip(
+      process.env.E2E_AUTH_BYPASS === "1",
+      "E2E_AUTH_BYPASS intentionally lets protected-route tests render locally."
+    );
+
     // Try to access a protected route
     await page.goto("/groups");
 

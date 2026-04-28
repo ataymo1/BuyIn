@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const groupsHeadingPattern = /groups|your groups/i;
-const createGroupLinkPattern = /create|new group/i;
+const createGroupLinkPattern = /new group/i;
 const nameFieldPattern = /name/i;
 const submitGroupPattern = /create|submit/i;
 const groupNameRequiredPattern = /required|name is required/i;
