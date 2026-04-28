@@ -57,12 +57,12 @@ function createE2ESession() {
 }
 
 async function shouldBypassAuthForE2E() {
-  if (process.env.E2E_AUTH_BYPASS === "1") {
-    return true;
-  }
-
   if (process.env.NODE_ENV !== "development") {
     return false;
+  }
+
+  if (process.env.E2E_AUTH_BYPASS === "1") {
+    return true;
   }
 
   try {

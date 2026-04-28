@@ -2,13 +2,14 @@ import { expect, test } from "@playwright/test";
 
 const googleSignInPattern = /google|sign in with google/i;
 const loginUrlPattern = /login/;
+const welcomeHeadingPattern = /welcome to buyin/i;
 
 test.describe("Authentication", () => {
   test("should show login page", async ({ page }) => {
     await page.goto("/login");
 
     await expect(
-      page.getByRole("heading", { name: /welcome to buyin/i })
+      page.getByRole("heading", { name: welcomeHeadingPattern })
     ).toBeVisible();
   });
 
