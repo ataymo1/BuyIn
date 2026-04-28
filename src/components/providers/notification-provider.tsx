@@ -1,6 +1,13 @@
 "use client";
 
 import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useState,
+} from "react";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogContent,
@@ -9,7 +16,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
 type NotificationType = "success" | "error" | "info" | "warning";
 
@@ -21,7 +27,10 @@ interface NotificationState {
 }
 
 interface NotificationContextType {
-  showNotification: (message: string, options?: { title?: string; type?: NotificationType }) => void;
+  showNotification: (
+    message: string,
+    options?: { title?: string; type?: NotificationType }
+  ) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
@@ -35,7 +44,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   });
 
   const showNotification = useCallback(
-    (message: string, options?: { title?: string; type?: NotificationType }) => {
+    (
+      message: string,
+      options?: { title?: string; type?: NotificationType }
+    ) => {
       const type = options?.type ?? "info";
       const defaultTitles: Record<NotificationType, string> = {
         success: "Success",
@@ -73,7 +85,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   return (
     <NotificationContext.Provider value={{ showNotification }}>
       {children}
-      <AlertDialog open={notification.isOpen} onOpenChange={handleClose}>
+      <AlertDialog onOpenChange={handleClose} open={notification.isOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className={getTypeStyles(notification.type)}>
@@ -95,7 +107,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 export function useNotification() {
   const context = useContext(NotificationContext);
   if (!context) {
-    throw new Error("useNotification must be used within a NotificationProvider");
+    throw new Error(
+      "useNotification must be used within a NotificationProvider"
+    );
   }
   return context;
 }

@@ -1,8 +1,8 @@
 import { Loader2 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { GameDetailClient } from "@/components/game-detail-client";
 import Navbar from "@/components/layout/navbar";
+import { GameDetailClient } from "@/features/games/game-detail";
 import { auth } from "@/lib/auth";
 
 interface PageProps {

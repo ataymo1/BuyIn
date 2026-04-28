@@ -283,8 +283,9 @@ export const getPlayerStats = query({
   handler: async (ctx, args) => {
     // Find user by ID first (existing behavior), then fallback to player ID
     const users = await ctx.db.query("users").collect();
-    let user = users.find((u) => u._id === args.userId) ?? null;
-    let player = null;
+    let user: Doc<"users"> | null =
+      users.find((u) => u._id === args.userId) ?? null;
+    let player: Doc<"players"> | null = null;
 
     if (user) {
       const userId = user._id;
@@ -347,7 +348,9 @@ export const getPlayerStats = query({
         );
         const games = gamesInGroups.flat();
         gameMap = new Map(games.map((g) => [g._id, g]));
-        filteredGamePlayers = gamePlayers.filter((gp) => gameMap.has(gp.gameId));
+        filteredGamePlayers = gamePlayers.filter((gp) =>
+          gameMap.has(gp.gameId)
+        );
       }
     }
     if (gameMap.size === 0) {

@@ -7,6 +7,8 @@ import { ProfileForm } from "@/components/profile/profile-form";
 import { useConvexUser, usePlayer } from "@/lib/convex-hooks";
 import { api } from "../../convex/_generated/api";
 
+const whitespacePattern = /\s+/;
+
 export function ProfileSetupClient() {
   const router = useRouter();
   const { userId, isLoading: userLoading, session } = useConvexUser();
@@ -41,7 +43,7 @@ export function ProfileSetupClient() {
     // Validate description word count
     const wordCount = data.description
       .trim()
-      .split(/\s+/)
+      .split(whitespacePattern)
       .filter(Boolean).length;
     if (wordCount > 50) {
       throw new Error("Description must be 50 words or less");

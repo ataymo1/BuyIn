@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getDisplayName } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -30,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getDisplayName } from "@/lib/utils";
 
 interface Member {
   id: string;
@@ -54,7 +54,6 @@ interface MemberListProps {
 
 export function MemberList({
   members,
-  groupId,
   isOwner,
   currentUserId,
   onInvite,
@@ -66,7 +65,9 @@ export function MemberList({
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim()) {
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -81,7 +82,10 @@ export function MemberList({
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Are you sure you want to remove this member?")) return;
+    // biome-ignore lint/suspicious/noAlert: This legacy inline confirmation preserves the existing remove flow.
+    if (!confirm("Are you sure you want to remove this member?")) {
+      return;
+    }
     try {
       await onRemove(userId);
     } catch (error) {
@@ -167,7 +171,10 @@ export function MemberList({
                     <Link
                       className="block max-w-[180px] truncate hover:underline"
                       href={`/players/${member.user.id}`}
-                      title={getDisplayName(member.user.name, member.user.email)}
+                      title={getDisplayName(
+                        member.user.name,
+                        member.user.email
+                      )}
                     >
                       {getDisplayName(member.user.name, member.user.email)}
                     </Link>

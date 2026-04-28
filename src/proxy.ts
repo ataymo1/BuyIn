@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
 export async function proxy(request: Request) {
+  if (
+    process.env.NODE_ENV === "development" &&
+    request.headers.get("x-e2e-auth") === "1"
+  ) {
+    return NextResponse.next();
+  }
+
   const session = await auth();
 
   // If user is not authenticated, redirect to login

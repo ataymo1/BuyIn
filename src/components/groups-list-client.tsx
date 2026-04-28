@@ -8,6 +8,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { GroupCardSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useUserGroups } from "@/lib/convex-hooks";
 
+const groupCardSkeletons = [
+  "group-card-1",
+  "group-card-2",
+  "group-card-3",
+  "group-card-4",
+  "group-card-5",
+  "group-card-6",
+];
+
 function GroupsListSkeleton() {
   return (
     <div className="space-y-8">
@@ -22,8 +31,8 @@ function GroupsListSkeleton() {
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <GroupCardSkeleton key={i} />
+        {groupCardSkeletons.map((skeletonKey) => (
+          <GroupCardSkeleton key={skeletonKey} />
         ))}
       </div>
     </div>
@@ -47,13 +56,13 @@ export function GroupsListClient() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/groups/search" className="flex-1 sm:flex-none">
-            <Button variant="outline" className="w-full sm:w-auto">
+          <Link className="flex-1 sm:flex-none" href="/groups/search">
+            <Button className="w-full sm:w-auto" variant="outline">
               <Search className="mr-2 h-4 w-4" />
               Find Groups
             </Button>
           </Link>
-          <Link href="/groups/new" className="flex-1 sm:flex-none">
+          <Link className="flex-1 sm:flex-none" href="/groups/new">
             <Button className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               New Group

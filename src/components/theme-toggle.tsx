@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import { usePlayer } from "@/lib/convex-hooks";
 
 export function ThemeToggle() {
@@ -30,12 +30,16 @@ export function ThemeToggle() {
 
   return (
     <Button
-      variant="ghost"
-      size="icon"
-      onClick={handleThemeToggle}
       aria-label="Toggle theme"
       disabled={isJoshuaDemo && theme !== "dark"}
-      title={isJoshuaDemo && theme !== "dark" ? "Dark mode is not available for Joshua Demo" : "Toggle theme"}
+      onClick={handleThemeToggle}
+      size="icon"
+      title={
+        isJoshuaDemo && theme !== "dark"
+          ? "Dark mode is not available for Joshua Demo"
+          : "Toggle theme"
+      }
+      variant="ghost"
     >
       <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
       <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />

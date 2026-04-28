@@ -3,7 +3,7 @@
 import { LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useNotification } from "@/components/notification-provider";
+import { useNotification } from "@/components/providers/notification-provider";
 import { Button } from "@/components/ui/button";
 
 interface JoinSessionButtonProps {
@@ -32,7 +32,9 @@ export function JoinSessionButton({
 
       if (!response.ok) {
         const error = await response.json();
-        showNotification(error.error || "Failed to join session", { type: "error" });
+        showNotification(error.error || "Failed to join session", {
+          type: "error",
+        });
         return;
       }
 

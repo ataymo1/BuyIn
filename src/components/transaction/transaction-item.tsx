@@ -3,7 +3,7 @@
 import { Edit, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useNotification } from "@/components/notification-provider";
+import { useNotification } from "@/components/providers/notification-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,7 +36,6 @@ export function TransactionItem({
   createdAt,
   canEdit,
   canDelete,
-  gameId,
 }: TransactionItemProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -59,7 +58,9 @@ export function TransactionItem({
 
       if (!response.ok) {
         const error = await response.json();
-        showNotification(error.error || "Failed to update transaction", { type: "error" });
+        showNotification(error.error || "Failed to update transaction", {
+          type: "error",
+        });
         return;
       }
 
@@ -72,22 +73,25 @@ export function TransactionItem({
   };
 
   const handleDelete = async () => {
+    // biome-ignore lint/suspicious/noAlert: This legacy inline confirmation preserves the existing delete flow.
     if (!confirm("Are you sure you want to delete this transaction?")) {
       return;
     }
- 
+
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/transactions/${id}`, {
         method: "DELETE",
-      }); 
+      });
 
       if (!response.ok) {
         const error = await response.json();
-        showNotification(error.error || "Failed to delete transaction", { type: "error" });
+        showNotification(error.error || "Failed to delete transaction", {
+          type: "error",
+        });
         return;
       }
- 
+
       router.refresh();
     } catch (error) {
       console.error("Error deleting transaction:", error);

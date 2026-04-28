@@ -40,14 +40,12 @@ export function useConvexUser() {
       ) {
         isCreatingRef.current = true;
         try {
-          console.log("[useConvexUser] Creating user in Convex:", email);
           await createUser({
             email,
             name: name ?? undefined,
             image: image ?? undefined,
           });
           hasCreatedRef.current = email;
-          console.log("[useConvexUser] User created successfully");
         } catch (error) {
           console.error("[useConvexUser] Failed to create user:", error);
         } finally {
@@ -226,16 +224,11 @@ export function usePlayer() {
       ) {
         isCreatingRef.current = true;
         try {
-          console.log(
-            "[usePlayer] Creating player in Convex for user:",
-            userId
-          );
           await getOrCreatePlayer({
             userId,
             name: getDisplayName(user.name, user.email) || "Player",
           });
           hasCreatedRef.current = userId;
-          console.log("[usePlayer] Player created successfully");
         } catch (error) {
           console.error("[usePlayer] Failed to create player:", error);
         } finally {

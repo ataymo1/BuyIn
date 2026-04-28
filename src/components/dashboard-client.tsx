@@ -1,5 +1,18 @@
 "use client";
 
+import { useQuery } from "convex/react";
+import { format } from "date-fns";
+import {
+  ArrowRight,
+  BarChart3,
+  Calendar,
+  MapPin,
+  Play,
+  Plus,
+  User,
+  Users,
+} from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -8,20 +21,22 @@ import {
   Skeleton,
 } from "@/components/ui/skeleton";
 import { useConvexUser, usePlayer, useUserGroups } from "@/lib/convex-hooks";
-import { useQuery } from "convex/react";
-import { format } from "date-fns";
-import {
-    ArrowRight,
-    BarChart3,
-    Calendar,
-    MapPin,
-    Play,
-    Plus,
-    User,
-    Users
-} from "lucide-react";
-import Link from "next/link";
 import { api } from "../../convex/_generated/api";
+
+const quickActionSkeletons = [
+  "quick-action-1",
+  "quick-action-2",
+  "quick-action-3",
+  "quick-action-4",
+  "quick-action-5",
+];
+const recentGameSkeletons = [
+  "recent-game-1",
+  "recent-game-2",
+  "recent-game-3",
+  "recent-game-4",
+  "recent-game-5",
+];
 
 function getProfitColorClass(profit: number): string {
   if (profit > 0) {
@@ -31,6 +46,16 @@ function getProfitColorClass(profit: number): string {
     return "text-red-600";
   }
   return "text-muted-foreground";
+}
+
+function getStatusBadgeColorClass(status: string) {
+  if (status === "ACTIVE") {
+    return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+  }
+  if (status === "COMPLETED") {
+    return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  }
+  return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
 }
 
 function DashboardSkeleton() {
@@ -45,8 +70,8 @@ function DashboardSkeleton() {
       <section>
         <Skeleton className="mb-4 h-6 w-32" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <CardSkeleton key={i} />
+          {quickActionSkeletons.map((skeletonKey) => (
+            <CardSkeleton key={skeletonKey} />
           ))}
         </div>
       </section>
@@ -62,8 +87,8 @@ function DashboardSkeleton() {
         </div>
         <Card>
           <CardContent className="divide-y pt-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <GameItemSkeleton key={i} />
+            {recentGameSkeletons.map((skeletonKey) => (
+              <GameItemSkeleton key={skeletonKey} />
             ))}
           </CardContent>
         </Card>
@@ -279,13 +304,7 @@ export function DashboardClient() {
                       </span>
                     )}
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${
-                        game.status === "ACTIVE"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                          : game.status === "COMPLETED"
-                            ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
-                            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                      }`}
+                      className={`inline-flex items-center rounded-full px-2 py-1 font-medium text-xs ${getStatusBadgeColorClass(game.status)}`}
                     >
                       {game.status}
                     </span>

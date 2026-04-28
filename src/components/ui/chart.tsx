@@ -1,42 +1,45 @@
 "use client";
 
-import * as React from "react";
-import * as RechartsPrimitive from "recharts";
+import {
+  type ComponentProps,
+  type ComponentType,
+  createContext,
+  forwardRef,
+  type ReactNode,
+  useContext,
+  useId,
+} from "react";
+import { Legend, ResponsiveContainer, Tooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
 const THEMES = { light: "", dark: ".dark" } as const;
+const reactIdSeparatorPattern = /:/g;
 
 export type ChartConfig = Record<
   string,
   {
-    label?: React.ReactNode;
-    icon?: React.ComponentType;
+    label?: ReactNode;
+    icon?: ComponentType;
     color?: string;
     theme?: Record<keyof typeof THEMES, string>;
   }
 >;
 
-type ChartContextProps = {
+interface ChartContextProps {
   config: ChartConfig;
-};
+}
 
-const ChartContext = React.createContext<ChartContextProps | null>(null);
+const ChartContext = createContext<ChartContextProps | null>(null);
 
 function useChart() {
-  const context = React.useContext(ChartContext);
+  const context = useContext(ChartContext);
   if (!context) {
     throw new Error("useChart must be used within a <ChartContainer />");
   }
   return context;
 }
 
-function ChartStyle({
-  id,
-  config,
-}: {
-  id: string;
-  config: ChartConfig;
-}) {
+function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(
     ([, cfg]) => cfg.theme || cfg.color
   );
@@ -47,6 +50,7 @@ function ChartStyle({
 
   return (
     <style
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: Chart CSS variables are generated from trusted local chart config.
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(
@@ -69,19 +73,44 @@ ${colorConfig
   );
 }
 
+function getTooltipLabel({
+  hideLabel,
+  labelFormatter,
+  label,
+  payload,
+}: {
+  hideLabel: boolean;
+  labelFormatter?: (
+    label: unknown,
+    payload?: TooltipPayloadItem[]
+  ) => ReactNode;
+  label?: string | number;
+  payload: TooltipPayloadItem[];
+}) {
+  if (hideLabel) {
+    return null;
+  }
+  if (labelFormatter) {
+    return labelFormatter(label, payload);
+  }
+  return label;
+}
+
+function getPayloadKey(item: TooltipPayloadItem) {
+  return String(item.dataKey ?? item.name ?? item.value ?? item.color ?? "");
+}
+
 export function ChartContainer({
   id,
   className,
   children,
   config,
   ...props
-}: React.ComponentProps<"div"> & {
+}: ComponentProps<"div"> & {
   config: ChartConfig;
-  children: React.ComponentProps<
-    typeof RechartsPrimitive.ResponsiveContainer
-  >["children"];
+  children: ComponentProps<typeof ResponsiveContainer>["children"];
 }) {
-  const uniqueId = React.useId().replace(/:/g, "");
+  const uniqueId = useId().replace(reactIdSeparatorPattern, "");
   const chartId = `chart-${id || uniqueId}`;
 
   return (
@@ -95,26 +124,24 @@ export function ChartContainer({
         {...props}
       >
         <ChartStyle config={config} id={chartId} />
-        <RechartsPrimitive.ResponsiveContainer>
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
     </ChartContext.Provider>
   );
 }
 
-export const ChartTooltip = RechartsPrimitive.Tooltip;
-export const ChartLegend = RechartsPrimitive.Legend;
+export const ChartTooltip = Tooltip;
+export const ChartLegend = Legend;
 
-type TooltipPayloadItem = {
+interface TooltipPayloadItem {
   dataKey?: string | number;
   name?: string;
   value?: number | string;
   color?: string;
   payload?: Record<string, unknown>;
-};
+}
 
-export const ChartTooltipContent = React.forwardRef<
+export const ChartTooltipContent = forwardRef<
   HTMLDivElement,
   {
     className?: string;
@@ -123,14 +150,17 @@ export const ChartTooltipContent = React.forwardRef<
     label?: string | number;
     hideLabel?: boolean;
     hideIndicator?: boolean;
-    labelFormatter?: (label: unknown, payload?: TooltipPayloadItem[]) => React.ReactNode;
+    labelFormatter?: (
+      label: unknown,
+      payload?: TooltipPayloadItem[]
+    ) => ReactNode;
     formatter?: (
       value: unknown,
       name: string,
       item: TooltipPayloadItem,
       index: number,
       payload: TooltipPayloadItem[]
-    ) => React.ReactNode;
+    ) => ReactNode;
   }
 >(function ChartTooltipContent(
   {
@@ -147,15 +177,16 @@ export const ChartTooltipContent = React.forwardRef<
 ) {
   const { config } = useChart();
 
-  if (!active || !payload?.length) {
+  if (!(active && payload?.length)) {
     return null;
   }
 
-  const renderedLabel = hideLabel
-    ? null
-    : labelFormatter
-      ? labelFormatter(label, payload)
-      : label;
+  const renderedLabel = getTooltipLabel({
+    hideLabel,
+    label,
+    labelFormatter,
+    payload,
+  });
 
   return (
     <div
@@ -170,41 +201,46 @@ export const ChartTooltipContent = React.forwardRef<
       ) : null}
       <div className="grid gap-1">
         {payload.map((item, index) => {
-          const key = String(item.dataKey ?? item.name ?? index);
+          const key = getPayloadKey(item);
           const configItem = config[key];
           const itemName = String(configItem?.label ?? item.name ?? key);
 
           if (formatter) {
-            const formatted = formatter(item.value, itemName, item, index, payload);
+            const formatted = formatter(
+              item.value,
+              itemName,
+              item,
+              index,
+              payload
+            );
             if (formatted == null) {
               return null;
             }
-            return (
-              <div key={`${key}-${index}`}>
-                {formatted}
-              </div>
-            );
+            return <div key={`${key}-${itemName}`}>{formatted}</div>;
           }
 
           return (
             <div
               className="flex w-full items-center justify-between gap-2"
-              key={`${key}-${index}`}
+              key={`${key}-${itemName}`}
             >
               <div className="flex items-center gap-2">
-                {!hideIndicator ? (
+                {hideIndicator ? null : (
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
                     style={{
                       backgroundColor:
-                        item.color ?? `var(--color-${String(item.dataKey ?? "")})`,
+                        item.color ??
+                        `var(--color-${String(item.dataKey ?? "")})`,
                     }}
                   />
-                ) : null}
+                )}
                 <span className="text-muted-foreground">{itemName}</span>
               </div>
-              <span className="font-mono font-medium text-foreground">
-                {typeof item.value === "number" ? item.value.toLocaleString() : item.value}
+              <span className="font-medium font-mono text-foreground">
+                {typeof item.value === "number"
+                  ? item.value.toLocaleString()
+                  : item.value}
               </span>
             </div>
           );
@@ -215,9 +251,9 @@ export const ChartTooltipContent = React.forwardRef<
 });
 ChartTooltipContent.displayName = "ChartTooltipContent";
 
-export const ChartLegendContent = React.forwardRef<
+export const ChartLegendContent = forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div"> & {
+  ComponentProps<"div"> & {
     payload?: Array<{ dataKey?: string; color?: string; value?: string }>;
     hideIcon?: boolean;
   }
@@ -237,17 +273,20 @@ export const ChartLegendContent = React.forwardRef<
       ref={ref}
       {...props}
     >
-      {payload.map((item, index) => {
-        const key = item.dataKey ?? `legend-${index}`;
+      {payload.map((item) => {
+        const key = item.dataKey ?? item.value ?? item.color ?? "";
         const configItem = config[key];
         return (
-          <div className="flex items-center gap-1.5" key={`${key}-${index}`}>
-            {!hideIcon ? (
+          <div
+            className="flex items-center gap-1.5"
+            key={`${key}-${item.color}`}
+          >
+            {hideIcon ? null : (
               <span
                 className="h-2.5 w-2.5 rounded-[2px]"
                 style={{ backgroundColor: item.color ?? `var(--color-${key})` }}
               />
-            ) : null}
+            )}
             <span className="text-muted-foreground text-xs">
               {configItem?.label ?? item.value ?? key}
             </span>

@@ -2,6 +2,7 @@ import path from "node:path";
 import { test as setup } from "@playwright/test";
 
 const authFile = path.join(__dirname, "../playwright/.auth/user.json");
+const loginLinkPattern = /sign in|login/i;
 
 setup("authenticate", async ({ page }) => {
   // For development, we'll create a mock authentication state
@@ -11,7 +12,7 @@ setup("authenticate", async ({ page }) => {
   await page.goto("/");
 
   // Check if we need to authenticate
-  const loginButton = page.getByRole("link", { name: /sign in|login/i });
+  const loginButton = page.getByRole("link", { name: loginLinkPattern });
 
   if (await loginButton.isVisible()) {
     // Note: OAuth flow testing requires special handling

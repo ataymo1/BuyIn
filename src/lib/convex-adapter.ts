@@ -78,6 +78,9 @@ export function ConvexAdapter(client: ConvexHttpClient): Adapter {
       if (!user.id) {
         throw new Error("User ID is required");
       }
+      if (!user.email) {
+        throw new Error("User email is required");
+      }
       await client.mutation(api.auth.updateUser, {
         id: user.id as Id<"users">,
         name: user.name ?? undefined,
@@ -88,7 +91,7 @@ export function ConvexAdapter(client: ConvexHttpClient): Adapter {
       });
       return {
         id: user.id,
-        email: user.email!,
+        email: user.email,
         name: user.name ?? null,
         image: user.image ?? null,
         emailVerified: user.emailVerified ?? null,

@@ -21,6 +21,15 @@ import {
   useSearchGroups,
 } from "@/lib/convex-hooks";
 
+const groupCardSkeletons = [
+  "group-card-1",
+  "group-card-2",
+  "group-card-3",
+  "group-card-4",
+  "group-card-5",
+  "group-card-6",
+];
+
 export function GroupSearchClient() {
   const [searchTerm, setSearchTerm] = useState("");
   const [requestingGroupId, setRequestingGroupId] = useState<string | null>(
@@ -31,8 +40,10 @@ export function GroupSearchClient() {
     null
   );
 
-  const { groups: searchResults, isLoading: searchLoading } = useSearchGroups(searchTerm);
-  const { groups: discoverableGroups, isLoading: discoverableLoading } = useDiscoverableGroups();
+  const { groups: searchResults, isLoading: searchLoading } =
+    useSearchGroups(searchTerm);
+  const { groups: discoverableGroups, isLoading: discoverableLoading } =
+    useDiscoverableGroups();
   const { userId, user } = useConvexUser();
   const requestToJoin = useRequestToJoin();
 
@@ -66,7 +77,7 @@ export function GroupSearchClient() {
 
     // Check if user has payment info (venmo or zelle)
     const hasPaymentInfo = user?.venmo?.trim() || user?.zelle?.trim();
-    
+
     if (hasPaymentInfo) {
       // User already has payment info, proceed directly
       await performJoinRequest(groupId);
@@ -126,8 +137,8 @@ export function GroupSearchClient() {
     if (isLoading) {
       return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <GroupCardSkeleton key={i} />
+          {groupCardSkeletons.map((skeletonKey) => (
+            <GroupCardSkeleton key={skeletonKey} />
           ))}
         </div>
       );
@@ -141,7 +152,7 @@ export function GroupSearchClient() {
             <p className="text-muted-foreground">
               No groups available to join yet
             </p>
-            <p className="text-muted-foreground text-sm mt-2">
+            <p className="mt-2 text-muted-foreground text-sm">
               <Link className="text-primary hover:underline" href="/groups/new">
                 Create your own group
               </Link>
@@ -219,8 +230,8 @@ export function GroupSearchClient() {
       {renderContent()}
 
       <PaymentInfoModal
-        open={showPaymentModal}
         onSuccess={handlePaymentSuccess}
+        open={showPaymentModal}
       />
     </div>
   );

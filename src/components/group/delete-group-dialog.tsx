@@ -47,7 +47,9 @@ export function DeleteGroupDialog({
   };
 
   const handleDelete = async () => {
-    if (!isConfirmValid) return;
+    if (!isConfirmValid) {
+      return;
+    }
 
     setError(null);
     setIsDeleting(true);
@@ -67,9 +69,9 @@ export function DeleteGroupDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <Button variant="destructive" size="sm">
+        <Button size="sm" variant="destructive">
           <Trash2 className="mr-2 h-4 w-4" />
           Delete Group
         </Button>
@@ -89,11 +91,11 @@ export function DeleteGroupDialog({
               Type <strong>{groupName}</strong> to confirm
             </Label>
             <Input
+              autoComplete="off"
               id="confirm-delete"
-              value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="Enter group name to confirm"
-              autoComplete="off"
+              value={confirmText}
             />
           </div>
           {error && (
@@ -104,18 +106,18 @@ export function DeleteGroupDialog({
         </div>
         <DialogFooter>
           <Button
+            disabled={isDeleting}
+            onClick={() => setOpen(false)}
             type="button"
             variant="outline"
-            onClick={() => setOpen(false)}
-            disabled={isDeleting}
           >
             Cancel
           </Button>
           <Button
+            disabled={!isConfirmValid || isDeleting}
+            onClick={handleDelete}
             type="button"
             variant="destructive"
-            onClick={handleDelete}
-            disabled={!isConfirmValid || isDeleting}
           >
             {isDeleting ? "Deleting..." : "Delete Group"}
           </Button>

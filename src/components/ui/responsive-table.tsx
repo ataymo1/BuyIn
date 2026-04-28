@@ -1,7 +1,6 @@
 "use client";
 
-import * as React from "react";
-import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
 import {
   Table,
   TableBody,
@@ -10,19 +9,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 interface Column<T> {
   key: string;
-  header: React.ReactNode;
+  header: ReactNode;
   className?: string;
-  render?: (item: T) => React.ReactNode;
+  render?: (item: T) => ReactNode;
 }
 
 interface ResponsiveTableProps<T> {
   data: T[];
   columns: Column<T>[];
   keyExtractor: (item: T) => string;
-  renderCard: (item: T) => React.ReactNode;
+  renderCard: (item: T) => ReactNode;
   className?: string;
   tableClassName?: string;
   cardsClassName?: string;
@@ -39,13 +39,12 @@ export function ResponsiveTable<T>({
 }: ResponsiveTableProps<T>) {
   return (
     <div className={cn(className)}>
-      {/* Desktop Table View */}
       <div className={cn("hidden md:block", tableClassName)}>
         <Table>
           <TableHeader>
             <TableRow>
               {columns.map((column) => (
-                <TableHead key={column.key} className={column.className}>
+                <TableHead className={column.className} key={column.key}>
                   {column.header}
                 </TableHead>
               ))}
@@ -55,10 +54,12 @@ export function ResponsiveTable<T>({
             {data.map((item) => (
               <TableRow key={keyExtractor(item)}>
                 {columns.map((column) => (
-                  <TableCell key={column.key} className={column.className}>
+                  <TableCell className={column.className} key={column.key}>
                     {column.render
                       ? column.render(item)
-                      : (item as Record<string, unknown>)[column.key] as React.ReactNode}
+                      : ((item as Record<string, unknown>)[
+                          column.key
+                        ] as ReactNode)}
                   </TableCell>
                 ))}
               </TableRow>
@@ -67,7 +68,6 @@ export function ResponsiveTable<T>({
         </Table>
       </div>
 
-      {/* Mobile Card View */}
       <div className={cn("space-y-3 md:hidden", cardsClassName)}>
         {data.map((item) => (
           <div key={keyExtractor(item)}>{renderCard(item)}</div>

@@ -121,12 +121,16 @@ export default defineSchema({
   transactions: defineTable({
     gameId: v.id("games"),
     playerId: v.id("players"),
-    type: v.string(), // "buyin" or "cashout"
+    type: v.union(v.literal("buyin"), v.literal("cashout")),
     amount: v.number(),
     description: v.optional(v.string()),
     createdById: v.id("users"),
     status: v.optional(
-      v.union(v.literal("PENDING"), v.literal("APPROVED"), v.literal("REJECTED"))
+      v.union(
+        v.literal("PENDING"),
+        v.literal("APPROVED"),
+        v.literal("REJECTED")
+      )
     ), // Buy-ins require approval from session creator
   })
     .index("by_gameId", ["gameId"])
