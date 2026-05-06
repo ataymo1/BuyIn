@@ -121,6 +121,7 @@ export function createInitialState(config: {
     actionLog: [],
     activeSeatIndex: null,
     bigBlind: config.bigBlind,
+    bigBlindSeatIndex: null,
     communityCards: [],
     currentBet: 0,
     dealerSeatIndex: null,
@@ -136,6 +137,7 @@ export function createInitialState(config: {
     seatCount: config.seatCount,
     seats: Array.from({ length: config.seatCount }, () => null),
     smallBlind: config.smallBlind,
+    smallBlindSeatIndex: null,
   };
 }
 
@@ -244,8 +246,10 @@ export function startHand(state: LivePokerState) {
   state.communityCards = [];
   state.deck = shuffleDeck();
   state.currentBet = 0;
+  state.bigBlindSeatIndex = null;
   state.lastWinners = [];
   state.minRaise = state.bigBlind;
+  state.smallBlindSeatIndex = null;
   state.lastAggressorSeatIndex = null;
 
   for (const seat of state.seats) {
@@ -290,6 +294,8 @@ export function startHand(state: LivePokerState) {
   }
 
   state.dealerSeatIndex = dealerSeatIndex;
+  state.smallBlindSeatIndex = smallBlindSeatIndex;
+  state.bigBlindSeatIndex = bigBlindSeatIndex;
 
   for (let cardIndex = 0; cardIndex < 2; cardIndex += 1) {
     for (let offset = 0; offset < state.seatCount; offset += 1) {

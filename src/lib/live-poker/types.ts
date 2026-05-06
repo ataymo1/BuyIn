@@ -78,6 +78,7 @@ export interface LivePokerState {
   actionLog: string[];
   activeSeatIndex: number | null;
   bigBlind: number;
+  bigBlindSeatIndex: number | null;
   communityCards: string[];
   currentBet: number;
   dealerSeatIndex: number | null;
@@ -93,12 +94,14 @@ export interface LivePokerState {
   seatCount: number;
   seats: Array<LivePokerSeat | null>;
   smallBlind: number;
+  smallBlindSeatIndex: number | null;
 }
 
 export interface PublicLivePokerState {
   actionLog: string[];
   activeSeatIndex: number | null;
   bigBlind: number;
+  bigBlindSeatIndex: number | null;
   communityCards: string[];
   currentBet: number;
   dealerSeatIndex: number | null;
@@ -113,6 +116,7 @@ export interface PublicLivePokerState {
   seatCount: number;
   seats: Array<PublicLivePokerSeat | null>;
   smallBlind: number;
+  smallBlindSeatIndex: number | null;
 }
 
 export type LivePokerServerMessage =
@@ -136,6 +140,7 @@ export function toPublicState(
     actionLog: state.actionLog.slice(-80),
     activeSeatIndex: state.activeSeatIndex,
     bigBlind: state.bigBlind,
+    bigBlindSeatIndex: state.bigBlindSeatIndex ?? null,
     communityCards: state.communityCards,
     currentBet: state.currentBet,
     dealerSeatIndex: state.dealerSeatIndex,
@@ -178,5 +183,6 @@ export function toPublicState(
       };
     }),
     smallBlind: state.smallBlind,
+    smallBlindSeatIndex: state.smallBlindSeatIndex ?? null,
   };
 }

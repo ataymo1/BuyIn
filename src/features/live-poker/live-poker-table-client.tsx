@@ -24,9 +24,11 @@ function chip(value: number) {
 }
 
 function Seat({
+  roles,
   seat,
   winAmount,
 }: {
+  roles: string[];
   seat: PublicLivePokerSeat | null;
   winAmount?: number;
 }) {
@@ -51,11 +53,21 @@ function Seat({
             Stack {chip(seat.stack)}
           </p>
         </div>
-        <span
-          className={`h-2.5 w-2.5 rounded-full ${
-            seat.connected ? "bg-emerald-500" : "bg-muted"
-          }`}
-        />
+        <div className="flex shrink-0 items-center gap-1">
+          {roles.map((role) => (
+            <span
+              className="rounded bg-zinc-100 px-1.5 py-0.5 font-semibold text-[10px] text-zinc-700"
+              key={role}
+            >
+              {role}
+            </span>
+          ))}
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              seat.connected ? "bg-emerald-500" : "bg-muted"
+            }`}
+          />
+        </div>
       </div>
       <div className="mt-3 flex min-h-8 gap-1">
         {seat.cards?.map((card) => (
@@ -247,6 +259,25 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     }
     return amounts;
   }, [state?.lastWinners]);
+  const tableRolesBySeat = useMemo(() => {
+    const roles = new Map<number, string[]>();
+
+    function addRole(seatIndex: number | null | undefined, role: string) {
+      if (seatIndex === null || seatIndex === undefined) {
+        return;
+      }
+      roles.set(seatIndex, [...(roles.get(seatIndex) ?? []), role]);
+    }
+
+    addRole(state?.dealerSeatIndex, "D");
+    addRole(state?.smallBlindSeatIndex, "SB");
+    addRole(state?.bigBlindSeatIndex, "BB");
+    return roles;
+  }, [
+    state?.bigBlindSeatIndex,
+    state?.dealerSeatIndex,
+    state?.smallBlindSeatIndex,
+  ]);
 
   function sitInSeat(seatIndex: number) {
     if (!state) {
@@ -299,7 +330,11 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               onClick={() => (seat ? undefined : sitInSeat(index))}
               type="button"
             >
-              <Seat seat={seat} winAmount={winnerAmountsBySeat.get(index)} />
+              <Seat
+                roles={tableRolesBySeat.get(index) ?? []}
+                seat={seat}
+                winAmount={winnerAmountsBySeat.get(index)}
+              />
             </button>
           ))}
         </div>
