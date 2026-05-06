@@ -51,6 +51,21 @@ export async function canUserManageGame(
   return group?.ownerId === userId;
 }
 
+export async function isUserGroupMember(
+  ctx: DbCtx,
+  groupId: Id<"groups">,
+  userId: Id<"users">
+) {
+  const membership = await ctx.db
+    .query("groupMembers")
+    .withIndex("by_groupId_userId", (q) =>
+      q.eq("groupId", groupId).eq("userId", userId)
+    )
+    .first();
+
+  return Boolean(membership);
+}
+
 export async function requireGameManager(
   ctx: DbCtx,
   game: Doc<"games">,
@@ -88,6 +103,15 @@ export async function deleteGameCascade(ctx: MutationCtx, gameId: Id<"games">) {
 
   for (const transaction of transactions) {
     await ctx.db.delete(transaction._id);
+  }
+
+  const liveHands = await ctx.db
+    .query("livePokerHands")
+    .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+    .collect();
+
+  for (const liveHand of liveHands) {
+    await ctx.db.delete(liveHand._id);
   }
 
   await ctx.db.delete(gameId);

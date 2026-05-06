@@ -6,6 +6,7 @@ import {
   Edit2,
   MoreVertical,
   PiggyBank,
+  Play,
   Trash2,
   Users,
 } from "lucide-react";
@@ -25,6 +26,9 @@ interface SessionHeaderProps {
   } | null;
   isJoined: boolean;
   isSessionCreator: boolean;
+  liveHref?: string;
+  livePokerEnabled?: boolean | null;
+  liveStatus?: string | null;
   location?: string | null;
   onDeleteClick: () => void;
   onEditClick: () => void;
@@ -89,6 +93,7 @@ function ActionsMenu({
   );
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Header composes several existing session states and responsive menus.
 export function SessionHeader({
   canManage,
   createdByName,
@@ -97,6 +102,9 @@ export function SessionHeader({
   group,
   isJoined,
   isSessionCreator,
+  liveHref,
+  livePokerEnabled,
+  liveStatus,
   location,
   onDeleteClick,
   onEditClick,
@@ -146,6 +154,12 @@ export function SessionHeader({
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 font-medium text-amber-800 text-xs dark:bg-amber-900 dark:text-amber-200">
                   <Banknote className="h-3 w-3" />
                   Banker
+                </span>
+              ) : null}
+              {livePokerEnabled ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 font-medium text-emerald-800 text-xs dark:bg-emerald-900 dark:text-emerald-200">
+                  <Play className="h-3 w-3" />
+                  Live {liveStatus ?? "WAITING"}
                 </span>
               ) : null}
             </div>
@@ -215,6 +229,15 @@ export function SessionHeader({
         </div>
 
         <div className="flex items-center gap-2">
+          {status === "ACTIVE" && livePokerEnabled && liveHref ? (
+            <Link href={liveHref}>
+              <Button className="flex-1 gap-2 sm:flex-none">
+                <Play className="h-4 w-4" />
+                Play Live
+              </Button>
+            </Link>
+          ) : null}
+
           {status === "ACTIVE" && !isJoined ? (
             <Button className="flex-1 sm:flex-none" onClick={onJoinClick}>
               Join Session

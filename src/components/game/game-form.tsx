@@ -27,6 +27,12 @@ const gameFormSchema = z.object({
   date: z.string().min(1, "Date is required"),
   location: z.string().optional(),
   gameType: z.enum(["cash", "tournament"]).optional(),
+  livePokerEnabled: z.boolean().optional(),
+  smallBlind: z.string().optional(),
+  bigBlind: z.string().optional(),
+  minBuyIn: z.string().optional(),
+  maxBuyIn: z.string().optional(),
+  seatCount: z.string().optional(),
 });
 
 type GameFormValues = z.infer<typeof gameFormSchema>;
@@ -36,6 +42,7 @@ interface GameFormProps {
   defaultValues?: Partial<GameFormValues>;
   groups: Array<{ id: string; name: string }>;
   defaultGroupId?: string;
+  showLivePokerFields?: boolean;
 }
 
 export function GameForm({
@@ -43,6 +50,7 @@ export function GameForm({
   defaultValues,
   groups,
   defaultGroupId,
+  showLivePokerFields = false,
 }: GameFormProps) {
   const form = useForm<GameFormValues>({
     resolver: zodResolver(gameFormSchema),
@@ -51,6 +59,12 @@ export function GameForm({
       date: new Date().toISOString().split("T")[0],
       location: "",
       gameType: "cash",
+      livePokerEnabled: false,
+      smallBlind: "1",
+      bigBlind: "2",
+      minBuyIn: "20",
+      maxBuyIn: "400",
+      seatCount: "6",
     },
   });
 
@@ -61,10 +75,19 @@ export function GameForm({
       date: String(data.date),
       location: data.location ? String(data.location) : undefined,
       gameType: data.gameType,
+      livePokerEnabled: showLivePokerFields && Boolean(data.livePokerEnabled),
+      smallBlind: data.smallBlind,
+      bigBlind: data.bigBlind,
+      minBuyIn: data.minBuyIn,
+      maxBuyIn: data.maxBuyIn,
+      seatCount: data.seatCount,
     });
   };
 
   const isLoading = form.formState.isSubmitting;
+  const gameType = form.watch("gameType") || "cash";
+  const livePokerEnabled =
+    showLivePokerFields && Boolean(form.watch("livePokerEnabled"));
 
   return (
     <Card className="overflow-hidden border-0 shadow-black/5 shadow-xl">
@@ -152,6 +175,108 @@ export function GameForm({
               </SelectContent>
             </Select>
           </div>
+
+          {showLivePokerFields ? (
+            <div className="rounded-lg border p-4">
+              <label
+                className="flex items-start gap-3"
+                htmlFor="livePokerEnabled"
+              >
+                <input
+                  className="mt-1 h-4 w-4 accent-violet-600"
+                  disabled={gameType === "tournament"}
+                  id="livePokerEnabled"
+                  type="checkbox"
+                  {...form.register("livePokerEnabled")}
+                />
+                <span className="space-y-1">
+                  <span className="block font-medium text-sm">
+                    Enable live poker table
+                  </span>
+                  <span className="block text-muted-foreground text-sm">
+                    Create a realtime cash table with seats, cards, betting, and
+                    hand flow.
+                  </span>
+                </span>
+              </label>
+              {gameType === "tournament" ? (
+                <p className="mt-2 text-muted-foreground text-xs">
+                  Live poker is available for cash games in this version.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {livePokerEnabled && gameType === "cash" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="font-medium text-sm" htmlFor="smallBlind">
+                  Small Blind
+                </Label>
+                <Input
+                  className="h-12"
+                  id="smallBlind"
+                  min="0.01"
+                  step="0.01"
+                  type="number"
+                  {...form.register("smallBlind")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-medium text-sm" htmlFor="bigBlind">
+                  Big Blind
+                </Label>
+                <Input
+                  className="h-12"
+                  id="bigBlind"
+                  min="0.01"
+                  step="0.01"
+                  type="number"
+                  {...form.register("bigBlind")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-medium text-sm" htmlFor="minBuyIn">
+                  Min Buy-in
+                </Label>
+                <Input
+                  className="h-12"
+                  id="minBuyIn"
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  {...form.register("minBuyIn")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-medium text-sm" htmlFor="maxBuyIn">
+                  Max Buy-in
+                </Label>
+                <Input
+                  className="h-12"
+                  id="maxBuyIn"
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  {...form.register("maxBuyIn")}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="font-medium text-sm" htmlFor="seatCount">
+                  Seats
+                </Label>
+                <Input
+                  className="h-12"
+                  id="seatCount"
+                  max="9"
+                  min="2"
+                  step="1"
+                  type="number"
+                  {...form.register("seatCount")}
+                />
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-3 pt-2">
             <Button
