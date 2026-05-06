@@ -128,6 +128,7 @@ export function createInitialState(config: {
     handNumber: 0,
     hostUserId: config.hostUserId,
     lastAggressorSeatIndex: null,
+    lastWinners: [],
     maxBuyIn: config.maxBuyIn,
     minBuyIn: config.minBuyIn,
     minRaise: config.bigBlind,
@@ -243,6 +244,7 @@ export function startHand(state: LivePokerState) {
   state.communityCards = [];
   state.deck = shuffleDeck();
   state.currentBet = 0;
+  state.lastWinners = [];
   state.minRaise = state.bigBlind;
   state.lastAggressorSeatIndex = null;
 
@@ -514,6 +516,7 @@ export function settleShowdown(state: LivePokerState) {
     }
   }
 
+  state.lastWinners = winners;
   for (const seat of state.seats) {
     if (seat) {
       seat.bet = 0;

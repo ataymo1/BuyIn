@@ -85,6 +85,7 @@ export interface LivePokerState {
   handNumber: number;
   hostUserId: string;
   lastAggressorSeatIndex: number | null;
+  lastWinners: LivePokerWinner[];
   minBuyIn: number;
   maxBuyIn: number;
   minRaise: number;
@@ -103,6 +104,7 @@ export interface PublicLivePokerState {
   dealerSeatIndex: number | null;
   handNumber: number;
   isHost: boolean;
+  lastWinners: LivePokerWinner[];
   maxBuyIn: number;
   minBuyIn: number;
   minRaise: number;
@@ -139,6 +141,7 @@ export function toPublicState(
     dealerSeatIndex: state.dealerSeatIndex,
     handNumber: state.handNumber,
     isHost: state.hostUserId === currentUserId,
+    lastWinners: state.lastWinners ?? [],
     maxBuyIn: state.maxBuyIn,
     minBuyIn: state.minBuyIn,
     minRaise: state.minRaise,

@@ -23,7 +23,13 @@ function chip(value: number) {
   });
 }
 
-function Seat({ seat }: { seat: PublicLivePokerSeat | null }) {
+function Seat({
+  seat,
+  winAmount,
+}: {
+  seat: PublicLivePokerSeat | null;
+  winAmount?: number;
+}) {
   if (!seat) {
     return (
       <div className="flex h-28 w-full items-center justify-center rounded-lg border border-dashed bg-background/80 font-medium text-foreground text-sm">
@@ -87,6 +93,11 @@ function Seat({ seat }: { seat: PublicLivePokerSeat | null }) {
         {seat.ready && !seat.sitOut && seat.stack > 0 ? (
           <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-700">
             Ready
+          </span>
+        ) : null}
+        {winAmount ? (
+          <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">
+            Winner
           </span>
         ) : null}
       </div>
@@ -226,6 +237,16 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     state?.seats.filter(
       (seat) => seat && !seat.sitOut && seat.ready && seat.stack > 0
     ).length ?? 0;
+  const winnerAmountsBySeat = useMemo(() => {
+    const amounts = new Map<number, number>();
+    for (const winner of state?.lastWinners ?? []) {
+      amounts.set(
+        winner.seatIndex,
+        (amounts.get(winner.seatIndex) ?? 0) + winner.amount
+      );
+    }
+    return amounts;
+  }, [state?.lastWinners]);
 
   function sitInSeat(seatIndex: number) {
     if (!state) {
@@ -278,7 +299,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               onClick={() => (seat ? undefined : sitInSeat(index))}
               type="button"
             >
-              <Seat seat={seat} />
+              <Seat seat={seat} winAmount={winnerAmountsBySeat.get(index)} />
             </button>
           ))}
         </div>
