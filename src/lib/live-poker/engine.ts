@@ -51,6 +51,7 @@ function resetStreet(state: LivePokerState) {
   for (const seat of state.seats) {
     if (seat) {
       seat.bet = 0;
+      seat.hasActedThisStreet = false;
     }
   }
 }
@@ -70,7 +71,8 @@ function isBettingRoundComplete(state: LivePokerState) {
   }
 
   return liveSeats.every(
-    (seat) => seat.isAllIn || seat.bet === state.currentBet
+    (seat) =>
+      seat.isAllIn || (seat.bet === state.currentBet && seat.hasActedThisStreet)
   );
 }
 
@@ -182,6 +184,7 @@ export function seatPlayer(
     committed: 0,
     connected: true,
     folded: false,
+    hasActedThisStreet: false,
     isAllIn: false,
     name: player.name,
     playerId: player.playerId,
@@ -249,6 +252,7 @@ export function startHand(state: LivePokerState) {
       seat.cards = undefined;
       seat.committed = 0;
       seat.folded = false;
+      seat.hasActedThisStreet = false;
       seat.isAllIn = false;
     }
   }
@@ -333,14 +337,17 @@ export function applyAction(
 
   if (action.type === "fold") {
     seat.folded = true;
+    seat.hasActedThisStreet = true;
     state.actionLog.push(`${seat.name} folded`);
   } else if (action.type === "check") {
     if (callAmount > 0) {
       throw new Error("Cannot check while facing a bet");
     }
+    seat.hasActedThisStreet = true;
     state.actionLog.push(`${seat.name} checked`);
   } else if (action.type === "call") {
     const paid = postBlind(seat, callAmount);
+    seat.hasActedThisStreet = true;
     state.actionLog.push(`${seat.name} called ${paid}`);
   } else if (action.type === "bet" || action.type === "raise") {
     const targetBet = action.amount;
@@ -359,6 +366,9 @@ export function applyAction(
     state.currentBet = seat.bet;
     state.minRaise = Math.max(raiseSize, state.bigBlind);
     state.lastAggressorSeatIndex = seatIndex;
+    for (const otherSeat of handSeats(state)) {
+      otherSeat.hasActedThisStreet = otherSeat.seatIndex === seatIndex;
+    }
     state.actionLog.push(
       `${seat.name} ${action.type === "bet" ? "bet" : "raised to"} ${seat.bet}`
     );
@@ -373,6 +383,7 @@ export function applyAction(
       state.minRaise = Math.max(raiseSize, state.bigBlind);
       state.lastAggressorSeatIndex = seatIndex;
     }
+    seat.hasActedThisStreet = true;
     state.actionLog.push(`${seat.name} moved all in for ${paid}`);
   }
 
@@ -507,6 +518,8 @@ export function settleShowdown(state: LivePokerState) {
     if (seat) {
       seat.bet = 0;
       seat.committed = 0;
+      seat.folded = false;
+      seat.hasActedThisStreet = false;
       seat.isAllIn = false;
       seat.ready = false;
     }

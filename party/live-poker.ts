@@ -266,6 +266,9 @@ export default class LivePokerServer implements Party.Server {
     }
 
     if (message.type === "ready") {
+      if (this.state.phase !== "waiting") {
+        throw new Error("You can ready up between hands");
+      }
       if (message.ready && seat.sitOut) {
         throw new Error("Return before readying for the next hand");
       }

@@ -48,6 +48,7 @@ export interface LivePokerSeat {
   committed: number;
   connected: boolean;
   folded: boolean;
+  hasActedThisStreet: boolean;
   isAllIn: boolean;
   name: string;
   playerId: string;
@@ -161,6 +162,7 @@ export function toPublicState(
         committed: seat.committed,
         connected: seat.connected,
         folded: seat.folded,
+        hasActedThisStreet: seat.hasActedThisStreet,
         hasCards: Boolean(seat.cards?.length),
         isAllIn: seat.isAllIn,
         isCurrentUser: seat.userId === currentUserId,

@@ -84,7 +84,7 @@ function Seat({ seat }: { seat: PublicLivePokerSeat | null }) {
         {seat.sitOut ? (
           <span className="rounded bg-muted px-2 py-0.5">Sitting out</span>
         ) : null}
-        {seat.ready && !seat.sitOut ? (
+        {seat.ready && !seat.sitOut && seat.stack > 0 ? (
           <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-700">
             Ready
           </span>
