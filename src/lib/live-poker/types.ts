@@ -10,6 +10,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
     seatIndex: z.number().int().min(0).max(8),
     buyIn: z.number().positive(),
   }),
+  z.object({ type: z.literal("addChips"), amount: z.number().positive() }),
   z.object({ type: z.literal("leaveSeat") }),
   z.object({ type: z.literal("ready"), ready: z.boolean() }),
   z.object({ type: z.literal("fold") }),

@@ -1,6 +1,7 @@
 import { jwtVerify } from "jose";
 import type * as Party from "partykit/server";
 import {
+  addChips,
   applyAction,
   createInitialState,
   seatPlayer,
@@ -12,6 +13,7 @@ import {
   clientMessageSchema,
   type LivePokerAuthToken,
   type LivePokerClientMessage,
+  type LivePokerSeat,
   type LivePokerServerMessage,
   type LivePokerState,
   type LivePokerWinner,
@@ -19,6 +21,15 @@ import {
 } from "../src/lib/live-poker/types";
 
 type ConnectionState = LivePokerAuthToken;
+type LivePokerActionMessage = Extract<
+  LivePokerClientMessage,
+  | { type: "allIn" }
+  | { type: "bet" }
+  | { type: "call" }
+  | { type: "check" }
+  | { type: "fold" }
+  | { type: "raise" }
+>;
 
 const encoder = new TextEncoder();
 
@@ -44,6 +55,19 @@ async function verifyToken(room: Party.Room, token: string) {
 
 function send(connection: Party.Connection, message: LivePokerServerMessage) {
   connection.send(JSON.stringify(message));
+}
+
+function isActionMessage(
+  message: LivePokerClientMessage
+): message is LivePokerActionMessage {
+  return (
+    message.type === "allIn" ||
+    message.type === "bet" ||
+    message.type === "call" ||
+    message.type === "check" ||
+    message.type === "fold" ||
+    message.type === "raise"
+  );
 }
 
 export default class LivePokerServer implements Party.Server {
@@ -197,26 +221,12 @@ export default class LivePokerServer implements Party.Server {
       throw new Error("Take a seat before acting");
     }
 
-    if (message.type === "leaveSeat") {
-      if (this.state.phase !== "waiting") {
-        throw new Error("You can leave after the current hand");
-      }
-      this.state.seats[seat.seatIndex] = null;
+    if (this.handleSeatedControlMessage(auth, seat, message)) {
       return;
     }
 
-    if (message.type === "ready") {
-      seat.ready = message.ready;
-      this.state.actionLog.push(
-        `${seat.name} is ${message.ready ? "ready" : "not ready"}`
-      );
-      return;
-    }
-
-    if (message.type === "sitOut") {
-      seat.sitOut = message.sitOut;
-      seat.ready = false;
-      return;
+    if (!isActionMessage(message)) {
+      throw new Error("Invalid table action");
     }
 
     applyAction(this.state, auth.userId, message);
@@ -231,6 +241,51 @@ export default class LivePokerServer implements Party.Server {
       );
       await this.recordHand(pot, winners, communityCards);
     }
+  }
+
+  private handleSeatedControlMessage(
+    auth: LivePokerAuthToken,
+    seat: LivePokerSeat,
+    message: LivePokerClientMessage
+  ) {
+    if (!this.state) {
+      throw new Error("Table is not ready");
+    }
+
+    if (message.type === "addChips") {
+      addChips(this.state, auth.userId, message.amount);
+      return true;
+    }
+
+    if (message.type === "leaveSeat") {
+      if (this.state.phase !== "waiting") {
+        throw new Error("You can leave after the current hand");
+      }
+      this.state.seats[seat.seatIndex] = null;
+      return true;
+    }
+
+    if (message.type === "ready") {
+      if (message.ready && seat.sitOut) {
+        throw new Error("Return before readying for the next hand");
+      }
+      if (message.ready && seat.stack <= 0) {
+        throw new Error("Add chips before readying for the next hand");
+      }
+      seat.ready = message.ready;
+      this.state.actionLog.push(
+        `${seat.name} is ${message.ready ? "ready" : "not ready"}`
+      );
+      return true;
+    }
+
+    if (message.type === "sitOut") {
+      seat.sitOut = message.sitOut;
+      seat.ready = false;
+      return true;
+    }
+
+    return false;
   }
 
   private async recordHand(

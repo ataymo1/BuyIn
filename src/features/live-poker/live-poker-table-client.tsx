@@ -81,7 +81,10 @@ function Seat({ seat }: { seat: PublicLivePokerSeat | null }) {
             All in
           </span>
         ) : null}
-        {seat.ready ? (
+        {seat.sitOut ? (
+          <span className="rounded bg-muted px-2 py-0.5">Sitting out</span>
+        ) : null}
+        {seat.ready && !seat.sitOut ? (
           <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-700">
             Ready
           </span>
@@ -164,6 +167,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         ) as LivePokerServerMessage;
         if (message.type === "tableState") {
           setState(message.state);
+          setError(null);
         }
         if (message.type === "actionRejected") {
           setError(message.message);
@@ -206,6 +210,22 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const canAct =
     Boolean(currentSeat && state?.activeSeatIndex === currentSeat.seatIndex) &&
     state?.phase !== "waiting";
+  const nextStack = Number(buyIn) + (currentSeat?.stack ?? 0);
+  const canAddChips =
+    Boolean(currentSeat && state?.phase === "waiting") &&
+    Number(buyIn) > 0 &&
+    nextStack >= (state?.minBuyIn ?? 0) &&
+    nextStack <= (state?.maxBuyIn ?? 0);
+  const canToggleReady = Boolean(
+    state?.phase === "waiting" &&
+      currentSeat &&
+      !currentSeat.sitOut &&
+      (currentSeat.ready || currentSeat.stack > 0)
+  );
+  const readyPlayerCount =
+    state?.seats.filter(
+      (seat) => seat && !seat.sitOut && seat.ready && seat.stack > 0
+    ).length ?? 0;
 
   function sitInSeat(seatIndex: number) {
     if (!state) {
@@ -283,7 +303,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             <div className="flex flex-wrap gap-2">
               {state?.isHost ? (
                 <Button
-                  disabled={state.phase !== "waiting"}
+                  disabled={state.phase !== "waiting" || readyPlayerCount < 2}
                   onClick={() => send({ type: "startHand" })}
                 >
                   <Play className="h-4 w-4" />
@@ -291,7 +311,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 </Button>
               ) : null}
               <Button
-                disabled={state?.phase !== "waiting"}
+                disabled={!canToggleReady}
                 onClick={() =>
                   send({ ready: !currentSeat.ready, type: "ready" })
                 }
@@ -300,6 +320,27 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 <Play className="h-4 w-4" />
                 {currentSeat.ready ? "Unready" : "Ready"}
               </Button>
+              {state?.phase === "waiting" ? (
+                <>
+                  <Input
+                    className="w-28"
+                    min={Math.max(1, state.minBuyIn - currentSeat.stack)}
+                    onChange={(event) => setBuyIn(event.target.value)}
+                    placeholder="Chips"
+                    type="number"
+                    value={buyIn}
+                  />
+                  <Button
+                    disabled={!canAddChips}
+                    onClick={() =>
+                      send({ amount: Number(buyIn), type: "addChips" })
+                    }
+                    variant="outline"
+                  >
+                    Add Chips
+                  </Button>
+                </>
+              ) : null}
               <Button
                 disabled={!canAct}
                 onClick={() => send({ type: "fold" })}

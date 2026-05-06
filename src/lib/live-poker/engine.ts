@@ -194,12 +194,45 @@ export function seatPlayer(
   state.actionLog.push(`${player.name} sat in seat ${seatIndex + 1}`);
 }
 
+export function addChips(
+  state: LivePokerState,
+  userId: string,
+  amount: number
+) {
+  if (state.phase !== "waiting") {
+    throw new Error("You can add chips between hands");
+  }
+
+  const seat = state.seats.find((candidate) => candidate?.userId === userId);
+  if (!seat) {
+    throw new Error("Take a seat before adding chips");
+  }
+
+  if (amount <= 0) {
+    throw new Error("Add-on amount must be positive");
+  }
+
+  const nextStack = seat.stack + amount;
+  if (nextStack < state.minBuyIn || nextStack > state.maxBuyIn) {
+    throw new Error(
+      `Stack must be between ${state.minBuyIn} and ${state.maxBuyIn}`
+    );
+  }
+
+  seat.buyIn += amount;
+  seat.ready = false;
+  seat.stack = nextStack;
+  state.actionLog.push(`${seat.name} added ${amount} chips`);
+}
+
 export function startHand(state: LivePokerState) {
   const eligible = activeSeats(state).filter(
     (seat) => seat.stack > 0 && seat.ready
   );
   if (eligible.length < 2) {
-    throw new Error("At least two ready players are required");
+    throw new Error(
+      "At least two active ready players with chips are required"
+    );
   }
 
   state.phase = "preflop";
