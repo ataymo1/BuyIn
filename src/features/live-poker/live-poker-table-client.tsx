@@ -1,9 +1,5 @@
 "use client";
 
-import { Loader2, Play, Power } from "lucide-react";
-import dynamic from "next/dynamic";
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type {
@@ -12,6 +8,10 @@ import type {
   PublicLivePokerSeat,
   PublicLivePokerState,
 } from "@/lib/live-poker/types";
+import { Loader2, Play, Power } from "lucide-react";
+import dynamic from "next/dynamic";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface LivePokerTableClientProps {
   tableId: string;
@@ -132,6 +132,19 @@ function getSeatPosition(index: number, seatCount: number) {
     x: 50 + 46 * Math.cos(angle),
     y: 50 + 52 * Math.sin(angle),
   };
+}
+
+function getViewerSeatPosition(
+  seatIndex: number,
+  seatCount: number,
+  viewerSeatIndex?: number
+) {
+  if (viewerSeatIndex === undefined) {
+    return getSeatPosition(seatIndex, seatCount);
+  }
+
+  const displayIndex = (seatIndex - viewerSeatIndex + seatCount) % seatCount;
+  return getSeatPosition(displayIndex, seatCount);
 }
 
 function PlayingCard({
@@ -276,8 +289,8 @@ function TableSeatMarkers({
     y: position.y + (50 - position.y) * 0.32,
   };
   const betPosition = {
-    x: position.x + (50 - position.x) * 0.5,
-    y: position.y + (50 - position.y) * 0.5,
+    x: position.x + (50 - position.x) * 0.56,
+    y: position.y + (50 - position.y) * 0.56,
   };
   const rolePosition = {
     x: position.x + (50 - position.x) * 0.34,
@@ -596,7 +609,11 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           </div>
 
           {state?.seats.map((seat, index) => {
-            const position = getSeatPosition(index, state.seatCount);
+            const position = getViewerSeatPosition(
+              index,
+              state.seatCount,
+              currentSeat?.seatIndex
+            );
             const roles = tableRolesBySeat.get(index) ?? [];
 
             return (
