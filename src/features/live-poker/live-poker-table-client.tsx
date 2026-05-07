@@ -1,5 +1,9 @@
 "use client";
 
+import { CircleDollarSign, Loader2, Play, Power } from "lucide-react";
+import dynamic from "next/dynamic";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type {
@@ -8,10 +12,6 @@ import type {
   PublicLivePokerSeat,
   PublicLivePokerState,
 } from "@/lib/live-poker/types";
-import { Loader2, Play, Power } from "lucide-react";
-import dynamic from "next/dynamic";
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface LivePokerTableClientProps {
   tableId: string;
@@ -53,66 +53,164 @@ const tableCenterStyle = {
 
 const SEAT_POSITIONS: Record<number, Array<{ x: number; y: number }>> = {
   2: [
-    { x: 50, y: 88 },
-    { x: 50, y: 12 },
+    { x: 50, y: 87 },
+    { x: 50, y: 13 },
   ],
   3: [
-    { x: 50, y: 88 },
-    { x: 16, y: 32 },
-    { x: 84, y: 32 },
+    { x: 50, y: 87 },
+    { x: 17, y: 34 },
+    { x: 83, y: 34 },
   ],
   4: [
-    { x: 50, y: 88 },
-    { x: 14, y: 50 },
-    { x: 50, y: 12 },
-    { x: 86, y: 50 },
+    { x: 50, y: 87 },
+    { x: 16, y: 50 },
+    { x: 50, y: 13 },
+    { x: 84, y: 50 },
   ],
   5: [
-    { x: 50, y: 88 },
-    { x: 14, y: 66 },
-    { x: 22, y: 15 },
-    { x: 78, y: 15 },
-    { x: 86, y: 66 },
+    { x: 50, y: 87 },
+    { x: 16, y: 66 },
+    { x: 24, y: 16 },
+    { x: 76, y: 16 },
+    { x: 84, y: 66 },
   ],
   6: [
-    { x: 50, y: 88 },
-    { x: 15, y: 72 },
-    { x: 15, y: 28 },
-    { x: 50, y: 12 },
-    { x: 85, y: 28 },
-    { x: 85, y: 72 },
+    { x: 50, y: 87 },
+    { x: 16, y: 72 },
+    { x: 16, y: 30 },
+    { x: 50, y: 13 },
+    { x: 84, y: 30 },
+    { x: 84, y: 72 },
   ],
   7: [
-    { x: 50, y: 88 },
-    { x: 16, y: 76 },
-    { x: 14, y: 43 },
-    { x: 26, y: 14 },
-    { x: 74, y: 14 },
-    { x: 86, y: 43 },
-    { x: 84, y: 76 },
+    { x: 50, y: 87 },
+    { x: 23, y: 82 },
+    { x: 16, y: 45 },
+    { x: 28, y: 16 },
+    { x: 72, y: 16 },
+    { x: 84, y: 45 },
+    { x: 77, y: 82 },
   ],
   8: [
-    { x: 50, y: 88 },
-    { x: 24, y: 84 },
-    { x: 14, y: 64 },
-    { x: 16, y: 26 },
-    { x: 50, y: 12 },
-    { x: 84, y: 26 },
-    { x: 86, y: 64 },
-    { x: 76, y: 84 },
+    { x: 50, y: 87 },
+    { x: 25, y: 82 },
+    { x: 16, y: 64 },
+    { x: 18, y: 28 },
+    { x: 50, y: 13 },
+    { x: 82, y: 28 },
+    { x: 84, y: 64 },
+    { x: 75, y: 82 },
   ],
   9: [
-    { x: 50, y: 88 },
-    { x: 24, y: 84 },
-    { x: 14, y: 70 },
-    { x: 14, y: 38 },
-    { x: 30, y: 14 },
-    { x: 70, y: 14 },
-    { x: 86, y: 38 },
-    { x: 86, y: 70 },
-    { x: 76, y: 84 },
+    { x: 50, y: 87 },
+    { x: 25, y: 82 },
+    { x: 16, y: 70 },
+    { x: 16, y: 40 },
+    { x: 31, y: 16 },
+    { x: 69, y: 16 },
+    { x: 84, y: 40 },
+    { x: 84, y: 70 },
+    { x: 75, y: 82 },
   ],
 };
+
+type SeatZone = "bottom" | "left" | "right" | "top";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getSeatZone(position: { x: number; y: number }): SeatZone {
+  if (position.y >= 78) {
+    return "bottom";
+  }
+  if (position.y <= 24) {
+    return "top";
+  }
+  return position.x < 50 ? "left" : "right";
+}
+
+function towardCenter(
+  position: { x: number; y: number },
+  distance: number,
+  xNudge = 0,
+  yNudge = 0
+) {
+  return {
+    x: clamp(position.x + (50 - position.x) * distance + xNudge, 8, 92),
+    y: clamp(position.y + (50 - position.y) * distance + yNudge, 8, 92),
+  };
+}
+
+function getMarkerLayout(position: { x: number; y: number }) {
+  const zone = getSeatZone(position);
+  let sideNudge = 0;
+  if (position.x < 50) {
+    sideNudge = 2;
+  } else if (position.x > 50) {
+    sideNudge = -2;
+  }
+
+  if (zone === "top") {
+    return {
+      bet: towardCenter(position, 0.48, 0, 1),
+      cards: {
+        x: clamp(position.x, 14, 86),
+        y: clamp(position.y - 5, 8, 14),
+      },
+      cardsZIndex: 10,
+      zone,
+    };
+  }
+
+  if (zone === "bottom") {
+    return {
+      bet: towardCenter(position, 0.5, 0, -3),
+      cards: {
+        x: clamp(position.x, 14, 86),
+        y: clamp(position.y - 8, 73, 81),
+      },
+      cardsZIndex: 18,
+      zone,
+    };
+  }
+
+  return {
+    bet: towardCenter(position, 0.5, sideNudge, 0),
+    cards: towardCenter(position, 0.24, sideNudge * 0.5, 0),
+    cardsZIndex: 10,
+    zone,
+  };
+}
+
+function getDealerButtonPosition(position: { x: number; y: number }) {
+  const zone = getSeatZone(position);
+  let horizontalSide = 1;
+  if (position.x < 50) {
+    horizontalSide = -1;
+  } else if (position.x > 50) {
+    horizontalSide = 1;
+  }
+
+  if (zone === "top") {
+    return {
+      x: clamp(position.x + horizontalSide * 10, 14, 86),
+      y: clamp(position.y + 9, 16, 28),
+    };
+  }
+
+  if (zone === "bottom") {
+    return {
+      x: clamp(position.x + horizontalSide * 10, 14, 86),
+      y: clamp(position.y - 6, 74, 84),
+    };
+  }
+
+  return {
+    x: clamp(position.x + (50 - position.x) * 0.18, 10, 90),
+    y: clamp(position.y + (position.y < 50 ? -8 : 8), 14, 86),
+  };
+}
 
 function chip(value: number) {
   return value.toLocaleString(undefined, {
@@ -210,6 +308,20 @@ function CurrentBetBadge({
   );
 }
 
+function DealerButton({ position }: { position: { x: number; y: number } }) {
+  return (
+    <div
+      className="pointer-events-none absolute z-[16] flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white font-bold text-[13px] text-zinc-900 shadow-lg ring-1 ring-black/15"
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+      }}
+    >
+      D
+    </div>
+  );
+}
+
 function CenterPot({
   amount,
   phase,
@@ -219,11 +331,13 @@ function CenterPot({
 }) {
   return (
     <>
-      <div className="rounded-full bg-black/30 px-6 py-2 font-bold text-2xl shadow-inner">
-        {chip(amount)}
+      <div className="inline-flex items-center gap-1.5 rounded-md bg-zinc-950/85 px-3 py-1 font-bold text-white text-xs shadow-md ring-1 ring-white/10">
+        <span className="text-zinc-300">POT:</span>
+        <CircleDollarSign className="h-3.5 w-3.5 text-emerald-400" />
+        <span>{chip(amount)}</span>
       </div>
-      <div className="text-emerald-50/90 text-xs uppercase tracking-widest">
-        Pot · {phase}
+      <div className="font-semibold text-[11px] text-amber-100/80 uppercase tracking-wider">
+        {phase}
       </div>
     </>
   );
@@ -240,7 +354,7 @@ function Seat({
 }) {
   if (!seat) {
     return (
-      <div className="flex h-24 w-full items-center justify-center rounded-lg border border-white/35 border-dashed bg-zinc-950/85 px-3 font-semibold text-sm text-white shadow-lg backdrop-blur-sm transition-colors hover:border-emerald-200 hover:bg-zinc-900 sm:h-28">
+      <div className="flex h-[4.5rem] w-full items-center justify-center rounded-md border border-white/35 border-dashed bg-zinc-950/85 px-3 font-semibold text-white text-xs shadow-lg backdrop-blur-sm transition-colors hover:border-emerald-200 hover:bg-zinc-900 sm:h-20">
         Open Seat
       </div>
     );
@@ -248,7 +362,7 @@ function Seat({
 
   return (
     <div
-      className={`flex min-h-20 flex-col justify-center rounded-lg border bg-background/95 p-3 text-center text-foreground shadow-xl backdrop-blur-sm sm:min-h-24 ${
+      className={`flex min-h-16 flex-col justify-center rounded-md border bg-background/95 p-2 text-center text-foreground shadow-xl backdrop-blur-sm sm:min-h-[4.5rem] ${
         seat.isCurrentUser
           ? "border-emerald-500 ring-2 ring-emerald-300/60"
           : ""
@@ -256,12 +370,12 @@ function Seat({
         seat.folded ? "opacity-70" : ""
       }`}
     >
-      <p className="truncate font-semibold text-sm">{seat.name}</p>
-      <p className="mt-1 text-muted-foreground text-xs">
+      <p className="truncate font-semibold text-xs">{seat.name}</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">
         Stack {chip(seat.stack)}
       </p>
       {winAmount ? (
-        <p className="mt-1 font-semibold text-amber-700 text-xs">
+        <p className="mt-0.5 font-semibold text-[11px] text-amber-700">
           Won {chip(winAmount)}
         </p>
       ) : null}
@@ -272,30 +386,17 @@ function Seat({
 function TableSeatMarkers({
   phase,
   position,
-  roles,
   seat,
 }: {
   phase: PublicLivePokerState["phase"];
   position: { x: number; y: number };
-  roles: string[];
   seat: PublicLivePokerSeat | null;
 }) {
   if (!seat) {
     return null;
   }
 
-  const markerPosition = {
-    x: position.x + (50 - position.x) * 0.32,
-    y: position.y + (50 - position.y) * 0.32,
-  };
-  const betPosition = {
-    x: position.x + (50 - position.x) * 0.56,
-    y: position.y + (50 - position.y) * 0.56,
-  };
-  const rolePosition = {
-    x: position.x + (50 - position.x) * 0.34,
-    y: position.y + (50 - position.y) * 0.34,
-  };
+  const markerLayout = getMarkerLayout(position);
   const currentStreetAction = seat.streetAction;
   const showCurrentStreetBet =
     phase !== "waiting" &&
@@ -309,50 +410,53 @@ function TableSeatMarkers({
         <div
           className="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
           style={{
-            left: `${betPosition.x}%`,
-            top: `${betPosition.y}%`,
+            left: `${markerLayout.bet.x}%`,
+            top: `${markerLayout.bet.y}%`,
           }}
         >
           <CurrentBetBadge action={currentStreetAction} amount={seat.bet} />
         </div>
       ) : null}
-      {roles.length ? (
-        <div
-          className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 gap-1"
-          style={{
-            left: `${rolePosition.x}%`,
-            top: `${rolePosition.y}%`,
-          }}
-        >
-          {roles.map((role) => (
-            <span
-              className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-sky-200/90 bg-sky-500 px-2 font-bold text-white text-xs shadow-md"
-              key={role}
-            >
-              {role}
-            </span>
-          ))}
-        </div>
-      ) : null}
       <div
         className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
         style={{
-          left: `${markerPosition.x}%`,
-          top: `${markerPosition.y}%`,
+          left: `${markerLayout.cards.x}%`,
+          top: `${markerLayout.cards.y}%`,
+          zIndex: markerLayout.cardsZIndex,
         }}
       >
         {seat.cards?.map((card) => (
           <PlayingCard
             card={card}
-            className="-mx-0.5 first:translate-y-1 last:-translate-y-1"
+            className={`-mx-0.5 ${
+              markerLayout.zone === "bottom"
+                ? "first:translate-y-1.5 last:translate-y-0"
+                : "first:translate-y-1 last:-translate-y-1"
+            }`}
             key={card}
             rotate={card === seat.cards?.[0] ? -7 : 7}
           />
         ))}
         {!seat.cards && seat.hasCards ? (
           <>
-            <PlayingCard className="-mx-0.5 translate-y-1" hidden rotate={-7} />
-            <PlayingCard className="-mx-0.5 -translate-y-1" hidden rotate={7} />
+            <PlayingCard
+              className={`-mx-0.5 ${
+                markerLayout.zone === "bottom"
+                  ? "translate-y-1.5"
+                  : "translate-y-1"
+              }`}
+              hidden
+              rotate={-7}
+            />
+            <PlayingCard
+              className={`-mx-0.5 ${
+                markerLayout.zone === "bottom"
+                  ? "translate-y-0"
+                  : "-translate-y-1"
+              }`}
+              hidden
+              rotate={7}
+            />
           </>
         ) : null}
       </div>
@@ -508,26 +612,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     }
     return amounts;
   }, [state?.lastWinners]);
-  const tableRolesBySeat = useMemo(() => {
-    const roles = new Map<number, string[]>();
-
-    function addRole(seatIndex: number | null | undefined, role: string) {
-      if (seatIndex === null || seatIndex === undefined) {
-        return;
-      }
-      roles.set(seatIndex, [...(roles.get(seatIndex) ?? []), role]);
-    }
-
-    addRole(state?.dealerSeatIndex, "D");
-    addRole(state?.smallBlindSeatIndex, "SB");
-    addRole(state?.bigBlindSeatIndex, "BB");
-    return roles;
-  }, [
-    state?.bigBlindSeatIndex,
-    state?.dealerSeatIndex,
-    state?.smallBlindSeatIndex,
-  ]);
-
   function sitInSeat(seatIndex: number) {
     if (!state) {
       return;
@@ -594,13 +678,13 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 amount={state?.pot ?? 0}
                 phase={state?.phase ?? "connecting"}
               />
-              <div className="flex min-h-16 max-w-full flex-wrap items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-black/20 px-3 py-3 shadow-inner sm:gap-2 sm:px-5">
+              <div className="flex min-h-16 max-w-full flex-wrap items-center justify-center gap-1.5 rounded-md border border-white/5 bg-black/10 px-3 py-3 shadow-inner sm:gap-2 sm:px-5">
                 {state?.communityCards.length ? (
                   state.communityCards.map((card) => (
                     <PlayingCard card={card} key={card} />
                   ))
                 ) : (
-                  <span className="text-emerald-50/75 text-sm">
+                  <span className="font-medium text-emerald-50/55 text-sm">
                     Community cards
                   </span>
                 )}
@@ -614,18 +698,20 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               state.seatCount,
               currentSeat?.seatIndex
             );
-            const roles = tableRolesBySeat.get(index) ?? [];
+            const dealerButtonPosition = getDealerButtonPosition(position);
 
             return (
               <div key={`seat-position-${index + 1}`}>
+                {state.dealerSeatIndex === index ? (
+                  <DealerButton position={dealerButtonPosition} />
+                ) : null}
                 <TableSeatMarkers
                   phase={state.phase}
                   position={position}
-                  roles={roles}
                   seat={seat}
                 />
                 <button
-                  className="absolute z-20 w-36 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-30 hover:scale-105 focus:z-30 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-44"
+                  className="absolute z-20 w-32 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-30 hover:scale-105 focus:z-30 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-36"
                   onClick={() => (seat ? undefined : sitInSeat(index))}
                   style={{
                     left: `${position.x}%`,

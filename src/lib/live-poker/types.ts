@@ -109,6 +109,7 @@ export interface LivePokerState {
   phase: LivePokerPhase;
   seatCount: number;
   seats: Array<LivePokerSeat | null>;
+  showdownSeatIndexes?: number[];
   smallBlind: number;
   smallBlindSeatIndex: number | null;
 }
@@ -131,6 +132,7 @@ export interface PublicLivePokerState {
   pot: number;
   seatCount: number;
   seats: Array<PublicLivePokerSeat | null>;
+  showdownSeatIndexes: number[];
   smallBlind: number;
   smallBlindSeatIndex: number | null;
 }
@@ -152,6 +154,8 @@ export function toPublicState(
   state: LivePokerState,
   currentUserId: string
 ): PublicLivePokerState {
+  const showdownSeatIndexes = state.showdownSeatIndexes ?? [];
+
   return {
     actionLog: state.actionLog.slice(-80),
     activeSeatIndex: state.activeSeatIndex,
@@ -175,9 +179,8 @@ export function toPublicState(
       }
 
       const canShowCards =
-        seat.userId === currentUserId ||
-        state.phase === "showdown" ||
-        (state.phase === "waiting" && Boolean(seat.cards?.length));
+        (state.phase !== "waiting" && seat.userId === currentUserId) ||
+        showdownSeatIndexes.includes(seat.seatIndex);
 
       return {
         bet: seat.bet,
@@ -199,6 +202,7 @@ export function toPublicState(
         streetAction: seat.streetAction,
       };
     }),
+    showdownSeatIndexes,
     smallBlind: state.smallBlind,
     smallBlindSeatIndex: state.smallBlindSeatIndex ?? null,
   };

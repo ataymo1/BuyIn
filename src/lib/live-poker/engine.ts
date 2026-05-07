@@ -137,6 +137,7 @@ export function createInitialState(config: {
     phase: "waiting",
     seatCount: config.seatCount,
     seats: Array.from({ length: config.seatCount }, () => null),
+    showdownSeatIndexes: [],
     smallBlind: config.smallBlind,
     smallBlindSeatIndex: null,
   };
@@ -251,6 +252,7 @@ export function startHand(state: LivePokerState) {
   state.bigBlindSeatIndex = null;
   state.lastWinners = [];
   state.minRaise = state.bigBlind;
+  state.showdownSeatIndexes = [];
   state.smallBlindSeatIndex = null;
   state.lastAggressorSeatIndex = null;
 
@@ -493,6 +495,10 @@ export function settleShowdown(state: LivePokerState) {
   const contenders = handSeats(state);
   const activeContenders = contenders.filter((seat) => !seat.folded);
   const winners: LivePokerWinner[] = [];
+  state.showdownSeatIndexes =
+    activeContenders.length > 1
+      ? activeContenders.map((seat) => seat.seatIndex)
+      : [];
 
   while (state.communityCards.length < 5 && state.deck.length > 0) {
     state.communityCards.push(state.deck.pop() as string);
