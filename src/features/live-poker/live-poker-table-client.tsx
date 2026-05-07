@@ -1,5 +1,6 @@
 "use client";
 
+import Card from "@heruka_urgyen/react-playing-cards/lib/FcB";
 import { Loader2, Play, Power, Users } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -128,6 +129,51 @@ function getSeatPosition(index: number, seatCount: number) {
   };
 }
 
+function PlayingCard({
+  card,
+  className = "",
+  hidden,
+  rotate = 0,
+}: {
+  card?: string;
+  className?: string;
+  hidden?: boolean;
+  rotate?: number;
+}) {
+  const packageCard = card
+    ? `${card.slice(0, -1)}${card.at(-1)?.toLowerCase()}`
+    : undefined;
+
+  const cardHeight = "80px";
+
+  return (
+    <span
+      className={`inline-flex rounded-md shadow-lg ring-1 ring-black/20 ${className}`}
+      style={{ transform: `rotate(${rotate}deg)` }}
+    >
+      <Card
+        back={hidden || !packageCard}
+        card={packageCard}
+        className="block rounded-md"
+        height={cardHeight}
+        style={{ filter: "drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28))" }}
+      />
+    </span>
+  );
+}
+
+function ChipBet({ amount }: { amount: number }) {
+  return (
+    <span className="inline-flex items-center overflow-hidden rounded-full bg-zinc-950/80 pr-2.5 font-bold text-white text-xs shadow-lg ring-1 ring-white/15 backdrop-blur-sm">
+      <span className="relative mr-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-sky-100 bg-sky-500 shadow-inner">
+        <span className="h-3.5 w-3.5 rounded-full border border-white/80 bg-emerald-400" />
+        <span className="absolute inset-1 rounded-full border border-white/30" />
+      </span>
+      {chip(amount)}
+    </span>
+  );
+}
+
 function Seat({
   isActive,
   seat,
@@ -182,20 +228,39 @@ function TableSeatMarkers({
   }
 
   const markerPosition = {
-    x: position.x + (50 - position.x) * 0.38,
-    y: position.y + (50 - position.y) * 0.38,
+    x: position.x + (50 - position.x) * 0.24,
+    y: position.y + (50 - position.y) * 0.24,
+  };
+  const betPosition = {
+    x: position.x + (50 - position.x) * 0.42,
+    y: position.y + (50 - position.y) * 0.42,
+  };
+  const rolePosition = {
+    x: position.x + (50 - position.x) * 0.34,
+    y: position.y + (50 - position.y) * 0.34,
   };
 
   return (
-    <div
-      className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5"
-      style={{
-        left: `${markerPosition.x}%`,
-        top: `${markerPosition.y}%`,
-      }}
-    >
+    <>
+      {seat.bet > 0 ? (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2"
+          style={{
+            left: `${betPosition.x}%`,
+            top: `${betPosition.y}%`,
+          }}
+        >
+          <ChipBet amount={seat.bet} />
+        </div>
+      ) : null}
       {roles.length ? (
-        <div className="flex gap-1">
+        <div
+          className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 gap-1"
+          style={{
+            left: `${rolePosition.x}%`,
+            top: `${rolePosition.y}%`,
+          }}
+        >
           {roles.map((role) => (
             <span
               className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-sky-200/90 bg-sky-500 px-2 font-bold text-white text-xs shadow-md"
@@ -206,28 +271,29 @@ function TableSeatMarkers({
           ))}
         </div>
       ) : null}
-      <div className="flex min-h-12 gap-1.5">
+      <div
+        className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-end justify-center"
+        style={{
+          left: `${markerPosition.x}%`,
+          top: `${markerPosition.y}%`,
+        }}
+      >
         {seat.cards?.map((card) => (
-          <span
-            className="inline-flex h-12 w-9 items-center justify-center rounded border border-zinc-200 bg-white font-bold text-black text-sm shadow-md sm:h-14 sm:w-10"
+          <PlayingCard
+            card={card}
+            className="-mx-0.5 first:translate-y-1 last:-translate-y-1"
             key={card}
-          >
-            {card}
-          </span>
+            rotate={card === seat.cards?.[0] ? -7 : 7}
+          />
         ))}
         {!seat.cards && seat.hasCards ? (
           <>
-            <span className="h-12 w-9 rounded border border-zinc-700 bg-zinc-950 shadow-md sm:h-14 sm:w-10" />
-            <span className="h-12 w-9 rounded border border-zinc-700 bg-zinc-950 shadow-md sm:h-14 sm:w-10" />
+            <PlayingCard className="-mx-0.5 translate-y-1" hidden rotate={-7} />
+            <PlayingCard className="-mx-0.5 -translate-y-1" hidden rotate={7} />
           </>
         ) : null}
       </div>
-      {seat.bet > 0 ? (
-        <span className="rounded-full border border-white/20 bg-black/55 px-2 py-0.5 font-semibold text-white text-xs shadow-md">
-          {chip(seat.bet)}
-        </span>
-      ) : null}
-    </div>
+    </>
   );
 }
 
@@ -473,12 +539,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               <div className="flex min-h-16 max-w-full flex-wrap items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-black/20 px-3 py-3 shadow-inner sm:gap-2 sm:px-5">
                 {state?.communityCards.length ? (
                   state.communityCards.map((card) => (
-                    <span
-                      className="inline-flex h-12 w-9 items-center justify-center rounded border bg-white font-bold text-black text-sm shadow-md sm:h-14 sm:w-10"
-                      key={card}
-                    >
-                      {card}
-                    </span>
+                    <PlayingCard card={card} key={card} />
                   ))
                 ) : (
                   <span className="text-emerald-50/75 text-sm">

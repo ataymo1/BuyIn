@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@heruka_urgyen/react-playing-cards':
+        specifier: ^0.5.0
+        version: 0.5.0(react@19.2.3)
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.71.1(react@19.2.3))
@@ -585,6 +588,11 @@ packages:
 
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+
+  '@heruka_urgyen/react-playing-cards@0.5.0':
+    resolution: {integrity: sha512-o/tSxBIIdGJQYCwARHMzddjY0hYdxxYZXiyCVzg8FuQNCrnVl8n1moKjzjkRVK7qMQGR3FCpromg2kpw85pQ+A==}
+    peerDependencies:
+      react: ^16.13.1
 
   '@hookform/resolvers@5.2.2':
     resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
@@ -2496,6 +2504,10 @@ snapshots:
       react-dom: 19.2.3(react@19.2.3)
 
   '@floating-ui/utils@0.2.10': {}
+
+  '@heruka_urgyen/react-playing-cards@0.5.0(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
 
   '@hookform/resolvers@5.2.2(react-hook-form@7.71.1(react@19.2.3))':
     dependencies:
