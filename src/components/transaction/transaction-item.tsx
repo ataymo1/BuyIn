@@ -57,8 +57,10 @@ export function TransactionItem({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        showNotification(error.error || "Failed to update transaction", {
+        const error = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        showNotification(error?.error || "Failed to update transaction", {
           type: "error",
         });
         return;
@@ -85,8 +87,10 @@ export function TransactionItem({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        showNotification(error.error || "Failed to delete transaction", {
+        const error = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        showNotification(error?.error || "Failed to delete transaction", {
           type: "error",
         });
         return;

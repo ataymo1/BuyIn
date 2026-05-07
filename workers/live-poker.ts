@@ -1,5 +1,7 @@
+/// <reference types="@cloudflare/workers-types" />
+
+import { DurableObject } from "cloudflare:workers";
 import { jwtVerify } from "jose";
-import type * as Party from "partykit/server";
 import {
   addChips,
   applyAction,
@@ -20,6 +22,18 @@ import {
   toPublicState,
 } from "../src/lib/live-poker/types";
 
+declare const WebSocketPair: {
+  new (): Record<0 | 1, WebSocket>;
+};
+
+interface Env {
+  LIVE_POKER_JWT_SECRET?: string;
+  LIVE_POKER_TABLE: DurableObjectNamespace<LivePokerTableDurableObject>;
+  LIVE_POKER_WEBHOOK_SECRET?: string;
+  LIVE_POKER_WEBHOOK_URL?: string;
+  NEXTAUTH_SECRET?: string;
+}
+
 type ConnectionState = LivePokerAuthToken;
 type LivePokerActionMessage = Extract<
   LivePokerClientMessage,
@@ -32,16 +46,17 @@ type LivePokerActionMessage = Extract<
 >;
 
 const encoder = new TextEncoder();
+const LIVE_POKER_PATH_REGEX = /^\/live-poker\/([^/]+)$/;
 
-function envString(room: Party.Room, key: string) {
-  const value = room.env[key];
+function envString(env: Env, key: keyof Env) {
+  const value = env[key];
   return typeof value === "string" ? value : undefined;
 }
 
-async function verifyToken(room: Party.Room, token: string) {
+async function verifyToken(env: Env, token: string) {
   const secret =
-    envString(room, "LIVE_POKER_JWT_SECRET") ||
-    envString(room, "NEXTAUTH_SECRET") ||
+    envString(env, "LIVE_POKER_JWT_SECRET") ||
+    envString(env, "NEXTAUTH_SECRET") ||
     "development-live-poker-secret";
   const { payload } = await jwtVerify(token, encoder.encode(secret));
   return {
@@ -53,8 +68,10 @@ async function verifyToken(room: Party.Room, token: string) {
   } satisfies LivePokerAuthToken;
 }
 
-function send(connection: Party.Connection, message: LivePokerServerMessage) {
-  connection.send(JSON.stringify(message));
+function send(connection: WebSocket, message: LivePokerServerMessage) {
+  if (connection.readyState === WebSocket.OPEN) {
+    connection.send(JSON.stringify(message));
+  }
 }
 
 function isActionMessage(
@@ -70,36 +87,65 @@ function isActionMessage(
   );
 }
 
-export default class LivePokerServer implements Party.Server {
-  readonly room: Party.Room;
-  state: LivePokerState | null = null;
+function getTableIdFromPath(pathname: string) {
+  const match = pathname.match(LIVE_POKER_PATH_REGEX);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
 
-  constructor(room: Party.Room) {
-    this.room = room;
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    const tableId = getTableIdFromPath(url.pathname);
+    if (!tableId) {
+      return new Response("Not found", { status: 404 });
+    }
+
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return new Response("Expected WebSocket", { status: 400 });
+    }
+
+    const id = env.LIVE_POKER_TABLE.idFromName(tableId);
+    const object = env.LIVE_POKER_TABLE.get(id);
+    return await object.fetch(request);
+  },
+};
+
+export class LivePokerTableDurableObject extends DurableObject<Env> {
+  private readonly bindings: Env;
+  private state: LivePokerState | null = null;
+  private readonly tableId: string;
+  private readonly ready: Promise<void>;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    this.bindings = env;
+    this.tableId = ctx.id.name ?? "";
+    this.ready = ctx.blockConcurrencyWhile(async () => {
+      this.state = (await ctx.storage.get<LivePokerState>("state")) ?? null;
+    });
   }
 
-  async onStart() {
-    this.state = (await this.room.storage.get<LivePokerState>("state")) ?? null;
-  }
+  async fetch(request: Request): Promise<Response> {
+    await this.ready;
 
-  async onConnect(
-    connection: Party.Connection<ConnectionState>,
-    ctx: Party.ConnectionContext
-  ) {
     try {
-      const url = new URL(ctx.request.url);
+      const url = new URL(request.url);
       const token = url.searchParams.get("token");
       if (!token) {
         throw new Error("Missing live poker token");
       }
 
-      const auth = await verifyToken(this.room, token);
-      if (auth.tableId !== this.room.id) {
+      const auth = await verifyToken(this.bindings, token);
+      if (auth.tableId !== this.tableId) {
         throw new Error("Token does not match this table");
       }
 
-      connection.setState(auth);
       await this.ensureState(url);
+
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
+      this.ctx.acceptWebSocket(server);
+      server.serializeAttachment(auth);
 
       const seat = this.state?.seats.find(
         (candidate) => candidate?.userId === auth.userId
@@ -110,41 +156,53 @@ export default class LivePokerServer implements Party.Server {
       }
 
       this.broadcast();
+      return new Response(null, { status: 101, webSocket: client });
     } catch (error) {
-      connection.close(
-        1008,
-        error instanceof Error ? error.message : "Unauthorized"
+      return new Response(
+        error instanceof Error ? error.message : "Unauthorized",
+        { status: 401 }
       );
     }
   }
 
-  async onMessage(message: string, sender: Party.Connection<ConnectionState>) {
-    const auth = sender.state;
-    if (!auth) {
-      sender.close(1008, "Unauthorized");
-      return;
-    }
+  async webSocketMessage(connection: WebSocket, message: string | ArrayBuffer) {
+    await this.ready;
 
-    const parsed = clientMessageSchema.safeParse(JSON.parse(message));
-    if (!parsed.success) {
-      send(sender, { type: "actionRejected", message: "Invalid table action" });
+    const auth = connection.deserializeAttachment() as ConnectionState | null;
+    if (!auth) {
+      connection.close(1008, "Unauthorized");
       return;
     }
 
     try {
+      const rawMessage =
+        typeof message === "string"
+          ? message
+          : new TextDecoder().decode(message);
+      const payload = JSON.parse(rawMessage) as unknown;
+      const parsed = clientMessageSchema.safeParse(payload);
+      if (!parsed.success) {
+        send(connection, {
+          type: "actionRejected",
+          message: "Invalid table action",
+        });
+        return;
+      }
+
       await this.handleMessage(auth, parsed.data);
       await this.persist();
       this.broadcast();
     } catch (error) {
-      send(sender, {
+      send(connection, {
         type: "actionRejected",
         message: error instanceof Error ? error.message : "Action rejected",
       });
     }
   }
 
-  async onClose(connection: Party.Connection<ConnectionState>) {
-    const auth = connection.state;
+  async webSocketClose(connection: WebSocket, code: number, reason: string) {
+    await this.ready;
+    const auth = connection.deserializeAttachment() as ConnectionState | null;
     const seat = this.state?.seats.find(
       (candidate) => candidate?.userId === auth?.userId
     );
@@ -153,6 +211,11 @@ export default class LivePokerServer implements Party.Server {
       await this.persist();
       this.broadcast();
     }
+    connection.close(code, reason);
+  }
+
+  async webSocketError(connection: WebSocket) {
+    await this.webSocketClose(connection, 1011, "WebSocket error");
   }
 
   private async ensureState(url: URL) {
@@ -296,8 +359,8 @@ export default class LivePokerServer implements Party.Server {
     winners: LivePokerWinner[],
     communityCards: string[]
   ) {
-    const webhookUrl = envString(this.room, "LIVE_POKER_WEBHOOK_URL");
-    const webhookSecret = envString(this.room, "LIVE_POKER_WEBHOOK_SECRET");
+    const webhookUrl = envString(this.bindings, "LIVE_POKER_WEBHOOK_URL");
+    const webhookSecret = envString(this.bindings, "LIVE_POKER_WEBHOOK_SECRET");
     if (!(webhookUrl && webhookSecret && this.state)) {
       return;
     }
@@ -308,10 +371,10 @@ export default class LivePokerServer implements Party.Server {
         bigBlind: this.state.bigBlind,
         communityCards,
         dealerSeat: this.state.dealerSeatIndex ?? 0,
-        tableId: this.room.id,
         handNumber: this.state.handNumber,
         pot,
         smallBlind: this.state.smallBlind,
+        tableId: this.tableId,
         winners,
       }),
       headers: {
@@ -324,7 +387,7 @@ export default class LivePokerServer implements Party.Server {
 
   private async persist() {
     if (this.state) {
-      await this.room.storage.put("state", this.state);
+      await this.ctx.storage.put("state", this.state);
     }
   }
 
@@ -333,8 +396,8 @@ export default class LivePokerServer implements Party.Server {
       return;
     }
 
-    for (const connection of this.room.getConnections<ConnectionState>()) {
-      const auth = connection.state;
+    for (const connection of this.ctx.getWebSockets()) {
+      const auth = connection.deserializeAttachment() as ConnectionState | null;
       if (!auth) {
         continue;
       }
@@ -352,6 +415,11 @@ export default class LivePokerServer implements Party.Server {
   }
 
   private broadcastMessage(message: LivePokerServerMessage) {
-    this.room.broadcast(JSON.stringify(message));
+    const rawMessage = JSON.stringify(message);
+    for (const connection of this.ctx.getWebSockets()) {
+      if (connection.readyState === WebSocket.OPEN) {
+        connection.send(rawMessage);
+      }
+    }
   }
 }

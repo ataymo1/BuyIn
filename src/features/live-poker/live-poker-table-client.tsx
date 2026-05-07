@@ -1,7 +1,6 @@
 "use client";
 
 import { Loader2, Play, Power, Users } from "lucide-react";
-import PartySocket from "partysocket";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -231,7 +230,7 @@ function Seat({
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component owns the socket lifecycle and compact v1 table controls.
 export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
-  const socketRef = useRef<PartySocket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const [buyIn, setBuyIn] = useState("100");
   const [error, setError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
@@ -272,20 +271,19 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         token: string;
       };
 
-      const socket = new PartySocket({
-        host: process.env.NEXT_PUBLIC_PARTYKIT_HOST ?? "localhost:1999",
-        party: "main",
-        query: {
-          bigBlind: String(body.config.bigBlind),
-          hostUserId: body.config.createdById,
-          maxBuyIn: String(body.config.maxBuyIn),
-          minBuyIn: String(body.config.minBuyIn),
-          seatCount: String(body.config.seatCount),
-          smallBlind: String(body.config.smallBlind),
-          token: body.token,
-        },
-        room: tableId,
-      });
+      const workerUrl = new URL(
+        `/live-poker/${encodeURIComponent(tableId)}`,
+        process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL ?? "ws://localhost:8787"
+      );
+      workerUrl.searchParams.set("bigBlind", String(body.config.bigBlind));
+      workerUrl.searchParams.set("hostUserId", body.config.createdById);
+      workerUrl.searchParams.set("maxBuyIn", String(body.config.maxBuyIn));
+      workerUrl.searchParams.set("minBuyIn", String(body.config.minBuyIn));
+      workerUrl.searchParams.set("seatCount", String(body.config.seatCount));
+      workerUrl.searchParams.set("smallBlind", String(body.config.smallBlind));
+      workerUrl.searchParams.set("token", body.token);
+
+      const socket = new WebSocket(workerUrl);
 
       socket.addEventListener("open", () => {
         if (!isMounted) {
@@ -312,6 +310,13 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
       socket.addEventListener("close", () => {
         if (isMounted) {
           setIsConnecting(true);
+        }
+      });
+
+      socket.addEventListener("error", () => {
+        if (isMounted) {
+          setError("Unable to connect to the live table");
+          setIsConnecting(false);
         }
       });
 
