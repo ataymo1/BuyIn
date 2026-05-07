@@ -130,12 +130,10 @@ function getSeatPosition(index: number, seatCount: number) {
 
 function Seat({
   isActive,
-  roles,
   seat,
   winAmount,
 }: {
   isActive?: boolean;
-  roles: string[];
   seat: PublicLivePokerSeat | null;
   winAmount?: number;
 }) {
@@ -149,7 +147,7 @@ function Seat({
 
   return (
     <div
-      className={`min-h-24 rounded-lg border bg-background/95 p-2.5 text-foreground shadow-xl backdrop-blur-sm sm:min-h-28 sm:p-3 ${
+      className={`flex min-h-20 flex-col justify-center rounded-lg border bg-background/95 p-3 text-center text-foreground shadow-xl backdrop-blur-sm sm:min-h-24 ${
         seat.isCurrentUser
           ? "border-emerald-500 ring-2 ring-emerald-300/60"
           : ""
@@ -157,33 +155,61 @@ function Seat({
         seat.folded ? "opacity-70" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-sm">{seat.name}</p>
-          <p className="text-muted-foreground text-xs">
-            Stack {chip(seat.stack)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
+      <p className="truncate font-semibold text-sm">{seat.name}</p>
+      <p className="mt-1 text-muted-foreground text-xs">
+        Stack {chip(seat.stack)}
+      </p>
+      {winAmount ? (
+        <p className="mt-1 font-semibold text-amber-700 text-xs">
+          Won {chip(winAmount)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function TableSeatMarkers({
+  position,
+  roles,
+  seat,
+}: {
+  position: { x: number; y: number };
+  roles: string[];
+  seat: PublicLivePokerSeat | null;
+}) {
+  if (!seat) {
+    return null;
+  }
+
+  const markerPosition = {
+    x: position.x + (50 - position.x) * 0.38,
+    y: position.y + (50 - position.y) * 0.38,
+  };
+
+  return (
+    <div
+      className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5"
+      style={{
+        left: `${markerPosition.x}%`,
+        top: `${markerPosition.y}%`,
+      }}
+    >
+      {roles.length ? (
+        <div className="flex gap-1">
           {roles.map((role) => (
             <span
-              className="rounded bg-zinc-100 px-1 py-0.5 font-semibold text-xs text-zinc-700"
+              className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-sky-200/90 bg-sky-500 px-2 font-bold text-white text-xs shadow-md"
               key={role}
             >
               {role}
             </span>
           ))}
-          <span
-            className={`h-2.5 w-2.5 rounded-full ring-2 ring-background ${
-              seat.connected ? "bg-emerald-500" : "bg-muted"
-            }`}
-          />
         </div>
-      </div>
-      <div className="mt-2 flex min-h-7 gap-1 sm:mt-3 sm:min-h-8">
+      ) : null}
+      <div className="flex min-h-12 gap-1.5">
         {seat.cards?.map((card) => (
           <span
-            className="inline-flex h-7 w-6 items-center justify-center rounded border bg-white font-semibold text-black text-xs sm:h-8 sm:w-7"
+            className="inline-flex h-12 w-9 items-center justify-center rounded border border-zinc-200 bg-white font-bold text-black text-sm shadow-md sm:h-14 sm:w-10"
             key={card}
           >
             {card}
@@ -191,39 +217,16 @@ function Seat({
         ))}
         {!seat.cards && seat.hasCards ? (
           <>
-            <span className="h-7 w-6 rounded border bg-zinc-900 sm:h-8 sm:w-7" />
-            <span className="h-7 w-6 rounded border bg-zinc-900 sm:h-8 sm:w-7" />
+            <span className="h-12 w-9 rounded border border-zinc-700 bg-zinc-950 shadow-md sm:h-14 sm:w-10" />
+            <span className="h-12 w-9 rounded border border-zinc-700 bg-zinc-950 shadow-md sm:h-14 sm:w-10" />
           </>
         ) : null}
       </div>
-      <div className="mt-2 flex flex-wrap gap-1 text-xs">
-        {seat.bet > 0 ? (
-          <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">
-            Bet {chip(seat.bet)}
-          </span>
-        ) : null}
-        {seat.folded ? (
-          <span className="rounded bg-muted px-2 py-0.5">Folded</span>
-        ) : null}
-        {seat.isAllIn ? (
-          <span className="rounded bg-red-100 px-2 py-0.5 text-red-700">
-            All in
-          </span>
-        ) : null}
-        {seat.sitOut ? (
-          <span className="rounded bg-muted px-2 py-0.5">Sitting out</span>
-        ) : null}
-        {seat.ready && !seat.sitOut && seat.stack > 0 ? (
-          <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-700">
-            Ready
-          </span>
-        ) : null}
-        {winAmount ? (
-          <span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">
-            Won {chip(winAmount)}
-          </span>
-        ) : null}
-      </div>
+      {seat.bet > 0 ? (
+        <span className="rounded-full border border-white/20 bg-black/55 px-2 py-0.5 font-semibold text-white text-xs shadow-md">
+          {chip(seat.bet)}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -488,25 +491,31 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
 
           {state?.seats.map((seat, index) => {
             const position = getSeatPosition(index, state.seatCount);
+            const roles = tableRolesBySeat.get(index) ?? [];
 
             return (
-              <button
-                className="absolute w-36 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-20 hover:scale-105 focus:z-20 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-44"
-                key={`seat-position-${index + 1}`}
-                onClick={() => (seat ? undefined : sitInSeat(index))}
-                style={{
-                  left: `${position.x}%`,
-                  top: `${position.y}%`,
-                }}
-                type="button"
-              >
-                <Seat
-                  isActive={state.activeSeatIndex === index}
-                  roles={tableRolesBySeat.get(index) ?? []}
+              <div key={`seat-position-${index + 1}`}>
+                <TableSeatMarkers
+                  position={position}
+                  roles={roles}
                   seat={seat}
-                  winAmount={winnerAmountsBySeat.get(index)}
                 />
-              </button>
+                <button
+                  className="absolute w-36 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-20 hover:scale-105 focus:z-20 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-44"
+                  onClick={() => (seat ? undefined : sitInSeat(index))}
+                  style={{
+                    left: `${position.x}%`,
+                    top: `${position.y}%`,
+                  }}
+                  type="button"
+                >
+                  <Seat
+                    isActive={state.activeSeatIndex === index}
+                    seat={seat}
+                    winAmount={winnerAmountsBySeat.get(index)}
+                  />
+                </button>
+              </div>
             );
           })}
         </div>
