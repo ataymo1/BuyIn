@@ -1,7 +1,7 @@
 "use client";
 
-import Card from "@heruka_urgyen/react-playing-cards/lib/FcB";
-import { Loader2, Play, Power, Users } from "lucide-react";
+import { Loader2, Play, Power } from "lucide-react";
+import dynamic from "next/dynamic";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,11 @@ import type {
 interface LivePokerTableClientProps {
   tableId: string;
 }
+
+const Card = dynamic(
+  () => import("@heruka_urgyen/react-playing-cards/lib/FcB"),
+  { ssr: false }
+);
 
 const tableStageStyle = {
   background:
@@ -148,7 +153,7 @@ function PlayingCard({
 
   return (
     <span
-      className={`inline-flex rounded-md shadow-lg ring-1 ring-black/20 ${className}`}
+      className={`inline-flex rounded-md shadow-lg ring-1 ring-black/20 drop-shadow-[0_8px_10px_rgba(0,0,0,0.28)] ${className}`}
       style={{ transform: `rotate(${rotate}deg)` }}
     >
       <Card
@@ -156,21 +161,58 @@ function PlayingCard({
         card={packageCard}
         className="block rounded-md"
         height={cardHeight}
-        style={{ filter: "drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28))" }}
       />
     </span>
   );
 }
 
-function ChipBet({ amount }: { amount: number }) {
+function streetActionLabel(
+  action: NonNullable<PublicLivePokerSeat["streetAction"]>["type"]
+) {
+  const labels = {
+    allIn: "All in",
+    bet: "Bet",
+    bigBlind: "BB",
+    call: "Call",
+    check: "Check",
+    fold: "Fold",
+    raise: "Raise",
+    smallBlind: "SB",
+  } satisfies Record<typeof action, string>;
+  return labels[action];
+}
+
+function CurrentBetBadge({
+  action,
+  amount,
+}: {
+  action: NonNullable<PublicLivePokerSeat["streetAction"]>;
+  amount: number;
+}) {
   return (
-    <span className="inline-flex items-center overflow-hidden rounded-full bg-zinc-950/80 pr-2.5 font-bold text-white text-xs shadow-lg ring-1 ring-white/15 backdrop-blur-sm">
-      <span className="relative mr-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-sky-100 bg-sky-500 shadow-inner">
-        <span className="h-3.5 w-3.5 rounded-full border border-white/80 bg-emerald-400" />
-        <span className="absolute inset-1 rounded-full border border-white/30" />
-      </span>
+    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-950/80 px-2 py-1 font-semibold text-[11px] text-white shadow-md ring-1 ring-white/15 backdrop-blur-sm">
+      <span className="text-zinc-300">{streetActionLabel(action.type)}</span>
       {chip(amount)}
     </span>
+  );
+}
+
+function CenterPot({
+  amount,
+  phase,
+}: {
+  amount: number;
+  phase: PublicLivePokerState["phase"] | "connecting";
+}) {
+  return (
+    <>
+      <div className="rounded-full bg-black/30 px-6 py-2 font-bold text-2xl shadow-inner">
+        {chip(amount)}
+      </div>
+      <div className="text-emerald-50/90 text-xs uppercase tracking-widest">
+        Pot · {phase}
+      </div>
+    </>
   );
 }
 
@@ -215,10 +257,12 @@ function Seat({
 }
 
 function TableSeatMarkers({
+  phase,
   position,
   roles,
   seat,
 }: {
+  phase: PublicLivePokerState["phase"];
   position: { x: number; y: number };
   roles: string[];
   seat: PublicLivePokerSeat | null;
@@ -228,29 +272,35 @@ function TableSeatMarkers({
   }
 
   const markerPosition = {
-    x: position.x + (50 - position.x) * 0.24,
-    y: position.y + (50 - position.y) * 0.24,
+    x: position.x + (50 - position.x) * 0.32,
+    y: position.y + (50 - position.y) * 0.32,
   };
   const betPosition = {
-    x: position.x + (50 - position.x) * 0.42,
-    y: position.y + (50 - position.y) * 0.42,
+    x: position.x + (50 - position.x) * 0.5,
+    y: position.y + (50 - position.y) * 0.5,
   };
   const rolePosition = {
     x: position.x + (50 - position.x) * 0.34,
     y: position.y + (50 - position.y) * 0.34,
   };
+  const currentStreetAction = seat.streetAction;
+  const showCurrentStreetBet =
+    phase !== "waiting" &&
+    phase !== "showdown" &&
+    seat.bet > 0 &&
+    Boolean(currentStreetAction);
 
   return (
     <>
-      {seat.bet > 0 ? (
+      {showCurrentStreetBet && currentStreetAction ? (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2"
+          className="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
           style={{
             left: `${betPosition.x}%`,
             top: `${betPosition.y}%`,
           }}
         >
-          <ChipBet amount={seat.bet} />
+          <CurrentBetBadge action={currentStreetAction} amount={seat.bet} />
         </div>
       ) : null}
       {roles.length ? (
@@ -491,12 +541,12 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-3">
+    <div>
       <section
-        className="rounded-lg bg-zinc-950 p-4 text-white shadow-inner xl:col-span-2"
+        className="rounded-lg bg-zinc-950 p-4 text-white shadow-inner"
         style={{ minHeight: 640 }}
       >
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-4">
           <div>
             <h1 className="font-bold text-2xl">Live Poker</h1>
             <p className="text-emerald-100 text-sm">
@@ -506,13 +556,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 : ""}
             </p>
           </div>
-          <div className="rounded bg-white/10 px-3 py-2 text-sm shadow-inner">
-            Pot {state ? chip(state.pot) : 0}
-          </div>
         </div>
 
         <div
-          className="relative mx-auto mb-6 max-w-5xl overflow-hidden rounded-lg border border-white/10 bg-zinc-950 px-8 py-20 shadow-2xl sm:px-16 sm:py-24 lg:px-24"
+          className="relative mx-auto mb-6 max-w-7xl overflow-hidden rounded-lg border border-white/10 bg-zinc-950 px-8 py-20 shadow-2xl sm:px-16 sm:py-24 lg:px-24"
           style={tableStageStyle}
         >
           <div className="absolute inset-0" style={tableVignetteStyle} />
@@ -530,12 +577,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 text-center"
               style={tableCenterStyle}
             >
-              <div className="rounded-full bg-black/30 px-6 py-2 font-bold text-2xl shadow-inner">
-                {state ? chip(state.pot) : 0}
-              </div>
-              <div className="text-emerald-50/90 text-xs uppercase tracking-widest">
-                Pot · {state?.phase ?? "connecting"}
-              </div>
+              <CenterPot
+                amount={state?.pot ?? 0}
+                phase={state?.phase ?? "connecting"}
+              />
               <div className="flex min-h-16 max-w-full flex-wrap items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-black/20 px-3 py-3 shadow-inner sm:gap-2 sm:px-5">
                 {state?.communityCards.length ? (
                   state.communityCards.map((card) => (
@@ -557,12 +602,13 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             return (
               <div key={`seat-position-${index + 1}`}>
                 <TableSeatMarkers
+                  phase={state.phase}
                   position={position}
                   roles={roles}
                   seat={seat}
                 />
                 <button
-                  className="absolute w-36 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-20 hover:scale-105 focus:z-20 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-44"
+                  className="absolute z-20 w-36 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-30 hover:scale-105 focus:z-30 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-44"
                   onClick={() => (seat ? undefined : sitInSeat(index))}
                   style={{
                     left: `${position.x}%`,
@@ -701,40 +747,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           ) : null}
         </div>
       </section>
-
-      <aside className="space-y-4">
-        <div className="rounded-lg border bg-card p-4">
-          <div className="mb-3 flex items-center gap-2 font-semibold">
-            <Users className="h-4 w-4" />
-            Players
-          </div>
-          <div className="space-y-2">
-            {state?.seats.map((seat, index) =>
-              seat ? (
-                <div
-                  className="flex items-center justify-between rounded border p-2 text-sm"
-                  key={`player-seat-${index + 1}`}
-                >
-                  <span>{seat.name}</span>
-                  <span>{chip(seat.stack)}</span>
-                </div>
-              ) : null
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-lg border bg-card p-4">
-          <div className="mb-3 font-semibold">Hand Log</div>
-          <div className="max-h-80 space-y-1 overflow-auto text-muted-foreground text-sm">
-            {state?.actionLog
-              .map((entry, index) => ({ entry, key: `${index + 1}-${entry}` }))
-              .reverse()
-              .map((item) => (
-                <p key={item.key}>{item.entry}</p>
-              ))}
-          </div>
-        </div>
-      </aside>
     </div>
   );
 }

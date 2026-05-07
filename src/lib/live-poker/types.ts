@@ -33,6 +33,21 @@ export type LivePokerPhase =
   | "river"
   | "showdown";
 
+export type LivePokerStreetActionType =
+  | "allIn"
+  | "bet"
+  | "bigBlind"
+  | "call"
+  | "check"
+  | "fold"
+  | "raise"
+  | "smallBlind";
+
+export interface LivePokerStreetAction {
+  amount: number;
+  type: LivePokerStreetActionType;
+}
+
 export interface LivePokerAuthToken {
   exp: number;
   tableId: string;
@@ -56,6 +71,7 @@ export interface LivePokerSeat {
   seatIndex: number;
   sitOut: boolean;
   stack: number;
+  streetAction?: LivePokerStreetAction;
   userId: string;
 }
 
@@ -180,6 +196,7 @@ export function toPublicState(
         seatIndex: seat.seatIndex,
         sitOut: seat.sitOut,
         stack: seat.stack,
+        streetAction: seat.streetAction,
       };
     }),
     smallBlind: state.smallBlind,

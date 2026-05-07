@@ -52,6 +52,7 @@ function resetStreet(state: LivePokerState) {
     if (seat) {
       seat.bet = 0;
       seat.hasActedThisStreet = false;
+      seat.streetAction = undefined;
     }
   }
 }
@@ -195,6 +196,7 @@ export function seatPlayer(
     seatIndex,
     sitOut: false,
     stack: player.buyIn,
+    streetAction: undefined,
     userId: player.userId,
   };
   state.actionLog.push(`${player.name} sat in seat ${seatIndex + 1}`);
@@ -260,6 +262,7 @@ export function startHand(state: LivePokerState) {
       seat.folded = false;
       seat.hasActedThisStreet = false;
       seat.isAllIn = false;
+      seat.streetAction = undefined;
     }
   }
 
@@ -311,6 +314,14 @@ export function startHand(state: LivePokerState) {
   const bigBlindSeat = state.seats[bigBlindSeatIndex] as LivePokerSeat;
   const postedSmallBlind = postBlind(smallBlindSeat, state.smallBlind);
   const postedBigBlind = postBlind(bigBlindSeat, state.bigBlind);
+  smallBlindSeat.streetAction = {
+    amount: smallBlindSeat.bet,
+    type: "smallBlind",
+  };
+  bigBlindSeat.streetAction = {
+    amount: bigBlindSeat.bet,
+    type: "bigBlind",
+  };
   state.currentBet = postedBigBlind;
   state.activeSeatIndex =
     firstActionSeat(state, bigBlindSeatIndex) ?? bigBlindSeatIndex;
@@ -346,16 +357,19 @@ export function applyAction(
   if (action.type === "fold") {
     seat.folded = true;
     seat.hasActedThisStreet = true;
+    seat.streetAction = { amount: seat.bet, type: "fold" };
     state.actionLog.push(`${seat.name} folded`);
   } else if (action.type === "check") {
     if (callAmount > 0) {
       throw new Error("Cannot check while facing a bet");
     }
     seat.hasActedThisStreet = true;
+    seat.streetAction = { amount: seat.bet, type: "check" };
     state.actionLog.push(`${seat.name} checked`);
   } else if (action.type === "call") {
     const paid = postBlind(seat, callAmount);
     seat.hasActedThisStreet = true;
+    seat.streetAction = { amount: seat.bet, type: "call" };
     state.actionLog.push(`${seat.name} called ${paid}`);
   } else if (action.type === "bet" || action.type === "raise") {
     const targetBet = action.amount;
@@ -377,6 +391,7 @@ export function applyAction(
     for (const otherSeat of handSeats(state)) {
       otherSeat.hasActedThisStreet = otherSeat.seatIndex === seatIndex;
     }
+    seat.streetAction = { amount: seat.bet, type: action.type };
     state.actionLog.push(
       `${seat.name} ${action.type === "bet" ? "bet" : "raised to"} ${seat.bet}`
     );
@@ -392,6 +407,7 @@ export function applyAction(
       state.lastAggressorSeatIndex = seatIndex;
     }
     seat.hasActedThisStreet = true;
+    seat.streetAction = { amount: seat.bet, type: "allIn" };
     state.actionLog.push(`${seat.name} moved all in for ${paid}`);
   }
 
