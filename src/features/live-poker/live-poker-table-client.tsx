@@ -1,6 +1,13 @@
 "use client";
 
-import { CircleDollarSign, Loader2, Play, Power } from "lucide-react";
+import {
+  CircleDollarSign,
+  Loader2,
+  Minus,
+  Play,
+  Plus,
+  Power,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -25,7 +32,7 @@ const Card = dynamic(
 const tableStageStyle = {
   background:
     "radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.12), transparent 34%), linear-gradient(145deg, #18181b, #050505)",
-  minHeight: 620,
+  minHeight: 660,
 } satisfies CSSProperties;
 
 const tableVignetteStyle = {
@@ -220,6 +227,30 @@ function chip(value: number) {
     maximumFractionDigits: 2,
     minimumFractionDigits: value % 1 === 0 ? 0 : 2,
   });
+}
+
+function getBetTargetBounds(
+  state: PublicLivePokerState,
+  seat: PublicLivePokerSeat
+) {
+  const maxTarget = seat.bet + seat.stack;
+  const minRaiseTarget =
+    state.currentBet === 0 ? state.bigBlind : state.currentBet + state.minRaise;
+
+  return {
+    maxTarget,
+    minTarget: Math.min(minRaiseTarget, maxTarget),
+  };
+}
+
+function getPresetBetTarget(
+  multiplier: number,
+  state: PublicLivePokerState,
+  seat: PublicLivePokerSeat
+) {
+  const baseline = state.currentBet > 0 ? state.currentBet : state.bigBlind;
+  const { maxTarget, minTarget } = getBetTargetBounds(state, seat);
+  return clamp(baseline * multiplier, minTarget, maxTarget);
 }
 
 function getSeatPosition(index: number, seatCount: number) {
@@ -451,13 +482,153 @@ function TableSeatMarkers({
   );
 }
 
+function BettingControlsOverlay({
+  amount,
+  callAmount,
+  currentSeat,
+  onAmountChange,
+  onSend,
+  state,
+}: {
+  amount: number;
+  callAmount: number;
+  currentSeat: PublicLivePokerSeat;
+  onAmountChange: (amount: number) => void;
+  onSend: (message: LivePokerClientMessage) => void;
+  state: PublicLivePokerState;
+}) {
+  const { maxTarget, minTarget } = getBetTargetBounds(state, currentSeat);
+  const step = Math.max(1, state.bigBlind || 1);
+  const hasCallAmount = callAmount > 0;
+  const clampedAmount = clamp(amount, minTarget, maxTarget);
+  const actionLabel = state.currentBet > 0 ? "Raise" : "Bet";
+
+  function setTarget(nextAmount: number) {
+    onAmountChange(clamp(nextAmount, minTarget, maxTarget));
+  }
+
+  function submitBetOrRaise() {
+    if (clampedAmount >= maxTarget) {
+      onSend({ type: "allIn" });
+      return;
+    }
+
+    onSend({
+      amount: clampedAmount,
+      type: state.currentBet > 0 ? "raise" : "bet",
+    });
+  }
+
+  return (
+    <div className="absolute right-3 bottom-[-6.25rem] left-3 z-40 flex justify-center sm:right-6 sm:left-6">
+      <div className="flex w-full max-w-3xl flex-col gap-1.5 rounded-lg border border-white/10 bg-zinc-950/90 p-2 text-white shadow-2xl backdrop-blur-md md:flex-row md:items-stretch">
+        <div className="grid grid-cols-3 gap-1 md:w-64">
+          <Button
+            className="h-9 border-white/10 bg-zinc-900/90 text-white hover:bg-zinc-800"
+            onClick={() => onSend({ type: "fold" })}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Fold
+          </Button>
+          <Button
+            className="h-9 border-white/10 bg-zinc-900/90 text-white hover:bg-zinc-800"
+            disabled={hasCallAmount}
+            onClick={() => onSend({ type: "check" })}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Check
+          </Button>
+          <Button
+            className="h-9 bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+            disabled={!hasCallAmount}
+            onClick={() => onSend({ type: "call" })}
+            size="sm"
+            type="button"
+          >
+            Call {chip(Math.max(0, callAmount))}
+          </Button>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="grid grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-zinc-900/80">
+            {[2, 3, 4].map((multiplier) => (
+              <button
+                className="h-8 border-white/10 border-r font-semibold text-sm text-zinc-200 transition-colors hover:bg-white/10"
+                key={multiplier}
+                onClick={() =>
+                  setTarget(
+                    getPresetBetTarget(multiplier, state, currentSeat)
+                  )
+                }
+                type="button"
+              >
+                {multiplier}x
+              </button>
+            ))}
+            <button
+              className="h-8 font-semibold text-sm text-zinc-200 transition-colors hover:bg-white/10"
+              onClick={() => setTarget(maxTarget)}
+              type="button"
+            >
+              All-In
+            </button>
+          </div>
+
+          <div className="mt-1.5 grid grid-cols-[auto_minmax(7rem,1fr)_auto_auto_auto] items-center gap-2">
+            <button
+              aria-label="Decrease bet"
+              className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
+              onClick={() => setTarget(clampedAmount - step)}
+              type="button"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <input
+              className="h-2 min-w-0 accent-emerald-400"
+              max={maxTarget}
+              min={minTarget}
+              onChange={(event) => setTarget(Number(event.target.value))}
+              step={step}
+              type="range"
+              value={clampedAmount}
+            />
+            <button
+              aria-label="Increase bet"
+              className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
+              onClick={() => setTarget(clampedAmount + step)}
+              type="button"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <div className="flex h-8 min-w-24 items-center justify-center rounded-md bg-black px-3 font-bold text-white shadow-inner ring-1 ring-white/10">
+              {chip(clampedAmount)}
+            </div>
+            <Button
+              className="h-8 bg-emerald-500 px-5 text-zinc-950 hover:bg-emerald-400"
+              disabled={maxTarget <= 0}
+              onClick={submitBetOrRaise}
+              type="button"
+            >
+              {clampedAmount >= maxTarget ? "All In" : actionLabel}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component owns the socket lifecycle and compact v1 table controls.
 export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const socketRef = useRef<WebSocket | null>(null);
   const [buyIn, setBuyIn] = useState("100");
+  const [betTargetAmount, setBetTargetAmount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
-  const [raiseAmount, setRaiseAmount] = useState("");
   const [state, setState] = useState<PublicLivePokerState | null>(null);
 
   const send = useCallback((message: LivePokerClientMessage) => {
@@ -573,6 +744,20 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const canAct =
     Boolean(currentSeat && state?.activeSeatIndex === currentSeat.seatIndex) &&
     state?.phase !== "waiting";
+  const betTargetBounds =
+    state && currentSeat ? getBetTargetBounds(state, currentSeat) : null;
+  const betTargetMin = betTargetBounds?.minTarget ?? 0;
+  const betTargetResetKey = [
+    currentSeat?.bet,
+    currentSeat?.seatIndex,
+    currentSeat?.stack,
+    state?.activeSeatIndex,
+    state?.bigBlind,
+    state?.currentBet,
+    state?.handNumber,
+    state?.minRaise,
+    state?.phase,
+  ].join(":");
   const nextStack = Number(buyIn) + (currentSeat?.stack ?? 0);
   const canAddChips =
     Boolean(currentSeat && state?.phase === "waiting") &&
@@ -599,6 +784,15 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     }
     return amounts;
   }, [state?.lastWinners]);
+
+  useEffect(() => {
+    if (!(canAct && betTargetResetKey)) {
+      return;
+    }
+
+    setBetTargetAmount(betTargetMin);
+  }, [betTargetMin, betTargetResetKey, canAct]);
+
   function sitInSeat(seatIndex: number) {
     if (!state) {
       return;
@@ -643,7 +837,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         </div>
 
         <div
-          className="relative mx-auto mb-6 max-w-7xl overflow-hidden rounded-lg border border-white/10 bg-zinc-950 px-8 py-20 shadow-2xl sm:px-16 sm:py-24 lg:px-24"
+          className="relative mx-auto mb-32 max-w-7xl overflow-visible rounded-lg border border-white/10 bg-zinc-950 px-8 py-20 shadow-2xl sm:px-16 sm:py-24 lg:px-24"
           style={tableStageStyle}
         >
           <div className="absolute inset-0" style={tableVignetteStyle} />
@@ -715,6 +909,17 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               </div>
             );
           })}
+
+          {state && currentSeat && canAct && betTargetBounds ? (
+            <BettingControlsOverlay
+              amount={betTargetAmount || betTargetBounds.minTarget}
+              callAmount={Math.max(0, callAmount)}
+              currentSeat={currentSeat}
+              onAmountChange={setBetTargetAmount}
+              onSend={send}
+              state={state}
+            />
+          ) : null}
         </div>
 
         <div className="rounded-lg bg-background p-3 text-foreground">
@@ -760,53 +965,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                   </Button>
                 </>
               ) : null}
-              <Button
-                disabled={!canAct}
-                onClick={() => send({ type: "fold" })}
-                variant="outline"
-              >
-                Fold
-              </Button>
-              <Button
-                disabled={!canAct || Number(callAmount) > 0}
-                onClick={() => send({ type: "check" })}
-                variant="outline"
-              >
-                Check
-              </Button>
-              <Button
-                disabled={!canAct || Number(callAmount) <= 0}
-                onClick={() => send({ type: "call" })}
-              >
-                Call {chip(Math.max(0, callAmount ?? 0))}
-              </Button>
-              <Input
-                className="w-28"
-                min={state?.bigBlind ?? 1}
-                onChange={(event) => setRaiseAmount(event.target.value)}
-                placeholder="Amount"
-                type="number"
-                value={raiseAmount}
-              />
-              <Button
-                disabled={!(canAct && raiseAmount)}
-                onClick={() =>
-                  send({
-                    amount: Number(raiseAmount),
-                    type: state?.currentBet ? "raise" : "bet",
-                  })
-                }
-                variant="outline"
-              >
-                {state?.currentBet ? "Raise" : "Bet"}
-              </Button>
-              <Button
-                disabled={!canAct}
-                onClick={() => send({ type: "allIn" })}
-                variant="destructive"
-              >
-                All In
-              </Button>
               <Button
                 onClick={() =>
                   send({ sitOut: !currentSeat.sitOut, type: "sitOut" })
