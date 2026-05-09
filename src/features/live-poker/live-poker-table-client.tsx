@@ -155,10 +155,10 @@ function getMarkerLayout(position: { x: number; y: number }) {
     return {
       bet: towardCenter(position, 0.48, 0, 1),
       cards: {
-        x: clamp(position.x, 14, 86),
-        y: clamp(position.y - 5, 8, 14),
+        x: clamp(position.x, 8, 92),
+        y: clamp(position.y - 8, 7, 92),
       },
-      cardsZIndex: 10,
+      cardsZIndex: 18,
       zone,
     };
   }
@@ -167,8 +167,8 @@ function getMarkerLayout(position: { x: number; y: number }) {
     return {
       bet: towardCenter(position, 0.5, 0, -3),
       cards: {
-        x: clamp(position.x, 14, 86),
-        y: clamp(position.y - 8, 73, 81),
+        x: clamp(position.x, 8, 92),
+        y: clamp(position.y - 8, 7, 92),
       },
       cardsZIndex: 18,
       zone,
@@ -177,8 +177,11 @@ function getMarkerLayout(position: { x: number; y: number }) {
 
   return {
     bet: towardCenter(position, 0.5, sideNudge, 0),
-    cards: towardCenter(position, 0.24, sideNudge * 0.5, 0),
-    cardsZIndex: 10,
+    cards: {
+      x: clamp(position.x, 8, 92),
+      y: clamp(position.y - 8, 7, 92),
+    },
+    cardsZIndex: 18,
     zone,
   };
 }
@@ -428,11 +431,7 @@ function TableSeatMarkers({
         {seat.cards?.map((card) => (
           <PlayingCard
             card={card}
-            className={`-mx-0.5 ${
-              markerLayout.zone === "bottom"
-                ? "first:translate-y-1.5 last:translate-y-0"
-                : "first:translate-y-1 last:-translate-y-1"
-            }`}
+            className="-mx-0.5 first:translate-y-1.5 last:translate-y-0"
             key={card}
             rotate={card === seat.cards?.[0] ? -7 : 7}
           />
@@ -440,23 +439,11 @@ function TableSeatMarkers({
         {!seat.cards && seat.hasCards ? (
           <>
             <PlayingCard
-              className={`-mx-0.5 ${
-                markerLayout.zone === "bottom"
-                  ? "translate-y-1.5"
-                  : "translate-y-1"
-              }`}
+              className="-mx-0.5 translate-y-1.5"
               hidden
               rotate={-7}
             />
-            <PlayingCard
-              className={`-mx-0.5 ${
-                markerLayout.zone === "bottom"
-                  ? "translate-y-0"
-                  : "-translate-y-1"
-              }`}
-              hidden
-              rotate={7}
-            />
+            <PlayingCard className="-mx-0.5 translate-y-0" hidden rotate={7} />
           </>
         ) : null}
       </div>
