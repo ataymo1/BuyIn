@@ -34,3 +34,41 @@ export function useCreateLivePokerTable() {
 export function useDeleteLivePokerTable() {
   return useMutation(api.live_poker.deleteLivePokerTable);
 }
+
+export function useCreateLivePokerBuyInRequest() {
+  return useMutation(api.live_poker.createLivePokerBuyInRequest);
+}
+
+export function usePendingLivePokerBuyInRequests(
+  tableId: Id<"livePokerTables"> | undefined,
+  userId: Id<"users"> | undefined
+) {
+  const requests = useQuery(
+    api.live_poker.getPendingLivePokerBuyInRequests,
+    tableId && userId ? { tableId, userId } : "skip"
+  );
+
+  return {
+    isLoading: requests === undefined && Boolean(tableId && userId),
+    requests: requests ?? [],
+  };
+}
+
+export function useUserLivePokerBuyInRequests(
+  tableId: Id<"livePokerTables"> | undefined,
+  userId: Id<"users"> | undefined
+) {
+  const requests = useQuery(
+    api.live_poker.getUserLivePokerBuyInRequests,
+    tableId && userId ? { tableId, userId } : "skip"
+  );
+
+  return {
+    isLoading: requests === undefined && Boolean(tableId && userId),
+    requests: requests ?? [],
+  };
+}
+
+export function useRespondToLivePokerBuyInRequest() {
+  return useMutation(api.live_poker.respondToLivePokerBuyInRequest);
+}

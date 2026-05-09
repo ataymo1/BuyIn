@@ -1,24 +1,35 @@
 "use client";
 
 import {
+  Check,
   CircleDollarSign,
   Loader2,
   Minus,
   Play,
   Plus,
   Power,
+  UserX,
+  X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConvexUser } from "@/lib/convex-hooks";
 import type {
   LivePokerClientMessage,
   LivePokerServerMessage,
   PublicLivePokerSeat,
   PublicLivePokerState,
 } from "@/lib/live-poker/types";
+import {
+  useCreateLivePokerBuyInRequest,
+  usePendingLivePokerBuyInRequests,
+  useRespondToLivePokerBuyInRequest,
+  useUserLivePokerBuyInRequests,
+} from "@/lib/live-poker-hooks";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 interface LivePokerTableClientProps {
   tableId: string;
@@ -560,9 +571,7 @@ function BettingControlsOverlay({
                 className="h-8 border-white/10 border-r font-semibold text-sm text-zinc-200 transition-colors hover:bg-white/10"
                 key={multiplier}
                 onClick={() =>
-                  setTarget(
-                    getPresetBetTarget(multiplier, state, currentSeat)
-                  )
+                  setTarget(getPresetBetTarget(multiplier, state, currentSeat))
                 }
                 type="button"
               >
@@ -622,14 +631,190 @@ function BettingControlsOverlay({
   );
 }
 
+interface LivePokerBuyInRequestRow {
+  _id: string;
+  amount: number;
+  id?: string;
+  player?: { name?: string };
+  requestedAt: number;
+  seatIndex?: number;
+  status: "APPROVED" | "CLAIMED" | "PENDING" | "REJECTED";
+  type: "ADD_ON" | "INITIAL";
+}
+
+function requestTypeLabel(type: LivePokerBuyInRequestRow["type"]) {
+  return type === "INITIAL" ? "Buy-in" : "Add-on";
+}
+
+function PendingBuyInRequestsPanel({
+  approvingId,
+  onApprove,
+  onReject,
+  rejectingId,
+  requests,
+}: {
+  approvingId: string | null;
+  onApprove: (requestId: string) => void;
+  onReject: (requestId: string) => void;
+  rejectingId: string | null;
+  requests: LivePokerBuyInRequestRow[];
+}) {
+  if (requests.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-300/40 bg-amber-50 p-3 text-amber-950">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <h2 className="font-semibold text-sm">Pending buy-ins</h2>
+          <p className="text-amber-800 text-xs">
+            Approve requests before players can claim chips.
+          </p>
+        </div>
+        <span className="rounded-md bg-amber-200 px-2 py-1 font-semibold text-xs">
+          {requests.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {requests.map((request) => (
+          <div
+            className="flex flex-col gap-2 rounded-md border border-amber-200 bg-white p-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+            key={request._id}
+          >
+            <div>
+              <p className="font-medium">
+                {request.player?.name ?? "Player"} requested{" "}
+                {chip(request.amount)}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {requestTypeLabel(request.type)}
+                {request.seatIndex !== undefined
+                  ? ` for seat ${request.seatIndex + 1}`
+                  : ""}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                disabled={
+                  approvingId === request._id || rejectingId === request._id
+                }
+                onClick={() => onReject(request._id)}
+                size="sm"
+                variant="outline"
+              >
+                {rejectingId === request._id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <X className="h-4 w-4" />
+                    Reject
+                  </>
+                )}
+              </Button>
+              <Button
+                disabled={
+                  approvingId === request._id || rejectingId === request._id
+                }
+                onClick={() => onApprove(request._id)}
+                size="sm"
+              >
+                {approvingId === request._id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Approve
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UserBuyInRequestStatus({
+  onClaim,
+  requests,
+  claimingId,
+}: {
+  claimingId: string | null;
+  onClaim: (requestId: string) => void;
+  requests: LivePokerBuyInRequestRow[];
+}) {
+  const visibleRequests = requests.slice(0, 3);
+  if (visibleRequests.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+      {visibleRequests.map((request) => (
+        <div
+          className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+          key={request._id}
+        >
+          <span>
+            {requestTypeLabel(request.type)} for {chip(request.amount)} is{" "}
+            <strong>{request.status.toLowerCase()}</strong>
+            {request.seatIndex !== undefined
+              ? ` for seat ${request.seatIndex + 1}`
+              : ""}
+          </span>
+          {request.status === "APPROVED" ? (
+            <Button
+              disabled={claimingId === request._id}
+              onClick={() => onClaim(request._id)}
+              size="sm"
+            >
+              {claimingId === request._id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Claim"
+              )}
+            </Button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component owns the socket lifecycle and compact v1 table controls.
 export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const socketRef = useRef<WebSocket | null>(null);
+  const { userId } = useConvexUser();
+  const tableConvexId = tableId as Id<"livePokerTables">;
+  const [playerId, setPlayerId] = useState<Id<"players"> | null>(null);
   const [buyIn, setBuyIn] = useState("100");
   const [betTargetAmount, setBetTargetAmount] = useState(0);
+  const [approvingRequestId, setApprovingRequestId] = useState<string | null>(
+    null
+  );
+  const [claimingRequestId, setClaimingRequestId] = useState<string | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
+  const [isRequestingBuyIn, setIsRequestingBuyIn] = useState(false);
+  const [kickingSeatIndex, setKickingSeatIndex] = useState<number | null>(null);
+  const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(
+    null
+  );
   const [state, setState] = useState<PublicLivePokerState | null>(null);
+  const createBuyInRequest = useCreateLivePokerBuyInRequest();
+  const respondToBuyInRequest = useRespondToLivePokerBuyInRequest();
+  const { requests: pendingBuyInRequests } = usePendingLivePokerBuyInRequests(
+    tableConvexId,
+    userId
+  );
+  const { requests: userBuyInRequests } = useUserLivePokerBuyInRequests(
+    tableConvexId,
+    userId
+  );
 
   const send = useCallback((message: LivePokerClientMessage) => {
     socketRef.current?.send(JSON.stringify(message));
@@ -662,8 +847,14 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           seatCount: number;
           smallBlind: number;
         };
+        player: {
+          id: Id<"players">;
+          name: string;
+        };
         token: string;
       };
+
+      setPlayerId(body.player.id);
 
       const workerUrl = new URL(
         `/live-poker/${encodeURIComponent(tableId)}`,
@@ -758,12 +949,16 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     state?.minRaise,
     state?.phase,
   ].join(":");
-  const nextStack = Number(buyIn) + (currentSeat?.stack ?? 0);
-  const canAddChips =
+  const canRequestAddOn =
     Boolean(currentSeat && state?.phase === "waiting") &&
     Number(buyIn) > 0 &&
-    nextStack >= (state?.minBuyIn ?? 0) &&
-    nextStack <= (state?.maxBuyIn ?? 0);
+    Number(buyIn) <= (state?.maxBuyIn ?? Number.POSITIVE_INFINITY) &&
+    !isRequestingBuyIn;
+  const canRequestInitialBuyIn =
+    Boolean(!currentSeat && state?.phase === "waiting") &&
+    Number(buyIn) >= (state?.minBuyIn ?? 0) &&
+    Number(buyIn) <= (state?.maxBuyIn ?? 0) &&
+    !isRequestingBuyIn;
   const canToggleReady = Boolean(
     state?.phase === "waiting" &&
       currentSeat &&
@@ -784,6 +979,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     }
     return amounts;
   }, [state?.lastWinners]);
+  const typedPendingBuyInRequests =
+    pendingBuyInRequests as LivePokerBuyInRequestRow[];
+  const typedUserBuyInRequests =
+    userBuyInRequests as LivePokerBuyInRequestRow[];
 
   useEffect(() => {
     if (!(canAct && betTargetResetKey)) {
@@ -793,8 +992,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     setBetTargetAmount(betTargetMin);
   }, [betTargetMin, betTargetResetKey, canAct]);
 
-  function sitInSeat(seatIndex: number) {
-    if (!state) {
+  async function requestInitialBuyIn(seatIndex: number) {
+    if (!(state && userId && playerId)) {
+      setError("Sign in with a player profile before requesting a seat");
       return;
     }
     const firstOpenSeat =
@@ -803,11 +1003,124 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
       setError("No open seats");
       return;
     }
-    send({
-      buyIn: Number(buyIn),
-      seatIndex: firstOpenSeat,
-      type: "sit",
-    });
+    if (!canRequestInitialBuyIn) {
+      setError(
+        `Buy-in must be between ${state.minBuyIn} and ${state.maxBuyIn}`
+      );
+      return;
+    }
+
+    setIsRequestingBuyIn(true);
+    setError(null);
+    try {
+      await createBuyInRequest({
+        amount: Number(buyIn),
+        playerId,
+        seatIndex: firstOpenSeat,
+        tableId: tableConvexId,
+        type: "INITIAL",
+        userId,
+      });
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to request buy-in"
+      );
+    } finally {
+      setIsRequestingBuyIn(false);
+    }
+  }
+
+  async function requestAddOn() {
+    if (!(userId && playerId && currentSeat)) {
+      setError("Take a seat before requesting chips");
+      return;
+    }
+    if (!canRequestAddOn) {
+      setError("Enter a valid chip amount");
+      return;
+    }
+
+    setIsRequestingBuyIn(true);
+    setError(null);
+    try {
+      await createBuyInRequest({
+        amount: Number(buyIn),
+        playerId,
+        tableId: tableConvexId,
+        type: "ADD_ON",
+        userId,
+      });
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to request chips"
+      );
+    } finally {
+      setIsRequestingBuyIn(false);
+    }
+  }
+
+  async function respondToRequest(
+    requestId: string,
+    status: "APPROVED" | "REJECTED"
+  ) {
+    if (!userId) {
+      return;
+    }
+    const setBusy =
+      status === "APPROVED" ? setApprovingRequestId : setRejectingRequestId;
+    setBusy(requestId);
+    setError(null);
+    try {
+      await respondToBuyInRequest({
+        requestId: requestId as Id<"livePokerBuyInRequests">,
+        status,
+        userId,
+      });
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to respond to buy-in request"
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function claimRequest(requestId: string) {
+    setClaimingRequestId(requestId);
+    setError(null);
+    try {
+      const response = await fetch("/api/live-poker/claim", {
+        body: JSON.stringify({ requestId }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(body?.error ?? "Unable to claim approved buy-in");
+      }
+      send({ type: "requestSync" });
+    } catch (claimError) {
+      setError(
+        claimError instanceof Error
+          ? claimError.message
+          : "Unable to claim approved buy-in"
+      );
+    } finally {
+      setClaimingRequestId(null);
+    }
+  }
+
+  function kickSeat(seatIndex: number) {
+    setKickingSeatIndex(null);
+    send({ seatIndex, type: "kickSeat" });
   }
 
   if (isConnecting && !state) {
@@ -893,7 +1206,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 />
                 <button
                   className="absolute z-20 w-32 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-30 hover:scale-105 focus:z-30 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-36"
-                  onClick={() => (seat ? undefined : sitInSeat(index))}
+                  onClick={() =>
+                    seat ? undefined : requestInitialBuyIn(index)
+                  }
                   style={{
                     left: `${position.x}%`,
                     top: `${position.y}%`,
@@ -906,6 +1221,30 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                     winAmount={winnerAmountsBySeat.get(index)}
                   />
                 </button>
+                {seat && state.isHost ? (
+                  <button
+                    aria-label={`Kick ${seat.name} from seat ${index + 1}`}
+                    className="absolute z-30 flex h-7 w-7 -translate-x-1/2 translate-y-5 items-center justify-center rounded-md bg-red-600 text-white shadow-lg ring-1 ring-white/20 transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-zinc-700"
+                    disabled={state.phase !== "waiting"}
+                    onClick={() =>
+                      kickingSeatIndex === index
+                        ? kickSeat(index)
+                        : setKickingSeatIndex(index)
+                    }
+                    style={{
+                      left: `${position.x}%`,
+                      top: `${position.y}%`,
+                    }}
+                    title={
+                      kickingSeatIndex === index
+                        ? "Click again to confirm"
+                        : "Kick seat"
+                    }
+                    type="button"
+                  >
+                    <UserX className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </div>
             );
           })}
@@ -922,7 +1261,16 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           ) : null}
         </div>
 
-        <div className="rounded-lg bg-background p-3 text-foreground">
+        <div className="space-y-3 rounded-lg bg-background p-3 text-foreground">
+          {state?.isHost ? (
+            <PendingBuyInRequestsPanel
+              approvingId={approvingRequestId}
+              onApprove={(requestId) => respondToRequest(requestId, "APPROVED")}
+              onReject={(requestId) => respondToRequest(requestId, "REJECTED")}
+              rejectingId={rejectingRequestId}
+              requests={typedPendingBuyInRequests}
+            />
+          ) : null}
           {currentSeat ? (
             <div className="flex flex-wrap gap-2">
               {state?.isHost ? (
@@ -955,13 +1303,11 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                     value={buyIn}
                   />
                   <Button
-                    disabled={!canAddChips}
-                    onClick={() =>
-                      send({ amount: Number(buyIn), type: "addChips" })
-                    }
+                    disabled={!canRequestAddOn}
+                    onClick={requestAddOn}
                     variant="outline"
                   >
-                    Add Chips
+                    Request Chips
                   </Button>
                 </>
               ) : null}
@@ -985,11 +1331,19 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 type="number"
                 value={buyIn}
               />
-              <Button onClick={() => sitInSeat(-1)}>
-                Sit at first open seat
+              <Button
+                disabled={!canRequestInitialBuyIn}
+                onClick={() => requestInitialBuyIn(-1)}
+              >
+                Request first open seat
               </Button>
             </div>
           )}
+          <UserBuyInRequestStatus
+            claimingId={claimingRequestId}
+            onClaim={claimRequest}
+            requests={typedUserBuyInRequests}
+          />
           {error ? (
             <p className="mt-2 text-destructive text-sm">{error}</p>
           ) : null}

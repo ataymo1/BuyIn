@@ -47,6 +47,24 @@ type LivePokerActionMessage = Extract<
 
 const encoder = new TextEncoder();
 const LIVE_POKER_PATH_REGEX = /^\/live-poker\/([^/]+)$/;
+const LIVE_POKER_CLAIM_PATH_REGEX = /^\/live-poker\/([^/]+)\/claim$/;
+
+type LivePokerClaimRequest =
+  | {
+      amount: number;
+      playerId: string;
+      playerName: string;
+      seatIndex: number;
+      type: "INITIAL";
+      userId: string;
+    }
+  | {
+      amount: number;
+      playerId: string;
+      playerName: string;
+      type: "ADD_ON";
+      userId: string;
+    };
 
 function envString(env: Env, key: keyof Env) {
   const value = env[key];
@@ -92,15 +110,21 @@ function getTableIdFromPath(pathname: string) {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+function getClaimTableIdFromPath(pathname: string) {
+  const match = pathname.match(LIVE_POKER_CLAIM_PATH_REGEX);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const tableId = getTableIdFromPath(url.pathname);
+    const claimTableId = getClaimTableIdFromPath(url.pathname);
+    const tableId = claimTableId ?? getTableIdFromPath(url.pathname);
     if (!tableId) {
       return new Response("Not found", { status: 404 });
     }
 
-    if (request.headers.get("Upgrade") !== "websocket") {
+    if (!claimTableId && request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected WebSocket", { status: 400 });
     }
 
@@ -130,6 +154,10 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
     try {
       const url = new URL(request.url);
+      if (url.pathname.endsWith("/claim")) {
+        return await this.handleClaimRequest(request, url);
+      }
+
       const token = url.searchParams.get("token");
       if (!token) {
         throw new Error("Missing live poker token");
@@ -161,6 +189,38 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       return new Response(
         error instanceof Error ? error.message : "Unauthorized",
         { status: 401 }
+      );
+    }
+  }
+
+  private async handleClaimRequest(request: Request, url: URL) {
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const webhookSecret = envString(this.bindings, "LIVE_POKER_WEBHOOK_SECRET");
+    if (
+      !webhookSecret ||
+      request.headers.get("x-live-poker-secret") !== webhookSecret
+    ) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    await this.ensureState(url);
+
+    try {
+      const claim = (await request.json()) as LivePokerClaimRequest;
+      this.applyApprovedClaim(claim);
+      await this.persist();
+      this.broadcast();
+      return Response.json({ ok: true });
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Unable to claim buy-in",
+        },
+        { status: 409 }
       );
     }
   }
@@ -270,21 +330,33 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       return;
     }
 
-    if (message.type === "sit") {
-      seatPlayer(this.state, message.seatIndex, {
-        buyIn: message.buyIn,
-        name: auth.playerName,
-        playerId: auth.playerId,
-        userId: auth.userId,
-      });
+    if (message.type === "kickSeat") {
+      if (auth.userId !== this.state.hostUserId) {
+        throw new Error("Only the table creator can kick seats");
+      }
+      if (this.state.phase !== "waiting") {
+        throw new Error("Seats can only be kicked between hands");
+      }
+      const kickedSeat = this.state.seats[message.seatIndex];
+      if (!kickedSeat) {
+        throw new Error("Seat is already open");
+      }
+      this.state.seats[message.seatIndex] = null;
+      this.state.actionLog.push(
+        `${kickedSeat.name} was removed from seat ${message.seatIndex + 1}`
+      );
       return;
+    }
+
+    if (message.type === "sit") {
+      throw new Error("Request and claim an approved buy-in before sitting");
     }
 
     if (!seat) {
       throw new Error("Take a seat before acting");
     }
 
-    if (this.handleSeatedControlMessage(auth, seat, message)) {
+    if (this.handleSeatedControlMessage(seat, message)) {
       return;
     }
 
@@ -307,7 +379,6 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
   }
 
   private handleSeatedControlMessage(
-    auth: LivePokerAuthToken,
     seat: LivePokerSeat,
     message: LivePokerClientMessage
   ) {
@@ -316,8 +387,9 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     }
 
     if (message.type === "addChips") {
-      addChips(this.state, auth.userId, message.amount);
-      return true;
+      throw new Error(
+        "Request and claim an approved add-on before adding chips"
+      );
     }
 
     if (message.type === "leaveSeat") {
@@ -352,6 +424,27 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     }
 
     return false;
+  }
+
+  private applyApprovedClaim(claim: LivePokerClaimRequest) {
+    if (!this.state) {
+      throw new Error("Table is not ready");
+    }
+    if (this.state.phase !== "waiting") {
+      throw new Error("Approved buy-ins can be claimed between hands");
+    }
+
+    if (claim.type === "INITIAL") {
+      seatPlayer(this.state, claim.seatIndex, {
+        buyIn: claim.amount,
+        name: claim.playerName,
+        playerId: claim.playerId,
+        userId: claim.userId,
+      });
+      return;
+    }
+
+    addChips(this.state, claim.userId, claim.amount);
   }
 
   private async recordHand(

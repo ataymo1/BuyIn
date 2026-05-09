@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 
 const winnerValidator = v.object({
@@ -8,6 +10,11 @@ const winnerValidator = v.object({
   amount: v.number(),
   description: v.optional(v.string()),
 });
+
+const buyInRequestTypeValidator = v.union(
+  v.literal("INITIAL"),
+  v.literal("ADD_ON")
+);
 
 export const recordCompletedHand = mutation({
   args: {
@@ -67,6 +74,34 @@ function validateTableSettings(args: {
   if (args.minBuyIn < 0 || args.maxBuyIn < args.minBuyIn) {
     throw new Error("Max buy-in must be at least the min buy-in");
   }
+}
+
+async function getRequestDetails(
+  ctx: QueryCtx,
+  request: {
+    playerId: Id<"players">;
+    respondedById?: Id<"users">;
+    userId: Id<"users">;
+  }
+) {
+  const player = await ctx.db.get(request.playerId);
+  const user = await ctx.db.get(request.userId);
+  const respondedBy = request.respondedById
+    ? await ctx.db.get(request.respondedById)
+    : null;
+
+  return {
+    player: {
+      id: request.playerId,
+      name: player?.name ?? user?.name ?? user?.email ?? "Player",
+    },
+    respondedBy: respondedBy
+      ? {
+          id: request.respondedById,
+          name: respondedBy.name ?? respondedBy.email ?? "Host",
+        }
+      : null,
+  };
 }
 
 export const createLivePokerTable = mutation({
@@ -202,6 +237,234 @@ export const getLivePokerAccess = query({
   },
 });
 
+export const createLivePokerBuyInRequest = mutation({
+  args: {
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+    playerId: v.id("players"),
+    seatIndex: v.optional(v.number()),
+    amount: v.number(),
+    type: buyInRequestTypeValidator,
+  },
+  handler: async (ctx, args) => {
+    const table = await ctx.db.get(args.tableId);
+    if (!table || table.status !== "OPEN") {
+      throw new Error("Table not found");
+    }
+
+    const player = await ctx.db.get(args.playerId);
+    if (!player || player.userId !== args.userId) {
+      throw new Error("Player profile does not match this user");
+    }
+
+    if (args.amount <= 0) {
+      throw new Error("Buy-in amount must be positive");
+    }
+
+    if (args.type === "INITIAL") {
+      if (
+        args.seatIndex === undefined ||
+        args.seatIndex < 0 ||
+        args.seatIndex >= table.seatCount ||
+        !Number.isInteger(args.seatIndex)
+      ) {
+        throw new Error("Choose a valid seat");
+      }
+      if (args.amount < table.minBuyIn || args.amount > table.maxBuyIn) {
+        throw new Error(
+          `Buy-in must be between ${table.minBuyIn} and ${table.maxBuyIn}`
+        );
+      }
+    }
+
+    if (args.type === "ADD_ON" && args.amount > table.maxBuyIn) {
+      throw new Error(`Add-on cannot exceed ${table.maxBuyIn}`);
+    }
+
+    const pendingRequests = await ctx.db
+      .query("livePokerBuyInRequests")
+      .withIndex("by_tableId_userId", (q) =>
+        q.eq("tableId", args.tableId).eq("userId", args.userId)
+      )
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("type"), args.type),
+          q.eq(q.field("status"), "PENDING")
+        )
+      )
+      .collect();
+
+    if (pendingRequests.length > 0) {
+      throw new Error("You already have a request waiting for this table");
+    }
+
+    return await ctx.db.insert("livePokerBuyInRequests", {
+      tableId: args.tableId,
+      userId: args.userId,
+      playerId: args.playerId,
+      seatIndex: args.type === "INITIAL" ? args.seatIndex : undefined,
+      amount: args.amount,
+      type: args.type,
+      status: "PENDING",
+      requestedAt: Date.now(),
+    });
+  },
+});
+
+export const getPendingLivePokerBuyInRequests = query({
+  args: {
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const table = await ctx.db.get(args.tableId);
+    if (!table || table.createdById !== args.userId) {
+      return [];
+    }
+
+    const requests = await ctx.db
+      .query("livePokerBuyInRequests")
+      .withIndex("by_tableId_status", (q) =>
+        q.eq("tableId", args.tableId).eq("status", "PENDING")
+      )
+      .collect();
+
+    const rows = await Promise.all(
+      requests.map(async (request) => ({
+        ...request,
+        id: request._id,
+        ...(await getRequestDetails(ctx, request)),
+      }))
+    );
+
+    return rows.sort((a, b) => a.requestedAt - b.requestedAt);
+  },
+});
+
+export const getUserLivePokerBuyInRequests = query({
+  args: {
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const requests = await ctx.db
+      .query("livePokerBuyInRequests")
+      .withIndex("by_tableId_userId", (q) =>
+        q.eq("tableId", args.tableId).eq("userId", args.userId)
+      )
+      .collect();
+
+    const visibleRequests = requests.filter((request) =>
+      ["PENDING", "APPROVED", "REJECTED"].includes(request.status)
+    );
+    const rows = await Promise.all(
+      visibleRequests.map(async (request) => ({
+        ...request,
+        id: request._id,
+        ...(await getRequestDetails(ctx, request)),
+      }))
+    );
+
+    return rows.sort((a, b) => b.requestedAt - a.requestedAt);
+  },
+});
+
+export const getLivePokerBuyInRequestForClaim = query({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (
+      !request ||
+      request.userId !== args.userId ||
+      request.status !== "APPROVED"
+    ) {
+      return null;
+    }
+
+    const table = await ctx.db.get(request.tableId);
+    if (!table || table.status !== "OPEN") {
+      return null;
+    }
+
+    return {
+      ...request,
+      id: request._id,
+      table: {
+        id: table._id,
+        bigBlind: table.bigBlind,
+        createdById: table.createdById,
+        maxBuyIn: table.maxBuyIn,
+        minBuyIn: table.minBuyIn,
+        seatCount: table.seatCount,
+        smallBlind: table.smallBlind,
+      },
+    };
+  },
+});
+
+export const respondToLivePokerBuyInRequest = mutation({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    userId: v.id("users"),
+    status: v.union(v.literal("APPROVED"), v.literal("REJECTED")),
+  },
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+
+    const table = await ctx.db.get(request.tableId);
+    if (!table) {
+      throw new Error("Table not found");
+    }
+    if (table.createdById !== args.userId) {
+      throw new Error("Only the table creator can respond to buy-ins");
+    }
+    if (request.status !== "PENDING") {
+      throw new Error("Request is not pending");
+    }
+
+    await ctx.db.patch(args.requestId, {
+      status: args.status,
+      respondedAt: Date.now(),
+      respondedById: args.userId,
+    });
+
+    return await ctx.db.get(args.requestId);
+  },
+});
+
+export const markLivePokerBuyInRequestClaimed = mutation({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+    if (request.userId !== args.userId) {
+      throw new Error("Only the requester can claim this buy-in");
+    }
+    if (request.status !== "APPROVED") {
+      throw new Error("Request is not approved");
+    }
+
+    await ctx.db.patch(args.requestId, {
+      status: "CLAIMED",
+      claimedAt: Date.now(),
+      claimedById: args.userId,
+    });
+
+    return await ctx.db.get(args.requestId);
+  },
+});
+
 export const updateLivePokerStatus = mutation({
   args: {
     tableId: v.id("livePokerTables"),
@@ -252,6 +515,15 @@ export const deleteLivePokerTable = mutation({
 
     for (const tablePlayer of tablePlayers) {
       await ctx.db.delete(tablePlayer._id);
+    }
+
+    const buyInRequests = await ctx.db
+      .query("livePokerBuyInRequests")
+      .withIndex("by_tableId", (q) => q.eq("tableId", args.tableId))
+      .collect();
+
+    for (const buyInRequest of buyInRequests) {
+      await ctx.db.delete(buyInRequest._id);
     }
 
     const hands = await ctx.db

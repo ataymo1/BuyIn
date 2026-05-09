@@ -190,6 +190,30 @@ export default defineSchema({
     .index("by_playerId", ["playerId"])
     .index("by_tableId_playerId", ["tableId", "playerId"]),
 
+  livePokerBuyInRequests: defineTable({
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+    playerId: v.id("players"),
+    seatIndex: v.optional(v.number()),
+    amount: v.number(),
+    type: v.union(v.literal("INITIAL"), v.literal("ADD_ON")),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("APPROVED"),
+      v.literal("REJECTED"),
+      v.literal("CLAIMED")
+    ),
+    requestedAt: v.number(),
+    respondedAt: v.optional(v.number()),
+    respondedById: v.optional(v.id("users")),
+    claimedAt: v.optional(v.number()),
+    claimedById: v.optional(v.id("users")),
+  })
+    .index("by_tableId", ["tableId"])
+    .index("by_tableId_status", ["tableId", "status"])
+    .index("by_tableId_userId", ["tableId", "userId"])
+    .index("by_userId_status", ["userId", "status"]),
+
   livePokerHands: defineTable({
     gameId: v.optional(v.id("games")),
     tableId: v.optional(v.id("livePokerTables")),
