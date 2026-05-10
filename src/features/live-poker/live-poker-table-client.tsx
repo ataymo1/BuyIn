@@ -4,6 +4,7 @@ import {
   Check,
   CircleDollarSign,
   Loader2,
+  LogOut,
   Minus,
   Play,
   Plus,
@@ -1196,7 +1197,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                     winAmount={winnerAmountsBySeat.get(index)}
                   />
                 </button>
-                {seat && state.isHost ? (
+                {seat && state.isHost && !seat.isCurrentUser ? (
                   <button
                     aria-label={`Kick ${seat.name} from seat ${index + 1}`}
                     className="absolute z-30 flex h-7 w-7 -translate-x-1/2 translate-y-5 items-center justify-center rounded-md bg-red-600 text-white shadow-lg ring-1 ring-white/20 transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-zinc-700"
@@ -1294,6 +1295,14 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               >
                 <Power className="h-4 w-4" />
                 {currentSeat.sitOut ? "Return" : "Sit out"}
+              </Button>
+              <Button
+                disabled={state?.phase !== "waiting"}
+                onClick={() => send({ type: "leaveSeat" })}
+                variant="outline"
+              >
+                <LogOut className="h-4 w-4" />
+                Leave Table
               </Button>
             </div>
           ) : (
