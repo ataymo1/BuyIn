@@ -669,7 +669,7 @@ function PendingBuyInRequestsPanel({
         <div>
           <h2 className="font-semibold text-sm">Pending buy-ins</h2>
           <p className="text-amber-800 text-xs">
-            Approve requests before players can claim chips.
+            Approving seats the player or adds chips immediately.
           </p>
         </div>
         <span className="rounded-md bg-amber-200 px-2 py-1 font-semibold text-xs">
@@ -686,12 +686,6 @@ function PendingBuyInRequestsPanel({
               <p className="font-medium">
                 {request.player?.name ?? "Player"} requested{" "}
                 {chip(request.amount)}
-              </p>
-              <p className="text-muted-foreground text-xs">
-                {requestTypeLabel(request.type)}
-                {request.seatIndex !== undefined
-                  ? ` for seat ${request.seatIndex + 1}`
-                  : ""}
               </p>
             </div>
             <div className="flex gap-2">
@@ -737,12 +731,8 @@ function PendingBuyInRequestsPanel({
 }
 
 function UserBuyInRequestStatus({
-  onClaim,
   requests,
-  claimingId,
 }: {
-  claimingId: string | null;
-  onClaim: (requestId: string) => void;
   requests: LivePokerBuyInRequestRow[];
 }) {
   const visibleRequests = requests.slice(0, 3);
@@ -764,19 +754,6 @@ function UserBuyInRequestStatus({
               ? ` for seat ${request.seatIndex + 1}`
               : ""}
           </span>
-          {request.status === "APPROVED" ? (
-            <Button
-              disabled={claimingId === request._id}
-              onClick={() => onClaim(request._id)}
-              size="sm"
-            >
-              {claimingId === request._id ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Claim"
-              )}
-            </Button>
-          ) : null}
         </div>
       ))}
     </div>
@@ -792,9 +769,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const [buyIn, setBuyIn] = useState("100");
   const [betTargetAmount, setBetTargetAmount] = useState(0);
   const [approvingRequestId, setApprovingRequestId] = useState<string | null>(
-    null
-  );
-  const [claimingRequestId, setClaimingRequestId] = useState<string | null>(
     null
   );
   const [error, setError] = useState<string | null>(null);
@@ -1013,7 +987,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     setIsRequestingBuyIn(true);
     setError(null);
     try {
-      await createBuyInRequest({
+      const requestId = await createBuyInRequest({
         amount: Number(buyIn),
         playerId,
         seatIndex: firstOpenSeat,
@@ -1021,6 +995,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         type: "INITIAL",
         userId,
       });
+      if (state.isHost) {
+        await approveBuyInRequest(String(requestId));
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -1045,13 +1022,16 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     setIsRequestingBuyIn(true);
     setError(null);
     try {
-      await createBuyInRequest({
+      const requestId = await createBuyInRequest({
         amount: Number(buyIn),
         playerId,
         tableId: tableConvexId,
         type: "ADD_ON",
         userId,
       });
+      if (state?.isHost) {
+        await approveBuyInRequest(String(requestId));
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -1063,39 +1043,11 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     }
   }
 
-  async function respondToRequest(
-    requestId: string,
-    status: "APPROVED" | "REJECTED"
-  ) {
-    if (!userId) {
-      return;
-    }
-    const setBusy =
-      status === "APPROVED" ? setApprovingRequestId : setRejectingRequestId;
-    setBusy(requestId);
+  async function approveBuyInRequest(requestId: string) {
+    setApprovingRequestId(requestId);
     setError(null);
     try {
-      await respondToBuyInRequest({
-        requestId: requestId as Id<"livePokerBuyInRequests">,
-        status,
-        userId,
-      });
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to respond to buy-in request"
-      );
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function claimRequest(requestId: string) {
-    setClaimingRequestId(requestId);
-    setError(null);
-    try {
-      const response = await fetch("/api/live-poker/claim", {
+      const response = await fetch("/api/live-poker/respond-buy-in", {
         body: JSON.stringify({ requestId }),
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -1104,17 +1056,40 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         const body = (await response.json().catch(() => null)) as {
           error?: string;
         } | null;
-        throw new Error(body?.error ?? "Unable to claim approved buy-in");
+        throw new Error(body?.error ?? "Unable to approve buy-in request");
       }
       send({ type: "requestSync" });
-    } catch (claimError) {
+    } catch (requestError) {
       setError(
-        claimError instanceof Error
-          ? claimError.message
-          : "Unable to claim approved buy-in"
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to approve buy-in request"
       );
     } finally {
-      setClaimingRequestId(null);
+      setApprovingRequestId(null);
+    }
+  }
+
+  async function rejectBuyInRequest(requestId: string) {
+    if (!userId) {
+      return;
+    }
+    setRejectingRequestId(requestId);
+    setError(null);
+    try {
+      await respondToBuyInRequest({
+        requestId: requestId as Id<"livePokerBuyInRequests">,
+        status: "REJECTED",
+        userId,
+      });
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to reject buy-in request"
+      );
+    } finally {
+      setRejectingRequestId(null);
     }
   }
 
@@ -1265,8 +1240,8 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           {state?.isHost ? (
             <PendingBuyInRequestsPanel
               approvingId={approvingRequestId}
-              onApprove={(requestId) => respondToRequest(requestId, "APPROVED")}
-              onReject={(requestId) => respondToRequest(requestId, "REJECTED")}
+              onApprove={approveBuyInRequest}
+              onReject={rejectBuyInRequest}
               rejectingId={rejectingRequestId}
               requests={typedPendingBuyInRequests}
             />
@@ -1339,11 +1314,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               </Button>
             </div>
           )}
-          <UserBuyInRequestStatus
-            claimingId={claimingRequestId}
-            onClaim={claimRequest}
-            requests={typedUserBuyInRequests}
-          />
+          <UserBuyInRequestStatus requests={typedUserBuyInRequests} />
           {error ? (
             <p className="mt-2 text-destructive text-sm">{error}</p>
           ) : null}

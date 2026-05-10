@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   const buyInRequest = await convex.query(
-    api.live_poker.getLivePokerBuyInRequestForClaim,
+    api.live_poker.getLivePokerBuyInRequestForApproval,
     {
       requestId: body.requestId as Id<"livePokerBuyInRequests">,
       userId: user._id,
@@ -44,24 +44,14 @@ export async function POST(request: Request) {
   );
   if (!buyInRequest) {
     return NextResponse.json(
-      { error: "Approved buy-in request not found" },
+      { error: "Pending buy-in request not found" },
       { status: 404 }
-    );
-  }
-
-  const player = await convex.query(api.players.getPlayerByUserId, {
-    userId: user._id,
-  });
-  if (!player || player._id !== buyInRequest.playerId) {
-    return NextResponse.json(
-      { error: "Player profile does not match this request" },
-      { status: 403 }
     );
   }
 
   const workerResult = await applyLivePokerBuyInRequest({
     ...buyInRequest,
-    playerName: player.name,
+    playerName: buyInRequest.playerName,
   });
   if (!("ok" in workerResult)) {
     return NextResponse.json(
@@ -70,10 +60,13 @@ export async function POST(request: Request) {
     );
   }
 
-  await convex.mutation(api.live_poker.markLivePokerBuyInRequestClaimed, {
-    requestId: body.requestId as Id<"livePokerBuyInRequests">,
-    userId: user._id,
-  });
+  await convex.mutation(
+    api.live_poker.approveAndMarkLivePokerBuyInRequestClaimed,
+    {
+      requestId: body.requestId as Id<"livePokerBuyInRequests">,
+      userId: user._id,
+    }
+  );
 
   return NextResponse.json({ ok: true });
 }

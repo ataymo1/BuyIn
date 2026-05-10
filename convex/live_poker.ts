@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 
 const winnerValidator = v.object({
@@ -102,6 +102,28 @@ async function getRequestDetails(
         }
       : null,
   };
+}
+
+async function handleExistingPendingBuyInRequest(
+  ctx: MutationCtx,
+  args: {
+    amount: number;
+    pendingRequestId?: Id<"livePokerBuyInRequests">;
+    seatIndex?: number;
+    type: "ADD_ON" | "INITIAL";
+  }
+) {
+  if (!args.pendingRequestId) {
+    return null;
+  }
+
+  await ctx.db.patch(args.pendingRequestId, {
+    amount: args.amount,
+    requestedAt: Date.now(),
+    seatIndex: args.type === "INITIAL" ? args.seatIndex : undefined,
+  });
+
+  return args.pendingRequestId;
 }
 
 export const createLivePokerTable = mutation({
@@ -294,9 +316,17 @@ export const createLivePokerBuyInRequest = mutation({
       )
       .collect();
 
-    if (pendingRequests.length > 0) {
-      throw new Error("You already have a request waiting for this table");
+    const existingRequestId = await handleExistingPendingBuyInRequest(ctx, {
+      amount: args.amount,
+      pendingRequestId: pendingRequests[0]?._id,
+      seatIndex: args.seatIndex,
+      type: args.type,
+    });
+    if (existingRequestId) {
+      return existingRequestId;
     }
+
+    const now = Date.now();
 
     return await ctx.db.insert("livePokerBuyInRequests", {
       tableId: args.tableId,
@@ -306,7 +336,7 @@ export const createLivePokerBuyInRequest = mutation({
       amount: args.amount,
       type: args.type,
       status: "PENDING",
-      requestedAt: Date.now(),
+      requestedAt: now,
     });
   },
 });
@@ -405,11 +435,51 @@ export const getLivePokerBuyInRequestForClaim = query({
   },
 });
 
+export const getLivePokerBuyInRequestForApproval = query({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request || request.status !== "PENDING") {
+      return null;
+    }
+
+    const table = await ctx.db.get(request.tableId);
+    if (
+      !table ||
+      table.status !== "OPEN" ||
+      table.createdById !== args.userId
+    ) {
+      return null;
+    }
+
+    const player = await ctx.db.get(request.playerId);
+    const user = await ctx.db.get(request.userId);
+
+    return {
+      ...request,
+      id: request._id,
+      playerName: player?.name ?? user?.name ?? user?.email ?? "Player",
+      table: {
+        id: table._id,
+        bigBlind: table.bigBlind,
+        createdById: table.createdById,
+        maxBuyIn: table.maxBuyIn,
+        minBuyIn: table.minBuyIn,
+        seatCount: table.seatCount,
+        smallBlind: table.smallBlind,
+      },
+    };
+  },
+});
+
 export const respondToLivePokerBuyInRequest = mutation({
   args: {
     requestId: v.id("livePokerBuyInRequests"),
     userId: v.id("users"),
-    status: v.union(v.literal("APPROVED"), v.literal("REJECTED")),
+    status: v.literal("REJECTED"),
   },
   handler: async (ctx, args) => {
     const request = await ctx.db.get(args.requestId);
@@ -459,6 +529,41 @@ export const markLivePokerBuyInRequestClaimed = mutation({
       status: "CLAIMED",
       claimedAt: Date.now(),
       claimedById: args.userId,
+    });
+
+    return await ctx.db.get(args.requestId);
+  },
+});
+
+export const approveAndMarkLivePokerBuyInRequestClaimed = mutation({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+
+    const table = await ctx.db.get(request.tableId);
+    if (!table) {
+      throw new Error("Table not found");
+    }
+    if (table.createdById !== args.userId) {
+      throw new Error("Only the table creator can approve buy-ins");
+    }
+    if (request.status !== "PENDING") {
+      throw new Error("Request is not pending");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.requestId, {
+      status: "CLAIMED",
+      respondedAt: now,
+      respondedById: args.userId,
+      claimedAt: now,
+      claimedById: request.userId,
     });
 
     return await ctx.db.get(args.requestId);
