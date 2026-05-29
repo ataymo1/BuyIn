@@ -52,6 +52,12 @@ const chartConfig = {
     label: "Net Profit",
     color: "hsl(var(--foreground))",
   },
+  positiveNetProfit: {
+    label: "Net Profit",
+  },
+  negativeNetProfit: {
+    label: "Net Profit",
+  },
   sessionProfit: {
     label: "Session",
   },
@@ -277,11 +283,13 @@ export function EarningsOverTimeChart({
                 strokeDasharray: "3 3",
               }}
               isAnimationActive={false}
+              payloadUniqBy={(entry) => entry.name}
             />
             <Area
               dataKey="positiveNetProfit"
               fill="url(#earningsPositiveFill)"
               isAnimationActive={false}
+              name="Net Profit"
               stroke="none"
               type="monotone"
             />
@@ -289,6 +297,7 @@ export function EarningsOverTimeChart({
               dataKey="negativeNetProfit"
               fill="url(#earningsNegativeFill)"
               isAnimationActive={false}
+              name="Net Profit"
               stroke="none"
               type="monotone"
             />
@@ -298,6 +307,7 @@ export function EarningsOverTimeChart({
               dot={false}
               isAnimationActive={false}
               legendType="none"
+              name="Session"
               stroke="transparent"
               strokeOpacity={0}
               strokeWidth={0}
@@ -319,6 +329,7 @@ export function EarningsOverTimeChart({
               dataKey="positiveNetProfit"
               dot={false}
               isAnimationActive={false}
+              name="Net Profit"
               stroke={positiveLineColor}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -341,6 +352,7 @@ export function EarningsOverTimeChart({
               dataKey="negativeNetProfit"
               dot={false}
               isAnimationActive={false}
+              name="Net Profit"
               stroke={negativeLineColor}
               strokeLinecap="round"
               strokeLinejoin="round"

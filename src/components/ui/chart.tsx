@@ -100,6 +100,24 @@ function getPayloadKey(item: TooltipPayloadItem) {
   return String(item.dataKey ?? item.name ?? item.value ?? item.color ?? "");
 }
 
+function getVisibleTooltipPayload(payload: TooltipPayloadItem[]) {
+  const seenKeys = new Set<string>();
+
+  return payload.filter((item) => {
+    if (item.value == null) {
+      return false;
+    }
+
+    const key = getPayloadKey(item);
+    if (seenKeys.has(key)) {
+      return false;
+    }
+
+    seenKeys.add(key);
+    return true;
+  });
+}
+
 export function ChartContainer({
   id,
   className,
@@ -181,11 +199,17 @@ export const ChartTooltipContent = forwardRef<
     return null;
   }
 
+  const visiblePayload = getVisibleTooltipPayload(payload);
+
+  if (visiblePayload.length === 0) {
+    return null;
+  }
+
   const renderedLabel = getTooltipLabel({
     hideLabel,
     label,
     labelFormatter,
-    payload,
+    payload: visiblePayload,
   });
 
   return (
@@ -200,7 +224,7 @@ export const ChartTooltipContent = forwardRef<
         <div className="font-medium text-foreground">{renderedLabel}</div>
       ) : null}
       <div className="grid gap-1">
-        {payload.map((item, index) => {
+        {visiblePayload.map((item, index) => {
           const key = getPayloadKey(item);
           const configItem = config[key];
           const itemName = String(configItem?.label ?? item.name ?? key);
@@ -211,7 +235,7 @@ export const ChartTooltipContent = forwardRef<
               itemName,
               item,
               index,
-              payload
+              visiblePayload
             );
             if (formatted == null) {
               return null;
