@@ -193,8 +193,8 @@ export function LivePokerLobbyClient() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete live poker table?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the table, hand history, and settled player records
-              for this live poker table. Only the table creator can do this.
+              This closes the table, settles every occupied seat, and prevents
+              anyone from reconnecting. Ledger and hand history are preserved.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

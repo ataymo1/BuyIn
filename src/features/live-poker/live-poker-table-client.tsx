@@ -1004,15 +1004,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           `/live-poker/${encodeURIComponent(tableId)}`,
           process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL ?? "ws://localhost:8787"
         );
-        workerUrl.searchParams.set("bigBlind", String(body.config.bigBlind));
-        workerUrl.searchParams.set("hostUserId", body.config.createdById);
-        workerUrl.searchParams.set("maxBuyIn", String(body.config.maxBuyIn));
-        workerUrl.searchParams.set("minBuyIn", String(body.config.minBuyIn));
-        workerUrl.searchParams.set("seatCount", String(body.config.seatCount));
-        workerUrl.searchParams.set(
-          "smallBlind",
-          String(body.config.smallBlind)
-        );
         workerUrl.searchParams.set("token", body.token);
 
         const socket = new WebSocket(workerUrl);

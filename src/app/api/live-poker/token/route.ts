@@ -70,6 +70,14 @@ export async function POST(request: Request) {
   const exp = Math.floor(Date.now() / 1000) + 5 * 60;
   const token = await signLivePokerToken({
     exp,
+    tableConfig: {
+      bigBlind: access.table.bigBlind,
+      hostUserId: access.table.createdById,
+      maxBuyIn: access.table.maxBuyIn,
+      minBuyIn: access.table.minBuyIn,
+      seatCount: access.table.seatCount,
+      smallBlind: access.table.smallBlind,
+    },
     tableId: body.tableId,
     playerId: access.player.id,
     playerName: access.player.name,
