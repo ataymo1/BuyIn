@@ -4,6 +4,9 @@ import type { LivePokerSeat, LivePokerState, LivePokerWinner } from "./types";
 const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"];
 const SUITS = ["S", "H", "D", "C"];
 
+// Live table amounts are currency-denominated (the UI accepts hundredths).
+const CHIP_UNITS_PER_AMOUNT = 100;
+
 interface RankResult {
   combination: string;
   rank: number;
@@ -37,11 +40,42 @@ function nextSeatIndex(
   return null;
 }
 
+function toChipUnits(amount: number, label = "Chip amount") {
+  const units = Math.round(amount * CHIP_UNITS_PER_AMOUNT);
+  if (
+    !(Number.isFinite(amount) && Number.isSafeInteger(units)) ||
+    Math.abs(amount * CHIP_UNITS_PER_AMOUNT - units) > 1e-7
+  ) {
+    throw new Error(`${label} must use increments of 0.01`);
+  }
+  return units;
+}
+
+function fromChipUnits(units: number) {
+  return units / CHIP_UNITS_PER_AMOUNT;
+}
+
+function validateChipAmount(
+  amount: number,
+  label: string,
+  { allowZero = false }: { allowZero?: boolean } = {}
+) {
+  const units = toChipUnits(amount, label);
+  if (allowZero ? units < 0 : units <= 0) {
+    throw new Error(
+      `${label} must be ${allowZero ? "non-negative" : "positive"}`
+    );
+  }
+  return fromChipUnits(units);
+}
+
 function postBlind(seat: LivePokerSeat, amount: number) {
-  const posted = Math.min(seat.stack, amount);
-  seat.stack -= posted;
-  seat.bet += posted;
-  seat.committed += posted;
+  const stackUnits = toChipUnits(seat.stack);
+  const postedUnits = Math.min(stackUnits, toChipUnits(amount));
+  const posted = fromChipUnits(postedUnits);
+  seat.stack = fromChipUnits(stackUnits - postedUnits);
+  seat.bet = fromChipUnits(toChipUnits(seat.bet) + postedUnits);
+  seat.committed = fromChipUnits(toChipUnits(seat.committed) + postedUnits);
   seat.isAllIn = seat.stack === 0;
   return posted;
 }
@@ -118,10 +152,23 @@ export function createInitialState(config: {
   seatCount: number;
   smallBlind: number;
 }): LivePokerState {
+  const smallBlind = validateChipAmount(config.smallBlind, "Small blind");
+  const bigBlind = validateChipAmount(config.bigBlind, "Big blind");
+  const minBuyIn = validateChipAmount(config.minBuyIn, "Minimum buy-in", {
+    allowZero: true,
+  });
+  const maxBuyIn = validateChipAmount(config.maxBuyIn, "Maximum buy-in");
+  if (bigBlind < smallBlind) {
+    throw new Error("Big blind must be at least the small blind");
+  }
+  if (maxBuyIn < minBuyIn) {
+    throw new Error("Maximum buy-in must be at least the minimum buy-in");
+  }
+
   return {
     actionLog: [],
     activeSeatIndex: null,
-    bigBlind: config.bigBlind,
+    bigBlind,
     bigBlindSeatIndex: null,
     communityCards: [],
     currentBet: 0,
@@ -131,14 +178,14 @@ export function createInitialState(config: {
     hostUserId: config.hostUserId,
     lastAggressorSeatIndex: null,
     lastWinners: [],
-    maxBuyIn: config.maxBuyIn,
-    minBuyIn: config.minBuyIn,
-    minRaise: config.bigBlind,
+    maxBuyIn,
+    minBuyIn,
+    minRaise: bigBlind,
     phase: "waiting",
     seatCount: config.seatCount,
     seats: Array.from({ length: config.seatCount }, () => null),
     showdownSeatIndexes: [],
-    smallBlind: config.smallBlind,
+    smallBlind,
     smallBlindSeatIndex: null,
   };
 }
@@ -177,7 +224,8 @@ export function seatPlayer(
   if (state.seats[seatIndex]) {
     throw new Error("Seat is already occupied");
   }
-  if (player.buyIn < state.minBuyIn || player.buyIn > state.maxBuyIn) {
+  const buyIn = validateChipAmount(player.buyIn, "Buy-in");
+  if (buyIn < state.minBuyIn || buyIn > state.maxBuyIn) {
     throw new Error(
       `Buy-in must be between ${state.minBuyIn} and ${state.maxBuyIn}`
     );
@@ -185,7 +233,7 @@ export function seatPlayer(
 
   state.seats[seatIndex] = {
     bet: 0,
-    buyIn: player.buyIn,
+    buyIn,
     committed: 0,
     connected: true,
     folded: false,
@@ -196,7 +244,7 @@ export function seatPlayer(
     ready: false,
     seatIndex,
     sitOut: false,
-    stack: player.buyIn,
+    stack: buyIn,
     streetAction: undefined,
     userId: player.userId,
   };
@@ -217,21 +265,18 @@ export function addChips(
     throw new Error("Take a seat before adding chips");
   }
 
-  if (amount <= 0) {
-    throw new Error("Add-on amount must be positive");
-  }
-
-  const nextStack = seat.stack + amount;
+  const addOn = validateChipAmount(amount, "Add-on amount");
+  const nextStack = fromChipUnits(toChipUnits(seat.stack) + toChipUnits(addOn));
   if (nextStack < state.minBuyIn || nextStack > state.maxBuyIn) {
     throw new Error(
       `Stack must be between ${state.minBuyIn} and ${state.maxBuyIn}`
     );
   }
 
-  seat.buyIn += amount;
+  seat.buyIn = fromChipUnits(toChipUnits(seat.buyIn) + toChipUnits(addOn));
   seat.ready = false;
   seat.stack = nextStack;
-  state.actionLog.push(`${seat.name} added ${amount} chips`);
+  state.actionLog.push(`${seat.name} added ${addOn} chips`);
 }
 
 export function startHand(state: LivePokerState) {
@@ -324,12 +369,25 @@ export function startHand(state: LivePokerState) {
     amount: bigBlindSeat.bet,
     type: "bigBlind",
   };
-  state.currentBet = postedBigBlind;
-  state.activeSeatIndex =
-    firstActionSeat(state, bigBlindSeatIndex) ?? bigBlindSeatIndex;
+  // A short big blind does not reduce the nominal preflop bring-in.
+  state.currentBet = state.bigBlind;
+  state.activeSeatIndex = firstActionSeat(state, bigBlindSeatIndex);
   state.actionLog.push(`Hand ${state.handNumber} started`);
   state.actionLog.push(`${smallBlindSeat.name} posted ${postedSmallBlind}`);
   state.actionLog.push(`${bigBlindSeat.name} posted ${postedBigBlind}`);
+
+  if (state.activeSeatIndex === null || shouldRunoutToShowdown(state)) {
+    runoutToShowdown(state);
+  }
+}
+
+function reopenBettingAfterFullRaise(
+  state: LivePokerState,
+  aggressorSeatIndex: number
+) {
+  for (const otherSeat of handSeats(state)) {
+    otherSeat.hasActedThisStreet = otherSeat.seatIndex === aggressorSeatIndex;
+  }
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Poker betting rules are clearer kept together at this layer.
@@ -354,7 +412,10 @@ export function applyAction(
     throw new Error("It is not your turn");
   }
 
-  const callAmount = Math.max(0, state.currentBet - seat.bet);
+  const currentBetUnits = toChipUnits(state.currentBet);
+  const seatBetUnits = toChipUnits(seat.bet);
+  const maxTargetUnits = seatBetUnits + toChipUnits(seat.stack);
+  const callAmount = fromChipUnits(Math.max(0, currentBetUnits - seatBetUnits));
 
   if (action.type === "fold") {
     seat.folded = true;
@@ -374,39 +435,58 @@ export function applyAction(
     seat.streetAction = { amount: seat.bet, type: "call" };
     state.actionLog.push(`${seat.name} called ${paid}`);
   } else if (action.type === "bet" || action.type === "raise") {
-    const targetBet = action.amount;
-    const minTarget =
-      state.currentBet === 0
-        ? state.bigBlind
-        : state.currentBet + state.minRaise;
-    if (targetBet < minTarget && targetBet < seat.bet + seat.stack) {
-      throw new Error(`Minimum ${action.type} is ${minTarget}`);
+    const targetBet = validateChipAmount(action.amount, "Bet target");
+    const targetBetUnits = toChipUnits(targetBet);
+
+    // Validate the actual stack cap before postBlind can mutate the seat.
+    if (targetBetUnits > maxTargetUnits) {
+      throw new Error("Bet target exceeds available stack");
     }
-    if (targetBet <= state.currentBet) {
+    if (targetBetUnits <= currentBetUnits) {
       throw new Error("Bet must increase the current bet");
     }
-    const paid = postBlind(seat, targetBet - seat.bet);
-    const raiseSize = targetBet - state.currentBet;
-    state.currentBet = seat.bet;
-    state.minRaise = Math.max(raiseSize, state.bigBlind);
+    if (seat.hasActedThisStreet) {
+      throw new Error("Betting has not been reopened");
+    }
+
+    const minTargetUnits =
+      currentBetUnits === 0
+        ? toChipUnits(state.bigBlind)
+        : currentBetUnits + toChipUnits(state.minRaise);
+    if (targetBetUnits < minTargetUnits && targetBetUnits !== maxTargetUnits) {
+      throw new Error(
+        `Minimum ${action.type} is ${fromChipUnits(minTargetUnits)}`
+      );
+    }
+
+    const raiseSizeUnits = targetBetUnits - currentBetUnits;
+    postBlind(seat, fromChipUnits(targetBetUnits - seatBetUnits));
+    state.currentBet = targetBet;
     state.lastAggressorSeatIndex = seatIndex;
-    for (const otherSeat of handSeats(state)) {
-      otherSeat.hasActedThisStreet = otherSeat.seatIndex === seatIndex;
+    if (raiseSizeUnits >= toChipUnits(state.minRaise)) {
+      state.minRaise = fromChipUnits(raiseSizeUnits);
+      reopenBettingAfterFullRaise(state, seatIndex);
+    } else {
+      seat.hasActedThisStreet = true;
     }
     seat.streetAction = { amount: seat.bet, type: action.type };
     state.actionLog.push(
       `${seat.name} ${action.type === "bet" ? "bet" : "raised to"} ${seat.bet}`
     );
-    if (paid === 0) {
-      throw new Error("Insufficient chips");
-    }
   } else {
+    if (maxTargetUnits > currentBetUnits && seat.hasActedThisStreet) {
+      throw new Error("Betting has not been reopened");
+    }
+
     const paid = postBlind(seat, seat.stack);
-    if (seat.bet > state.currentBet) {
-      const raiseSize = seat.bet - state.currentBet;
-      state.currentBet = seat.bet;
-      state.minRaise = Math.max(raiseSize, state.bigBlind);
+    if (maxTargetUnits > currentBetUnits) {
+      const raiseSizeUnits = maxTargetUnits - currentBetUnits;
+      state.currentBet = fromChipUnits(maxTargetUnits);
       state.lastAggressorSeatIndex = seatIndex;
+      if (raiseSizeUnits >= toChipUnits(state.minRaise)) {
+        state.minRaise = fromChipUnits(raiseSizeUnits);
+        reopenBettingAfterFullRaise(state, seatIndex);
+      }
     }
     seat.hasActedThisStreet = true;
     seat.streetAction = { amount: seat.bet, type: "allIn" };
@@ -475,22 +555,44 @@ export function advanceStreet(state: LivePokerState) {
 }
 
 function buildSidePots(contenders: LivePokerSeat[]) {
-  const levels = [...new Set(contenders.map((seat) => seat.committed))]
-    .filter((amount) => amount > 0)
+  const levels = [
+    ...new Set(contenders.map((seat) => toChipUnits(seat.committed))),
+  ]
+    .filter((units) => units > 0)
     .sort((a, b) => a - b);
-  let previous = 0;
+  let previousUnits = 0;
 
   return levels
-    .map((level) => {
-      const contributors = contenders.filter((seat) => seat.committed >= level);
+    .map((levelUnits) => {
+      const contributors = contenders.filter(
+        (seat) => toChipUnits(seat.committed) >= levelUnits
+      );
       const eligible = contributors.filter((seat) => !seat.folded);
-      const amount = (level - previous) * contributors.length;
-      previous = level;
-      return { amount, eligible };
+      const amountUnits = (levelUnits - previousUnits) * contributors.length;
+      previousUnits = levelUnits;
+      return { amountUnits, eligible };
     })
-    .filter((pot) => pot.amount > 0 && pot.eligible.length > 0);
+    .filter((pot) => pot.amountUnits > 0);
 }
 
+function payoutOrder(state: LivePokerState, seats: LivePokerSeat[]) {
+  if (state.dealerSeatIndex === null) {
+    return [...seats].sort((a, b) => a.seatIndex - b.seatIndex);
+  }
+
+  const distanceFromDealer = (seat: LivePokerSeat) => {
+    const distance =
+      (seat.seatIndex - (state.dealerSeatIndex as number) + state.seatCount) %
+      state.seatCount;
+    return distance === 0 ? state.seatCount : distance;
+  };
+
+  return [...seats].sort(
+    (a, b) => distanceFromDealer(a) - distanceFromDealer(b)
+  );
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Side-pot ranking and exact-unit payouts are kept together to make conservation auditable.
 export function settleShowdown(state: LivePokerState) {
   const contenders = handSeats(state);
   const activeContenders = contenders.filter((seat) => !seat.folded);
@@ -504,10 +606,17 @@ export function settleShowdown(state: LivePokerState) {
     state.communityCards.push(state.deck.pop() as string);
   }
 
+  const potUnits = contenders.reduce(
+    (sum, seat) => sum + toChipUnits(seat.committed),
+    0
+  );
+  let awardedUnits = 0;
+
   if (activeContenders.length === 1) {
     const winner = activeContenders[0];
-    const pot = contenders.reduce((sum, seat) => sum + seat.committed, 0);
-    winner.stack += pot;
+    winner.stack = fromChipUnits(toChipUnits(winner.stack) + potUnits);
+    awardedUnits = potUnits;
+    const pot = fromChipUnits(potUnits);
     winners.push({
       amount: pot,
       playerId: winner.playerId,
@@ -518,30 +627,41 @@ export function settleShowdown(state: LivePokerState) {
   } else {
     const sidePots = buildSidePots(contenders);
     for (const sidePot of sidePots) {
+      // A zero-eligible layer is not reachable through legal betting, but dead
+      // chips still belong to the remaining live hand rather than disappearing.
+      const eligible =
+        sidePot.eligible.length > 0 ? sidePot.eligible : activeContenders;
       const ranks = rankHands(
         "texas",
         state.communityCards as never,
-        sidePot.eligible.map((seat) => seat.cards ?? []) as never
+        eligible.map((seat) => seat.cards ?? []) as never
       ) as RankResult[];
       const bestRank = Math.min(...ranks.map((rank) => rank.rank));
-      const potWinners = sidePot.eligible.filter(
+      const tiedWinners = eligible.filter(
         (_seat, index) => ranks[index].rank === bestRank
       );
-      const share = Math.floor(sidePot.amount / potWinners.length);
-      let remainder = sidePot.amount - share * potWinners.length;
+      const potWinners = payoutOrder(state, tiedWinners);
+      const shareUnits = Math.floor(sidePot.amountUnits / potWinners.length);
+      let remainderUnits = sidePot.amountUnits - shareUnits * potWinners.length;
       for (const winner of potWinners) {
-        const amount = share + (remainder > 0 ? 1 : 0);
-        remainder -= 1;
-        winner.stack += amount;
+        const winnerUnits = shareUnits + (remainderUnits > 0 ? 1 : 0);
+        remainderUnits = Math.max(0, remainderUnits - 1);
+        const amount = fromChipUnits(winnerUnits);
+        winner.stack = fromChipUnits(toChipUnits(winner.stack) + winnerUnits);
+        awardedUnits += winnerUnits;
         winners.push({
           amount,
-          description: ranks[sidePot.eligible.indexOf(winner)]?.combination,
+          description: ranks[eligible.indexOf(winner)]?.combination,
           playerId: winner.playerId,
           seatIndex: winner.seatIndex,
           userId: winner.userId,
         });
       }
     }
+  }
+
+  if (awardedUnits !== potUnits) {
+    throw new Error("Showdown payouts did not conserve the pot");
   }
 
   state.lastWinners = winners;
