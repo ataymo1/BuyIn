@@ -55,6 +55,15 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_email", ["email"]),
 
+  pokerNowAliases: defineTable({
+    groupId: v.id("groups"),
+    sourcePlayerId: v.string(),
+    displayName: v.string(),
+    playerId: v.id("players"),
+  })
+    .index("by_groupId", ["groupId"])
+    .index("by_groupId_sourcePlayerId", ["groupId", "sourcePlayerId"]),
+
   groups: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
@@ -102,10 +111,13 @@ export default defineSchema({
     gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
     groupId: v.id("groups"),
     createdById: v.id("users"),
+    importSource: v.optional(v.literal("POKER_NOW")),
+    importSourceId: v.optional(v.string()),
   })
     .index("by_groupId", ["groupId"])
     .index("by_groupId_status", ["groupId", "status"])
-    .index("by_createdById", ["createdById"]),
+    .index("by_createdById", ["createdById"])
+    .index("by_groupId_importSourceId", ["groupId", "importSourceId"]),
 
   gamePlayers: defineTable({
     gameId: v.id("games"),

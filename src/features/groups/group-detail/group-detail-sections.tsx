@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
+import { FileUp, MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { DeleteGroupDialog } from "@/components/group/delete-group-dialog";
 import { EditGroupDialog } from "@/components/group/edit-group-dialog";
@@ -196,12 +196,20 @@ export function GroupHeader({
         ) : null}
       </div>
       {isOwner ? (
-        <Link href={`/games/new?groupId=${groupId}`}>
-          <Button className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            New Session
-          </Button>
-        </Link>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link href={`/games/import?groupId=${groupId}`}>
+            <Button className="w-full sm:w-auto" variant="outline">
+              <FileUp className="mr-2 h-4 w-4" />
+              Import PokerNow
+            </Button>
+          </Link>
+          <Link href={`/games/new?groupId=${groupId}`}>
+            <Button className="w-full sm:w-auto">
+              <Plus className="mr-2 h-4 w-4" />
+              New Session
+            </Button>
+          </Link>
+        </div>
       ) : null}
     </div>
   );
