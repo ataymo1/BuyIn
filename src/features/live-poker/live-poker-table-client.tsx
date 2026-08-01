@@ -390,7 +390,7 @@ function CurrentBetBadge({
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-zinc-950/80 px-2 py-1 font-semibold text-[11px] text-white shadow-md ring-1 ring-white/15 backdrop-blur-sm">
       <span className="text-zinc-300">{streetActionLabel(action.type)}</span>
-      {chip(amount)}
+      {amount > 0 ? chip(amount) : null}
     </span>
   );
 }
@@ -430,13 +430,58 @@ function CenterPot({
   );
 }
 
+function TimingStatus({
+  now,
+  state,
+}: {
+  now: number;
+  state: PublicLivePokerState;
+}) {
+  const deadline = state.transitionDeadlineAt ?? state.turnDeadlineAt;
+  if (!deadline) {
+    return null;
+  }
+
+  const seconds = Math.max(0, Math.ceil((deadline - now) / 1000));
+  const activeSeat =
+    state.activeSeatIndex === null ? null : state.seats[state.activeSeatIndex];
+  let label = `${activeSeat?.name ?? "Player"} to act: ${seconds} seconds`;
+  if (state.timeBankActive) {
+    label = `${activeSeat?.name ?? "Player"} time bank: ${seconds} seconds`;
+  } else if (state.transition === "deal") {
+    label = `Dealing cards: ${seconds} seconds`;
+  } else if (state.transition === "actionSettle") {
+    label = "Action settling";
+  } else if (state.transition === "runout") {
+    label = `Running out the board: next card in ${seconds} seconds`;
+  } else if (state.transition === "showdown") {
+    label = `Showdown: next hand available in ${seconds} seconds`;
+  }
+
+  return (
+    <output
+      aria-atomic="true"
+      aria-live="polite"
+      className={`rounded-md px-3 py-1.5 text-center font-semibold text-sm ${
+        state.timeBankActive
+          ? "bg-amber-500 text-zinc-950"
+          : "bg-zinc-900 text-white ring-1 ring-white/15"
+      }`}
+    >
+      {label}
+    </output>
+  );
+}
+
 function Seat({
   isActive,
   seat,
+  timeBankRemainingMs,
   winAmount,
 }: {
   isActive?: boolean;
   seat: PublicLivePokerSeat | null;
+  timeBankRemainingMs?: number;
   winAmount?: number;
 }) {
   if (!seat) {
@@ -459,7 +504,8 @@ function Seat({
     >
       <p className="truncate font-semibold text-xs">{seat.name}</p>
       <p className="mt-0.5 text-[11px] text-muted-foreground">
-        Stack {chip(seat.stack)}
+        Stack {chip(seat.stack)} · Time bank{" "}
+        {Math.ceil((timeBankRemainingMs ?? seat.timeBankRemainingMs) / 1000)}s
       </p>
       {seat.connected ? null : (
         <p className="mt-0.5 flex items-center justify-center gap-1 font-medium text-[10px] text-red-600">
@@ -480,22 +526,28 @@ function TableSeatMarkers({
   phase,
   position,
   seat,
+  settledAction,
 }: {
   phase: PublicLivePokerState["phase"];
   position: { x: number; y: number };
   seat: PublicLivePokerSeat | null;
+  settledAction: PublicLivePokerState["settledAction"];
 }) {
   if (!seat) {
     return null;
   }
 
   const markerLayout = getMarkerLayout(position);
-  const currentStreetAction = seat.streetAction;
+  const settlingAction =
+    settledAction?.seatIndex === seat.seatIndex ? settledAction : null;
+  const currentStreetAction = settlingAction ?? seat.streetAction;
+  const displayedAmount = settlingAction?.amount ?? seat.bet;
   const showCurrentStreetBet =
-    phase !== "waiting" &&
-    phase !== "showdown" &&
-    seat.bet > 0 &&
-    Boolean(currentStreetAction);
+    Boolean(settlingAction) ||
+    (phase !== "waiting" &&
+      phase !== "showdown" &&
+      seat.bet > 0 &&
+      Boolean(currentStreetAction));
 
   return (
     <>
@@ -507,7 +559,10 @@ function TableSeatMarkers({
             top: `${markerLayout.bet.y}%`,
           }}
         >
-          <CurrentBetBadge action={currentStreetAction} amount={seat.bet} />
+          <CurrentBetBadge
+            action={currentStreetAction}
+            amount={displayedAmount}
+          />
         </div>
       ) : null}
       <div
@@ -873,6 +928,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("connecting");
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [isRequestingBuyIn, setIsRequestingBuyIn] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -881,6 +937,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     null
   );
   const [stateSnapshot, setStateSnapshot] = useState<{
+    receivedAt: number;
     state: PublicLivePokerState;
     tableId: string;
   } | null>(null);
@@ -1034,7 +1091,13 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               String(event.data)
             ) as LivePokerServerMessage;
             if (message.type === "tableState") {
-              setStateSnapshot({ state: message.state, tableId });
+              const receivedAt = Date.now();
+              setClockNow(receivedAt);
+              setStateSnapshot({
+                receivedAt,
+                state: message.state,
+                tableId,
+              });
             } else if (message.type === "actionRejected") {
               setError(message.message);
             }
@@ -1092,6 +1155,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     };
   }, [retryNonce, tableId]);
 
+  const serverClockNow = state
+    ? state.serverTimeAt + (clockNow - (stateSnapshot?.receivedAt ?? clockNow))
+    : clockNow;
   const currentSeat = useMemo(
     () => state?.seats.find((seat) => seat?.isCurrentUser) ?? null,
     [state]
@@ -1104,7 +1170,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const canAct =
     isConnected &&
     Boolean(currentSeat && state?.activeSeatIndex === currentSeat.seatIndex) &&
-    state?.phase !== "waiting";
+    state?.phase !== "waiting" &&
+    !state?.transition &&
+    Boolean(state?.turnDeadlineAt && state.turnDeadlineAt > serverClockNow);
   const betTargetBounds =
     state && currentSeat ? getBetTargetBounds(state, currentSeat) : null;
   const betTargetMin = betTargetBounds?.minTarget ?? 0;
@@ -1164,6 +1232,16 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     pendingBuyInRequests as LivePokerBuyInRequestRow[];
   const typedUserBuyInRequests =
     userBuyInRequests as LivePokerBuyInRequestRow[];
+
+  useEffect(() => {
+    const deadline = state?.transitionDeadlineAt ?? state?.turnDeadlineAt;
+    if (!deadline) {
+      return;
+    }
+    setClockNow(Date.now());
+    const timer = window.setInterval(() => setClockNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [state?.transitionDeadlineAt, state?.turnDeadlineAt]);
 
   useEffect(() => {
     if (!(canAct && betTargetResetKey)) {
@@ -1402,6 +1480,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           </div>
         </div>
 
+        <div className="mb-3 flex justify-center">
+          <TimingStatus now={serverClockNow} state={state} />
+        </div>
+
         <div
           className="relative mx-auto mb-48 min-h-[36rem] max-w-7xl overflow-visible rounded-lg border border-white/10 bg-zinc-950 px-2 py-16 shadow-2xl sm:min-h-[41.25rem] sm:px-16 sm:py-24 md:mb-32 lg:px-24"
           style={tableStageStyle}
@@ -1456,6 +1538,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                   phase={state.phase}
                   position={position}
                   seat={seat}
+                  settledAction={state.settledAction}
                 />
                 <button
                   className="absolute z-20 w-24 -translate-x-1/2 -translate-y-1/2 touch-manipulation text-left transition-transform focus:z-30 focus:outline-none focus:ring-2 focus:ring-emerald-200 enabled:hover:z-30 enabled:hover:scale-105 sm:w-36 min-[380px]:w-28"
@@ -1470,6 +1553,17 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                   <Seat
                     isActive={state.activeSeatIndex === index}
                     seat={seat}
+                    timeBankRemainingMs={
+                      seat &&
+                      state.timeBankActive &&
+                      state.activeSeatIndex === index &&
+                      state.turnDeadlineAt
+                        ? Math.min(
+                            seat.timeBankRemainingMs,
+                            Math.max(0, state.turnDeadlineAt - serverClockNow)
+                          )
+                        : seat?.timeBankRemainingMs
+                    }
                     winAmount={winnerAmountsBySeat.get(index)}
                   />
                 </button>

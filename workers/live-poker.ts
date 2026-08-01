@@ -5,11 +5,28 @@ import { jwtVerify } from "jose";
 import {
   addChips,
   applyAction,
+  cleanupShowdown,
   createInitialState,
+  revealNextRunoutStage,
   seatPlayer,
   settleShowdown,
   startHand,
 } from "../src/lib/live-poker/engine";
+import {
+  assertLivePokerActionAvailable,
+  clearLivePokerTiming,
+  consumeLivePokerTimeBank,
+  DEFAULT_LIVE_POKER_TIMING,
+  getDueLivePokerTimingEvent,
+  getLivePokerSeatTimeBankRemainingMs,
+  getLivePokerTimeoutAction,
+  getNextLivePokerDeadline,
+  type LivePokerTimingConfig,
+  repairLivePokerTimeBanks,
+  startLivePokerTimeBank,
+  startLivePokerTransition,
+  startLivePokerTurn,
+} from "../src/lib/live-poker/timing";
 import {
   calculatePot,
   clientMessageSchema,
@@ -220,12 +237,10 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       }
 
       await this.ensureState(auth.tableConfig);
-      if (
-        this.state?.activeSeatIndex !== null &&
-        this.state?.activeSeatIndex !== undefined &&
-        !this.state.turnDeadlineAt
-      ) {
-        this.updateTurnDeadline();
+      const now = Date.now();
+      const repairedTiming = this.repairTimingState(now);
+      const advancedTiming = this.advanceDueTiming(now);
+      if (repairedTiming || advancedTiming) {
         await this.persist();
       }
       if (this.state?.admissionsClosed) {
@@ -255,7 +270,13 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
   async alarm() {
     await this.ready;
-    await this.handleExpiredTurn();
+    const now = Date.now();
+    const repairedTiming = this.repairTimingState(now);
+    const advancedTiming = this.advanceDueTiming(now);
+    if (repairedTiming || advancedTiming) {
+      await this.persist();
+      this.broadcast();
+    }
     await this.flushOutbox();
     await this.scheduleAlarm();
   }
@@ -285,11 +306,14 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         return;
       }
 
-      const previousTurn = this.turnIdentity();
-      this.handleMessage(auth, parsed.data);
-      if (previousTurn !== this.turnIdentity() || !this.state?.turnDeadlineAt) {
-        this.updateTurnDeadline();
+      const now = Date.now();
+      const repairedTiming = this.repairTimingState(now);
+      const advancedTiming = this.advanceDueTiming(now);
+      if (repairedTiming || advancedTiming) {
+        await this.persist();
+        this.broadcast();
       }
+      this.handleMessage(auth, parsed.data, now);
       await this.persist();
       this.broadcast();
       this.ctx.waitUntil(this.flushOutbox());
@@ -382,7 +406,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         }
       }
       this.state.seats = this.state.seats.map(() => null);
-      this.state.turnDeadlineAt = null;
+      clearLivePokerTiming(this.state);
       await this.persist();
 
       for (const connection of this.ctx.getWebSockets()) {
@@ -424,8 +448,8 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     }
 
     // Signed tokens and secret-authenticated server requests are authoritative.
-    // This repairs legacy objects initialized from unsigned query parameters.
-    let repaired = false;
+    // This also upgrades legacy seats to persisted per-session time banks.
+    let repaired = repairLivePokerTimeBanks(this.state, this.timing());
     if (this.state.hostUserId !== config.hostUserId) {
       this.state.hostUserId = config.hostUserId;
       repaired = true;
@@ -463,7 +487,8 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
   private handleMessage(
     auth: LivePokerAuthToken,
-    message: LivePokerClientMessage
+    message: LivePokerClientMessage,
+    now: number
   ) {
     if (!this.state) {
       throw new Error("Table is not ready");
@@ -480,6 +505,11 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         throw new Error("A hand is already in progress");
       }
       startHand(this.state);
+      startLivePokerTransition(
+        this.state,
+        "deal",
+        now + this.timing().initialDealMs
+      );
       this.broadcastMessage({
         type: "handStarted",
         handNumber: this.state.handNumber,
@@ -517,9 +547,19 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     if (!isActionMessage(message)) {
       throw new Error("Invalid table action");
     }
+    assertLivePokerActionAvailable(this.state);
 
+    const actingSeatIndex = this.state.activeSeatIndex;
     applyAction(this.state, auth.userId, message);
-    this.completeShowdown();
+    if (actingSeatIndex !== null) {
+      consumeLivePokerTimeBank(this.state, actingSeatIndex, now, this.timing());
+    }
+    this.captureSettledAction(actingSeatIndex, message);
+    startLivePokerTransition(
+      this.state,
+      "actionSettle",
+      now + this.timing().actionSettleMs
+    );
   }
 
   private requireHost(userId: string) {
@@ -615,7 +655,11 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
   }
 
   private completeShowdown() {
-    if (!this.state || this.state.phase !== "showdown") {
+    if (
+      !this.state ||
+      this.state.phase !== "showdown" ||
+      this.state.showdownSettled
+    ) {
       return;
     }
     const pot = calculatePot(this.state);
@@ -638,6 +682,10 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       this.state.activeSeatIndex = null;
     }
     this.completeShowdown();
+    if (this.state.showdownSettled) {
+      cleanupShowdown(this.state);
+      clearLivePokerTiming(this.state);
+    }
   }
 
   private queueCompletedHand(
@@ -746,59 +794,202 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     }
   }
 
-  private turnIdentity() {
-    return `${this.state?.handNumber}:${this.state?.phase}:${this.state?.activeSeatIndex}`;
+  private captureSettledAction(
+    seatIndex: number | null,
+    action: LivePokerActionMessage
+  ) {
+    if (!this.state || seatIndex === null) {
+      return;
+    }
+    const seat = this.state.seats[seatIndex];
+    this.state.settledAction = {
+      amount:
+        action.type === "bet" || action.type === "raise"
+          ? action.amount
+          : (seat?.streetAction?.amount ?? 0),
+      seatIndex,
+      type: action.type,
+    };
   }
 
-  private updateTurnDeadline() {
+  private finishShowdown(at: number) {
     if (!this.state) {
       return;
     }
-    this.state.turnDeadlineAt =
-      this.state.activeSeatIndex !== null &&
-      this.state.phase !== "waiting" &&
-      this.state.phase !== "showdown"
-        ? Date.now() + this.turnTimeoutMs()
-        : null;
-  }
-
-  private async handleExpiredTurn() {
-    if (
-      !this.state?.turnDeadlineAt ||
-      this.state.turnDeadlineAt > Date.now() ||
-      this.state.activeSeatIndex === null
-    ) {
-      return;
-    }
-
-    const seat = this.state.seats[this.state.activeSeatIndex];
-    if (!seat) {
-      this.state.turnDeadlineAt = null;
-      await this.persist();
-      return;
-    }
-
-    const canCheck = this.state.currentBet <= seat.bet;
-    applyAction(this.state, seat.userId, {
-      type: canCheck ? "check" : "fold",
-    });
-    this.state.actionLog.push(
-      `${seat.name} automatically ${canCheck ? "checked" : "folded"} after the turn deadline`
-    );
     this.completeShowdown();
-    this.updateTurnDeadline();
-    await this.persist();
-    this.broadcast();
+    startLivePokerTransition(
+      this.state,
+      "showdown",
+      at + this.timing().showdownMs
+    );
   }
 
-  private turnTimeoutMs() {
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Persisted poker timing events are kept in one chronological transition loop so late alarms catch up atomically.
+  private advanceDueTiming(now: number) {
+    if (!this.state) {
+      return false;
+    }
+
+    let changed = false;
+    for (let step = 0; step < 20; step += 1) {
+      const event = getDueLivePokerTimingEvent(this.state, now);
+      if (!event) {
+        return changed;
+      }
+      changed = true;
+
+      if (event.type === "startTimeBank") {
+        const seatIndex = this.state.activeSeatIndex;
+        const remaining =
+          seatIndex === null
+            ? 0
+            : getLivePokerSeatTimeBankRemainingMs(
+                this.state,
+                seatIndex,
+                this.timing()
+              );
+        startLivePokerTimeBank(this.state, event.at, this.timing());
+        const seat = seatIndex === null ? null : this.state.seats[seatIndex];
+        if (seat) {
+          this.state.actionLog.push(
+            `${seat.name}'s time bank started with ${remaining / 1000} seconds remaining`
+          );
+        }
+        continue;
+      }
+
+      if (event.type === "turnExpired") {
+        const seatIndex = this.state.activeSeatIndex;
+        const seat = seatIndex === null ? null : this.state.seats[seatIndex];
+        if (seatIndex === null || !seat) {
+          clearLivePokerTiming(this.state);
+          continue;
+        }
+        const action = getLivePokerTimeoutAction(this.state);
+        if (!action) {
+          clearLivePokerTiming(this.state);
+          continue;
+        }
+        const canCheck = action.type === "check";
+        const timeBankWasActive = this.state.timeBankActive ?? false;
+        consumeLivePokerTimeBank(
+          this.state,
+          seatIndex,
+          event.at,
+          this.timing()
+        );
+        applyAction(this.state, seat.userId, action);
+        this.captureSettledAction(seatIndex, action);
+        this.state.actionLog.push(
+          `${seat.name} automatically ${canCheck ? "checked" : "folded"} ${
+            timeBankWasActive
+              ? "after the time bank expired"
+              : "with no time bank remaining"
+          }`
+        );
+        startLivePokerTransition(
+          this.state,
+          "actionSettle",
+          event.at + this.timing().actionSettleMs
+        );
+        continue;
+      }
+
+      this.state.transition = null;
+      this.state.transitionDeadlineAt = null;
+      if (event.transition === "showdown") {
+        cleanupShowdown(this.state);
+        clearLivePokerTiming(this.state);
+        continue;
+      }
+
+      if (event.transition === "runout") {
+        revealNextRunoutStage(this.state);
+        if (this.state.phase === "showdown") {
+          this.finishShowdown(event.at);
+        } else {
+          startLivePokerTransition(
+            this.state,
+            "runout",
+            event.at + this.timing().runoutStageMs
+          );
+        }
+        continue;
+      }
+
+      if (event.transition === "actionSettle") {
+        this.state.settledAction = null;
+      }
+      if (this.state.phase === "showdown") {
+        this.finishShowdown(event.at);
+      } else if (this.state.runoutPending) {
+        startLivePokerTransition(
+          this.state,
+          "runout",
+          event.at + this.timing().runoutStageMs
+        );
+      } else if (this.state.activeSeatIndex !== null) {
+        startLivePokerTurn(this.state, event.at, this.timing());
+      } else {
+        clearLivePokerTiming(this.state);
+      }
+    }
+
+    throw new Error("Live poker timing did not converge");
+  }
+
+  private repairTimingState(now: number) {
+    if (!this.state) {
+      return false;
+    }
+
+    const timing = this.timing();
+    let changed = repairLivePokerTimeBanks(this.state, timing);
+    if (this.state.transition) {
+      return changed;
+    }
+    if (this.state.phase === "waiting") {
+      if (
+        this.state.turnDeadlineAt ||
+        this.state.transitionDeadlineAt ||
+        this.state.timeBankActive
+      ) {
+        clearLivePokerTiming(this.state);
+        changed = true;
+      }
+      return changed;
+    }
+    if (this.state.phase === "showdown") {
+      this.finishShowdown(now);
+      return true;
+    }
+    if (this.state.runoutPending) {
+      startLivePokerTransition(
+        this.state,
+        "runout",
+        now + timing.runoutStageMs
+      );
+      return true;
+    }
+    if (this.state.activeSeatIndex !== null && !this.state.turnDeadlineAt) {
+      startLivePokerTurn(this.state, now, timing);
+      return true;
+    }
+    return changed;
+  }
+
+  private timing(): LivePokerTimingConfig {
     const configured = Number(
-      envString(this.bindings, "LIVE_POKER_TURN_TIMEOUT_SECONDS") ?? 30
+      envString(this.bindings, "LIVE_POKER_TURN_TIMEOUT_SECONDS") ??
+        DEFAULT_LIVE_POKER_TIMING.actionTimeMs / 1000
     );
     const seconds = Number.isFinite(configured)
       ? Math.min(300, Math.max(10, configured))
-      : 30;
-    return seconds * 1000;
+      : DEFAULT_LIVE_POKER_TIMING.actionTimeMs / 1000;
+    return {
+      ...DEFAULT_LIVE_POKER_TIMING,
+      actionTimeMs: seconds * 1000,
+    };
   }
 
   private async persist() {
@@ -811,7 +1002,9 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
   private async scheduleAlarm() {
     const deadlines = [
-      this.state?.turnDeadlineAt ?? Number.POSITIVE_INFINITY,
+      this.state
+        ? getNextLivePokerDeadline(this.state)
+        : Number.POSITIVE_INFINITY,
       this.outbox[0]?.nextAttemptAt ?? Number.POSITIVE_INFINITY,
     ];
     const next = Math.min(...deadlines);

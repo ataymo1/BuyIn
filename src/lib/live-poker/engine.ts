@@ -1,4 +1,5 @@
 import { rankHands } from "@xpressit/winning-poker-hand-rank";
+import { LIVE_POKER_TIME_BANK_MS } from "./timing";
 import type { LivePokerSeat, LivePokerState, LivePokerWinner } from "./types";
 
 const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"];
@@ -122,26 +123,42 @@ function shouldRunoutToShowdown(state: LivePokerState) {
   );
 }
 
-function runoutToShowdown(state: LivePokerState) {
-  while (state.communityCards.length < 5) {
-    if (state.communityCards.length === 0) {
-      state.communityCards.push(
-        state.deck.pop() as string,
-        state.deck.pop() as string,
-        state.deck.pop() as string
-      );
-      state.actionLog.push("FLOP dealt");
-      continue;
-    }
+function beginRunout(state: LivePokerState) {
+  state.activeSeatIndex = null;
+  state.runoutPending = true;
+}
 
-    state.communityCards.push(state.deck.pop() as string);
-    state.actionLog.push(
-      state.communityCards.length === 4 ? "TURN dealt" : "RIVER dealt"
+export function revealNextRunoutStage(state: LivePokerState) {
+  if (!state.runoutPending) {
+    throw new Error("No board runout is pending");
+  }
+
+  if (state.communityCards.length === 0) {
+    state.phase = "flop";
+    state.communityCards.push(
+      state.deck.pop() as string,
+      state.deck.pop() as string,
+      state.deck.pop() as string
     );
+    state.actionLog.push("FLOP dealt");
+    return;
+  }
+
+  if (state.communityCards.length === 3) {
+    state.phase = "turn";
+    state.communityCards.push(state.deck.pop() as string);
+    state.actionLog.push("TURN dealt");
+    return;
+  }
+
+  if (state.communityCards.length === 4) {
+    state.communityCards.push(state.deck.pop() as string);
+    state.actionLog.push("RIVER dealt");
   }
 
   state.phase = "showdown";
   state.activeSeatIndex = null;
+  state.runoutPending = false;
 }
 
 export function createInitialState(config: {
@@ -184,9 +201,18 @@ export function createInitialState(config: {
     phase: "waiting",
     seatCount: config.seatCount,
     seats: Array.from({ length: config.seatCount }, () => null),
+    settledAction: null,
+    showdownPot: null,
     showdownSeatIndexes: [],
+    showdownSettled: false,
     smallBlind,
     smallBlindSeatIndex: null,
+    timeBankActive: false,
+    transition: null,
+    transitionDeadlineAt: null,
+    turnDeadlineAt: null,
+    turnStartedAt: null,
+    runoutPending: false,
   };
 }
 
@@ -246,6 +272,7 @@ export function seatPlayer(
     sitOut: false,
     stack: buyIn,
     streetAction: undefined,
+    timeBankRemainingMs: LIVE_POKER_TIME_BANK_MS,
     userId: player.userId,
   };
   state.actionLog.push(`${player.name} sat in seat ${seatIndex + 1}`);
@@ -297,7 +324,11 @@ export function startHand(state: LivePokerState) {
   state.bigBlindSeatIndex = null;
   state.lastWinners = [];
   state.minRaise = state.bigBlind;
+  state.runoutPending = false;
+  state.settledAction = null;
+  state.showdownPot = null;
   state.showdownSeatIndexes = [];
+  state.showdownSettled = false;
   state.smallBlindSeatIndex = null;
   state.lastAggressorSeatIndex = null;
 
@@ -377,7 +408,7 @@ export function startHand(state: LivePokerState) {
   state.actionLog.push(`${bigBlindSeat.name} posted ${postedBigBlind}`);
 
   if (state.activeSeatIndex === null || shouldRunoutToShowdown(state)) {
-    runoutToShowdown(state);
+    beginRunout(state);
   }
 }
 
@@ -508,7 +539,7 @@ export function advanceAfterAction(
   }
 
   if (shouldRunoutToShowdown(state)) {
-    runoutToShowdown(state);
+    beginRunout(state);
     return;
   }
 
@@ -594,6 +625,10 @@ function payoutOrder(state: LivePokerState, seats: LivePokerSeat[]) {
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Side-pot ranking and exact-unit payouts are kept together to make conservation auditable.
 export function settleShowdown(state: LivePokerState) {
+  if (state.showdownSettled) {
+    return state.lastWinners;
+  }
+
   const contenders = handSeats(state);
   const activeContenders = contenders.filter((seat) => !seat.folded);
   const winners: LivePokerWinner[] = [];
@@ -602,7 +637,11 @@ export function settleShowdown(state: LivePokerState) {
       ? activeContenders.map((seat) => seat.seatIndex)
       : [];
 
-  while (state.communityCards.length < 5 && state.deck.length > 0) {
+  while (
+    activeContenders.length > 1 &&
+    state.communityCards.length < 5 &&
+    state.deck.length > 0
+  ) {
     state.communityCards.push(state.deck.pop() as string);
   }
 
@@ -665,22 +704,45 @@ export function settleShowdown(state: LivePokerState) {
   }
 
   state.lastWinners = winners;
+  state.showdownPot = fromChipUnits(potUnits);
+  state.showdownSettled = true;
+  state.phase = "showdown";
+  state.activeSeatIndex = null;
+  state.currentBet = 0;
+  state.runoutPending = false;
   for (const seat of state.seats) {
     if (seat) {
       seat.bet = 0;
       seat.committed = 0;
-      seat.folded = false;
       seat.hasActedThisStreet = false;
-      seat.isAllIn = false;
       seat.ready = false;
     }
   }
-
-  state.phase = "waiting";
-  state.activeSeatIndex = null;
-  state.currentBet = 0;
-  state.deck = [];
   return winners;
+}
+
+export function cleanupShowdown(state: LivePokerState) {
+  if (state.phase !== "showdown" || !state.showdownSettled) {
+    throw new Error("Showdown is not ready to clean up");
+  }
+
+  for (const seat of state.seats) {
+    if (seat) {
+      seat.cards = undefined;
+      seat.folded = false;
+      seat.isAllIn = false;
+      seat.streetAction = undefined;
+    }
+  }
+  state.activeSeatIndex = null;
+  state.communityCards = [];
+  state.deck = [];
+  state.lastWinners = [];
+  state.phase = "waiting";
+  state.settledAction = null;
+  state.showdownPot = null;
+  state.showdownSeatIndexes = [];
+  state.showdownSettled = false;
 }
 
 export function maybeStartNextHand(state: LivePokerState) {

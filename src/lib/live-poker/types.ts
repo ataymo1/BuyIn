@@ -37,6 +37,12 @@ export type LivePokerPhase =
   | "river"
   | "showdown";
 
+export type LivePokerTransition =
+  | "actionSettle"
+  | "deal"
+  | "runout"
+  | "showdown";
+
 export type LivePokerStreetActionType =
   | "allIn"
   | "bet"
@@ -86,6 +92,7 @@ export interface LivePokerSeat {
   sitOut: boolean;
   stack: number;
   streetAction?: LivePokerStreetAction;
+  timeBankRemainingMs: number;
   userId: string;
 }
 
@@ -105,6 +112,10 @@ export interface LivePokerWinner {
 }
 
 export type PublicLivePokerWinner = Omit<LivePokerWinner, "userId">;
+
+export interface LivePokerSettledAction extends LivePokerStreetAction {
+  seatIndex: number;
+}
 
 export interface LivePokerState {
   actionLog: string[];
@@ -127,10 +138,18 @@ export interface LivePokerState {
   phase: LivePokerPhase;
   seatCount: number;
   seats: Array<LivePokerSeat | null>;
+  settledAction?: LivePokerSettledAction | null;
+  showdownPot?: number | null;
   showdownSeatIndexes?: number[];
+  showdownSettled?: boolean;
   smallBlind: number;
   smallBlindSeatIndex: number | null;
+  timeBankActive?: boolean;
+  transition?: LivePokerTransition | null;
+  transitionDeadlineAt?: number | null;
   turnDeadlineAt?: number | null;
+  turnStartedAt?: number | null;
+  runoutPending?: boolean;
 }
 
 export interface PublicLivePokerState {
@@ -151,10 +170,16 @@ export interface PublicLivePokerState {
   pot: number;
   seatCount: number;
   seats: Array<PublicLivePokerSeat | null>;
+  serverTimeAt: number;
+  settledAction: LivePokerSettledAction | null;
   showdownSeatIndexes: number[];
   smallBlind: number;
   smallBlindSeatIndex: number | null;
+  timeBankActive: boolean;
+  transition: LivePokerTransition | null;
+  transitionDeadlineAt: number | null;
   turnDeadlineAt: number | null;
+  turnStartedAt: number | null;
 }
 
 export type LivePokerServerMessage =
@@ -172,7 +197,8 @@ export function calculatePot(state: Pick<LivePokerState, "seats">) {
 
 export function toPublicState(
   state: LivePokerState,
-  currentUserId: string
+  currentUserId: string,
+  serverTimeAt = Date.now()
 ): PublicLivePokerState {
   const showdownSeatIndexes = state.showdownSeatIndexes ?? [];
 
@@ -193,7 +219,10 @@ export function toPublicState(
     minBuyIn: state.minBuyIn,
     minRaise: state.minRaise,
     phase: state.phase,
-    pot: calculatePot(state),
+    pot:
+      state.phase === "showdown"
+        ? (state.showdownPot ?? calculatePot(state))
+        : calculatePot(state),
     seatCount: state.seatCount,
     seats: state.seats.map((seat) => {
       if (!seat) {
@@ -222,11 +251,27 @@ export function toPublicState(
         sitOut: seat.sitOut,
         stack: seat.stack,
         streetAction: seat.streetAction,
+        timeBankRemainingMs:
+          state.timeBankActive &&
+          state.activeSeatIndex === seat.seatIndex &&
+          state.turnDeadlineAt !== null &&
+          state.turnDeadlineAt !== undefined
+            ? Math.min(
+                seat.timeBankRemainingMs,
+                Math.max(0, state.turnDeadlineAt - serverTimeAt)
+              )
+            : seat.timeBankRemainingMs,
       };
     }),
+    serverTimeAt,
+    settledAction: state.settledAction ?? null,
     showdownSeatIndexes,
     smallBlind: state.smallBlind,
     smallBlindSeatIndex: state.smallBlindSeatIndex ?? null,
+    timeBankActive: state.timeBankActive ?? false,
+    transition: state.transition ?? null,
+    transitionDeadlineAt: state.transitionDeadlineAt ?? null,
     turnDeadlineAt: state.turnDeadlineAt ?? null,
+    turnStartedAt: state.turnStartedAt ?? null,
   };
 }
