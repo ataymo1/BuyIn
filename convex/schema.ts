@@ -64,6 +64,37 @@ export default defineSchema({
     .index("by_groupId", ["groupId"])
     .index("by_groupId_sourcePlayerId", ["groupId", "sourcePlayerId"]),
 
+  pokerNowImportRequests: defineTable({
+    groupId: v.id("groups"),
+    requestedById: v.id("users"),
+    sourceId: v.string(),
+    date: v.number(),
+    smallBlind: v.optional(v.number()),
+    bigBlind: v.optional(v.number()),
+    handCount: v.number(),
+    players: v.array(
+      v.object({
+        sourcePlayerId: v.string(),
+        displayName: v.string(),
+        buyIn: v.number(),
+        cashOut: v.number(),
+        playerId: v.optional(v.id("players")),
+      })
+    ),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("APPROVED"),
+      v.literal("REJECTED")
+    ),
+    requestedAt: v.number(),
+    respondedAt: v.optional(v.number()),
+    respondedById: v.optional(v.id("users")),
+    gameId: v.optional(v.id("games")),
+  })
+    .index("by_groupId", ["groupId"])
+    .index("by_groupId_status", ["groupId", "status"])
+    .index("by_groupId_sourceId", ["groupId", "sourceId"]),
+
   groups: defineTable({
     name: v.string(),
     description: v.optional(v.string()),

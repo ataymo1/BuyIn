@@ -1,6 +1,127 @@
 // biome-ignore-all lint/style/useFilenamingConvention: Convex exposes underscore filenames as stable API namespaces.
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { type MutationCtx, mutation, query } from "./_generated/server";
+
+const importedPlayer = v.object({
+  sourcePlayerId: v.string(),
+  displayName: v.string(),
+  buyIn: v.number(),
+  cashOut: v.number(),
+  playerId: v.optional(v.id("players")),
+});
+
+type ImportedPlayer = Doc<"pokerNowImportRequests">["players"][number];
+interface ImportData {
+  groupId: Id<"groups">;
+  createdById: Id<"users">;
+  sourceId: string;
+  date: number;
+  smallBlind?: number;
+  bigBlind?: number;
+  handCount: number;
+  players: ImportedPlayer[];
+}
+
+async function findDuplicate(
+  ctx: MutationCtx,
+  groupId: Id<"groups">,
+  sourceId: string
+) {
+  const game = await ctx.db
+    .query("games")
+    .withIndex("by_groupId_importSourceId", (q) =>
+      q.eq("groupId", groupId).eq("importSourceId", sourceId)
+    )
+    .first();
+  const request = await ctx.db
+    .query("pokerNowImportRequests")
+    .withIndex("by_groupId_sourceId", (q) =>
+      q.eq("groupId", groupId).eq("sourceId", sourceId)
+    )
+    .filter((q) => q.eq(q.field("status"), "PENDING"))
+    .first();
+  return game ?? request;
+}
+
+async function persistSession(ctx: MutationCtx, args: ImportData) {
+  if (args.players.length < 2) {
+    throw new Error("An imported session needs at least two players");
+  }
+  const gameId = await ctx.db.insert("games", {
+    date: args.date,
+    location: "PokerNow",
+    notes: `Imported from PokerNow · ${args.handCount} hands${
+      args.smallBlind && args.bigBlind
+        ? ` · ${args.smallBlind}/${args.bigBlind} blinds`
+        : ""
+    }`,
+    status: "COMPLETED",
+    gameType: "cash",
+    groupId: args.groupId,
+    createdById: args.createdById,
+    importSource: "POKER_NOW",
+    importSourceId: args.sourceId,
+  });
+
+  for (const imported of args.players) {
+    if (
+      !(Number.isFinite(imported.buyIn) && Number.isFinite(imported.cashOut))
+    ) {
+      throw new Error("Player totals must be valid numbers");
+    }
+    let playerId = imported.playerId;
+    if (playerId && !(await ctx.db.get(playerId))) {
+      throw new Error("A selected player no longer exists");
+    }
+    playerId ??= await ctx.db.insert("players", {
+      name: imported.displayName.trim(),
+    });
+
+    const priorAlias = await ctx.db
+      .query("pokerNowAliases")
+      .withIndex("by_groupId_sourcePlayerId", (q) =>
+        q
+          .eq("groupId", args.groupId)
+          .eq("sourcePlayerId", imported.sourcePlayerId)
+      )
+      .first();
+    if (priorAlias) {
+      await ctx.db.patch(priorAlias._id, {
+        playerId,
+        displayName: imported.displayName.trim(),
+      });
+    } else {
+      await ctx.db.insert("pokerNowAliases", {
+        groupId: args.groupId,
+        sourcePlayerId: imported.sourcePlayerId,
+        displayName: imported.displayName.trim(),
+        playerId,
+      });
+    }
+    await ctx.db.insert("gamePlayers", {
+      gameId,
+      playerId,
+      buyIn: imported.buyIn,
+      cashOut: imported.cashOut,
+      profit: Math.round((imported.cashOut - imported.buyIn) * 100) / 100,
+    });
+    for (const transaction of [
+      { type: "buyin" as const, amount: imported.buyIn },
+      { type: "cashout" as const, amount: imported.cashOut },
+    ]) {
+      await ctx.db.insert("transactions", {
+        gameId,
+        playerId,
+        ...transaction,
+        description: "Imported from PokerNow",
+        createdById: args.createdById,
+        status: "APPROVED",
+      });
+    }
+  }
+  return gameId;
+}
 
 export const getCandidates = query({
   args: { groupId: v.id("groups") },
@@ -17,12 +138,7 @@ export const getCandidates = query({
           .withIndex("by_userId", (q) => q.eq("userId", member.userId))
           .first();
         return player
-          ? {
-              id: player._id,
-              name: player.name,
-              email: user?.email,
-              isMember: true,
-            }
+          ? { id: player._id, name: player.name, email: user?.email }
           : null;
       })
     );
@@ -37,12 +153,29 @@ export const getCandidates = query({
   },
 });
 
-const importedPlayer = v.object({
-  sourcePlayerId: v.string(),
-  displayName: v.string(),
-  buyIn: v.number(),
-  cashOut: v.number(),
-  playerId: v.optional(v.id("players")),
+export const getPendingRequests = query({
+  args: { groupId: v.id("groups"), userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const group = await ctx.db.get(args.groupId);
+    if (group?.ownerId !== args.userId) {
+      return [];
+    }
+    const requests = await ctx.db
+      .query("pokerNowImportRequests")
+      .withIndex("by_groupId_status", (q) =>
+        q.eq("groupId", args.groupId).eq("status", "PENDING")
+      )
+      .collect();
+    return await Promise.all(
+      requests.map(async (request) => {
+        const requester = await ctx.db.get(request.requestedById);
+        return {
+          ...request,
+          requesterName: requester?.name ?? requester?.email ?? "Group member",
+        };
+      })
+    );
+  },
 });
 
 export const createSession = mutation({
@@ -66,98 +199,87 @@ export const createSession = mutation({
     if (!membership) {
       throw new Error("Only group members can import sessions");
     }
-    const duplicate = await ctx.db
-      .query("games")
-      .withIndex("by_groupId_importSourceId", (q) =>
-        q.eq("groupId", args.groupId).eq("importSourceId", args.sourceId)
-      )
-      .first();
-    if (duplicate) {
+    if (await findDuplicate(ctx, args.groupId, args.sourceId)) {
       throw new Error(
-        "This PokerNow log has already been imported into this group"
+        "This PokerNow log has already been imported or is awaiting approval"
       );
     }
-    if (args.players.length < 2) {
-      throw new Error("An imported session needs at least two players");
+    const group = await ctx.db.get(args.groupId);
+    if (!group) {
+      throw new Error("Group not found");
     }
-
-    const gameId = await ctx.db.insert("games", {
-      date: args.date,
-      location: "PokerNow",
-      notes: `Imported from PokerNow · ${args.handCount} hands${
-        args.smallBlind && args.bigBlind
-          ? ` · ${args.smallBlind}/${args.bigBlind} blinds`
-          : ""
-      }`,
-      status: "COMPLETED",
-      gameType: "cash",
+    if (group.ownerId === args.createdById) {
+      const gameId = await persistSession(ctx, args);
+      return { status: "APPROVED" as const, gameId };
+    }
+    const requestId = await ctx.db.insert("pokerNowImportRequests", {
       groupId: args.groupId,
-      createdById: args.createdById,
-      importSource: "POKER_NOW",
-      importSourceId: args.sourceId,
+      requestedById: args.createdById,
+      sourceId: args.sourceId,
+      date: args.date,
+      smallBlind: args.smallBlind,
+      bigBlind: args.bigBlind,
+      handCount: args.handCount,
+      players: args.players,
+      status: "PENDING",
+      requestedAt: Date.now(),
     });
+    return { status: "PENDING" as const, requestId };
+  },
+});
 
-    for (const imported of args.players) {
-      if (
-        !(Number.isFinite(imported.buyIn) && Number.isFinite(imported.cashOut))
-      ) {
-        throw new Error("Player totals must be valid numbers");
-      }
-      let playerId = imported.playerId;
-      if (playerId && !(await ctx.db.get(playerId))) {
-        throw new Error("A selected player no longer exists");
-      }
-      playerId ??= await ctx.db.insert("players", {
-        name: imported.displayName.trim(),
+export const respondToRequest = mutation({
+  args: {
+    requestId: v.id("pokerNowImportRequests"),
+    userId: v.id("users"),
+    approve: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request || request.status !== "PENDING") {
+      throw new Error("Import request not found");
+    }
+    const group = await ctx.db.get(request.groupId);
+    if (group?.ownerId !== args.userId) {
+      throw new Error("Only the group leader can review imports");
+    }
+    if (!args.approve) {
+      await ctx.db.patch(request._id, {
+        status: "REJECTED",
+        respondedAt: Date.now(),
+        respondedById: args.userId,
       });
-
-      const priorAlias = await ctx.db
-        .query("pokerNowAliases")
-        .withIndex("by_groupId_sourcePlayerId", (q) =>
+      return null;
+    }
+    if (await findDuplicate(ctx, request.groupId, request.sourceId)) {
+      const existingGame = await ctx.db
+        .query("games")
+        .withIndex("by_groupId_importSourceId", (q) =>
           q
-            .eq("groupId", args.groupId)
-            .eq("sourcePlayerId", imported.sourcePlayerId)
+            .eq("groupId", request.groupId)
+            .eq("importSourceId", request.sourceId)
         )
         .first();
-      if (priorAlias) {
-        await ctx.db.patch(priorAlias._id, {
-          playerId,
-          displayName: imported.displayName.trim(),
-        });
-      } else {
-        await ctx.db.insert("pokerNowAliases", {
-          groupId: args.groupId,
-          sourcePlayerId: imported.sourcePlayerId,
-          displayName: imported.displayName.trim(),
-          playerId,
-        });
+      if (existingGame) {
+        throw new Error("This PokerNow log has already been imported");
       }
-      await ctx.db.insert("gamePlayers", {
-        gameId,
-        playerId,
-        buyIn: imported.buyIn,
-        cashOut: imported.cashOut,
-        profit: Math.round((imported.cashOut - imported.buyIn) * 100) / 100,
-      });
-      await ctx.db.insert("transactions", {
-        gameId,
-        playerId,
-        type: "buyin",
-        amount: imported.buyIn,
-        description: "Imported from PokerNow",
-        createdById: args.createdById,
-        status: "APPROVED",
-      });
-      await ctx.db.insert("transactions", {
-        gameId,
-        playerId,
-        type: "cashout",
-        amount: imported.cashOut,
-        description: "Imported from PokerNow",
-        createdById: args.createdById,
-        status: "APPROVED",
-      });
     }
+    const gameId = await persistSession(ctx, {
+      groupId: request.groupId,
+      createdById: request.requestedById,
+      sourceId: request.sourceId,
+      date: request.date,
+      smallBlind: request.smallBlind,
+      bigBlind: request.bigBlind,
+      handCount: request.handCount,
+      players: request.players,
+    });
+    await ctx.db.patch(request._id, {
+      status: "APPROVED",
+      respondedAt: Date.now(),
+      respondedById: args.userId,
+      gameId,
+    });
     return gameId;
   },
 });

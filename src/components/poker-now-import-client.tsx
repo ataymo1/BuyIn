@@ -39,6 +39,7 @@ export function PokerNowImportClient() {
   const [session, setSession] = useState<PokerNowSession>();
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
+  const [success, setSuccess] = useState<string>();
   const [saving, setSaving] = useState(false);
   const candidates = useQuery(
     api.poker_now_imports.getCandidates,
@@ -81,8 +82,9 @@ export function PokerNowImportClient() {
     }
     setSaving(true);
     setError(undefined);
+    setSuccess(undefined);
     try {
-      const gameId = await createSession({
+      const result = await createSession({
         groupId: groupId as Id<"groups">,
         createdById: userId,
         sourceId: session.sourceId,
@@ -102,7 +104,13 @@ export function PokerNowImportClient() {
               : undefined,
         })),
       });
-      router.push(`/games/${gameId}`);
+      if (result.status === "APPROVED") {
+        router.push(`/games/${result.gameId}`);
+        return;
+      }
+      setSuccess("Import sent to the group leader for approval.");
+      setSession(undefined);
+      setSaving(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Import failed");
       setSaving(false);
@@ -165,6 +173,11 @@ export function PokerNowImportClient() {
           {error ? (
             <p className="rounded-md bg-destructive/10 p-3 text-destructive text-sm">
               {error}
+            </p>
+          ) : null}
+          {success ? (
+            <p className="rounded-md bg-green-500/10 p-3 text-green-700 text-sm dark:text-green-400">
+              {success}
             </p>
           ) : null}
         </CardContent>
