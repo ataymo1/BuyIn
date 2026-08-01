@@ -430,58 +430,24 @@ function CenterPot({
   );
 }
 
-function TimingStatus({
-  now,
-  state,
-}: {
-  now: number;
-  state: PublicLivePokerState;
-}) {
-  const deadline = state.transitionDeadlineAt ?? state.turnDeadlineAt;
-  if (!deadline) {
-    return null;
+function timerBarColor(isTimeBank: boolean, progress: number) {
+  if (isTimeBank) {
+    return "bg-amber-400";
   }
-
-  const seconds = Math.max(0, Math.ceil((deadline - now) / 1000));
-  const activeSeat =
-    state.activeSeatIndex === null ? null : state.seats[state.activeSeatIndex];
-  let label = `${activeSeat?.name ?? "Player"} to act: ${seconds} seconds`;
-  if (state.timeBankActive) {
-    label = `${activeSeat?.name ?? "Player"} time bank: ${seconds} seconds`;
-  } else if (state.transition === "deal") {
-    label = `Dealing cards: ${seconds} seconds`;
-  } else if (state.transition === "actionSettle") {
-    label = "Action settling";
-  } else if (state.transition === "runout") {
-    label = `Running out the board: next card in ${seconds} seconds`;
-  } else if (state.transition === "showdown") {
-    label = `Showdown: next hand available in ${seconds} seconds`;
-  }
-
-  return (
-    <output
-      aria-atomic="true"
-      aria-live="polite"
-      className={`rounded-md px-3 py-1.5 text-center font-semibold text-sm ${
-        state.timeBankActive
-          ? "bg-amber-500 text-zinc-950"
-          : "bg-zinc-900 text-white ring-1 ring-white/15"
-      }`}
-    >
-      {label}
-    </output>
-  );
+  return progress <= 25 ? "bg-red-500" : "bg-emerald-500";
 }
 
 function Seat({
   isActive,
+  isTimeBank,
   seat,
-  timeBankRemainingMs,
+  turnProgress,
   winAmount,
 }: {
   isActive?: boolean;
+  isTimeBank?: boolean;
   seat: PublicLivePokerSeat | null;
-  timeBankRemainingMs?: number;
+  turnProgress?: number;
   winAmount?: number;
 }) {
   if (!seat) {
@@ -494,7 +460,7 @@ function Seat({
 
   return (
     <div
-      className={`flex min-h-16 flex-col justify-center rounded-md border bg-background/95 p-2 text-center text-foreground shadow-xl backdrop-blur-sm sm:min-h-[4.5rem] ${
+      className={`relative flex min-h-16 flex-col justify-center overflow-hidden rounded-md border bg-background/95 px-2 py-2 text-center text-foreground shadow-xl backdrop-blur-sm sm:min-h-[4.5rem] ${
         seat.isCurrentUser
           ? "border-emerald-500 ring-2 ring-emerald-300/60"
           : ""
@@ -503,9 +469,8 @@ function Seat({
       }`}
     >
       <p className="truncate font-semibold text-xs">{seat.name}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">
-        Stack {chip(seat.stack)} · Time bank{" "}
-        {Math.ceil((timeBankRemainingMs ?? seat.timeBankRemainingMs) / 1000)}s
+      <p className="mt-0.5 truncate font-bold text-base tabular-nums sm:text-lg">
+        {chip(seat.stack)}
       </p>
       {seat.connected ? null : (
         <p className="mt-0.5 flex items-center justify-center gap-1 font-medium text-[10px] text-red-600">
@@ -517,6 +482,24 @@ function Seat({
         <p className="mt-0.5 font-semibold text-[11px] text-amber-700">
           Won {chip(winAmount)}
         </p>
+      ) : null}
+      {turnProgress !== undefined ? (
+        <div
+          aria-label={`${seat.name} action time remaining`}
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={Math.round(turnProgress)}
+          className="absolute inset-x-0 bottom-0 h-1.5 bg-zinc-300/60"
+          role="progressbar"
+        >
+          <div
+            className={`h-full origin-left transition-[width,background-color] duration-200 ease-linear ${timerBarColor(
+              Boolean(isTimeBank),
+              turnProgress
+            )}`}
+            style={{ width: `${turnProgress}%` }}
+          />
+        </div>
       ) : null}
     </div>
   );
@@ -814,62 +797,60 @@ function PendingBuyInRequestsPanel({
   }
 
   return (
-    <div className="rounded-lg border border-amber-300/40 bg-amber-50 p-3 text-amber-950">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className="w-full overflow-hidden rounded-xl border border-white/15 bg-zinc-950/95 text-white shadow-2xl backdrop-blur-md">
+      <div className="flex items-center justify-between border-white/10 border-b px-4 py-3">
         <div>
-          <h2 className="font-semibold text-sm">Pending buy-ins</h2>
-          <p className="text-amber-800 text-xs">
-            Approving seats the player or adds chips immediately.
-          </p>
+          <h2 className="font-semibold text-sm">Join requests</h2>
+          <p className="text-[11px] text-zinc-400">Waiting for your approval</p>
         </div>
-        <span className="rounded-md bg-amber-200 px-2 py-1 font-semibold text-xs">
+        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-emerald-500 px-1.5 font-bold text-[11px] text-zinc-950">
           {requests.length}
         </span>
       </div>
-      <div className="space-y-2">
+      <div className="max-h-48 divide-y divide-white/10 overflow-y-auto">
         {requests.map((request) => (
           <div
-            className="flex flex-col gap-2 rounded-md border border-amber-200 bg-white p-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+            className="flex items-center justify-between gap-3 px-4 py-3"
             key={request._id}
           >
-            <div>
-              <p className="font-medium">
-                {request.player?.name ?? "Player"} requested{" "}
-                {chip(request.amount)}
+            <div className="min-w-0 text-left">
+              <p className="truncate font-semibold text-sm">
+                {request.player?.name ?? "Player"}
+              </p>
+              <p className="text-xs text-zinc-400">
+                {requestTypeLabel(request.type)} · {chip(request.amount)}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex shrink-0 gap-1.5">
               <Button
+                aria-label={`Reject ${request.player?.name ?? "player"}`}
+                className="h-8 w-8 border-white/15 bg-white/5 p-0 text-zinc-300 hover:bg-red-500/20 hover:text-red-300"
                 disabled={
                   disabled || approvingId !== null || rejectingId !== null
                 }
                 onClick={() => onReject(request._id)}
-                size="sm"
+                size="icon"
                 variant="outline"
               >
                 {rejectingId === request._id ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <>
-                    <X className="h-4 w-4" />
-                    Reject
-                  </>
+                  <X className="h-4 w-4" />
                 )}
               </Button>
               <Button
+                aria-label={`Approve ${request.player?.name ?? "player"}`}
+                className="h-8 w-8 bg-emerald-500 p-0 text-zinc-950 hover:bg-emerald-400"
                 disabled={
                   disabled || approvingId !== null || rejectingId !== null
                 }
                 onClick={() => onApprove(request._id)}
-                size="sm"
+                size="icon"
               >
                 {approvingId === request._id ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <>
-                    <Check className="h-4 w-4" />
-                    Approve
-                  </>
+                  <Check className="h-4 w-4" />
                 )}
               </Button>
             </div>
@@ -1480,10 +1461,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           </div>
         </div>
 
-        <div className="mb-3 flex justify-center">
-          <TimingStatus now={serverClockNow} state={state} />
-        </div>
-
         <div
           className="relative mx-auto mb-48 min-h-[36rem] max-w-7xl overflow-visible rounded-lg border border-white/10 bg-zinc-950 px-2 py-16 shadow-2xl sm:min-h-[41.25rem] sm:px-16 sm:py-24 md:mb-32 lg:px-24"
           style={tableStageStyle}
@@ -1521,6 +1498,19 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             </div>
           </div>
 
+          {state.isHost && typedPendingBuyInRequests.length > 0 ? (
+            <div className="absolute top-1/2 left-1/2 z-40 w-[min(22rem,calc(100%-3rem))] -translate-x-1/2 -translate-y-1/2">
+              <PendingBuyInRequestsPanel
+                approvingId={approvingRequestId}
+                disabled={!isConnected}
+                onApprove={approveBuyInRequest}
+                onReject={rejectBuyInRequest}
+                rejectingId={rejectingRequestId}
+                requests={typedPendingBuyInRequests}
+              />
+            </div>
+          ) : null}
+
           {state?.seats.map((seat, index) => {
             const position = getViewerSeatPosition(
               index,
@@ -1552,17 +1542,22 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 >
                   <Seat
                     isActive={state.activeSeatIndex === index}
+                    isTimeBank={state.timeBankActive}
                     seat={seat}
-                    timeBankRemainingMs={
-                      seat &&
-                      state.timeBankActive &&
+                    turnProgress={
                       state.activeSeatIndex === index &&
-                      state.turnDeadlineAt
-                        ? Math.min(
-                            seat.timeBankRemainingMs,
-                            Math.max(0, state.turnDeadlineAt - serverClockNow)
+                      state.turnDeadlineAt &&
+                      state.turnStartedAt
+                        ? Math.max(
+                            0,
+                            Math.min(
+                              100,
+                              ((state.turnDeadlineAt - serverClockNow) /
+                                (state.turnDeadlineAt - state.turnStartedAt)) *
+                                100
+                            )
                           )
-                        : seat?.timeBankRemainingMs
+                        : undefined
                     }
                     winAmount={winnerAmountsBySeat.get(index)}
                   />
@@ -1636,16 +1631,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         </AlertDialog>
 
         <div className="space-y-3 rounded-lg bg-background p-3 text-foreground">
-          {state.isHost ? (
-            <PendingBuyInRequestsPanel
-              approvingId={approvingRequestId}
-              disabled={!isConnected}
-              onApprove={approveBuyInRequest}
-              onReject={rejectBuyInRequest}
-              rejectingId={rejectingRequestId}
-              requests={typedPendingBuyInRequests}
-            />
-          ) : null}
           {currentSeat ? (
             <div className="flex flex-wrap gap-2">
               {state?.isHost ? (
