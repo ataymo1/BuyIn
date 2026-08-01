@@ -28,6 +28,7 @@ export function canStartHand(state: LivePokerState) {
   return (
     state.phase === "waiting" &&
     !state.admissionsClosed &&
+    !state.gamePaused &&
     getEligibleSeats(state).length >= 2
   );
 }
@@ -204,6 +205,7 @@ export function createInitialState(config: {
     currentBet: 0,
     dealerSeatIndex: null,
     deck: [],
+    gamePaused: true,
     handNumber: 0,
     hostUserId: config.hostUserId,
     lastAggressorSeatIndex: null,
@@ -323,6 +325,9 @@ function requireEligibleSeatsForHand(state: LivePokerState) {
   }
   if (state.admissionsClosed) {
     throw new Error("Table is closed");
+  }
+  if (state.gamePaused) {
+    throw new Error("Table is paused");
   }
   const eligible = getEligibleSeats(state);
   if (eligible.length < 2) {

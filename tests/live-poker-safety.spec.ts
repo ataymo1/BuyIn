@@ -57,6 +57,13 @@ test("ready state and manual starts are absent from the public protocol", () => 
   expect(
     clientMessageSchema.safeParse({ ready: true, type: "ready" }).success
   ).toBe(false);
+  expect(
+    clientMessageSchema.safeParse({
+      paused: true,
+      type: "setTablePaused",
+    }).success
+  ).toBe(true);
+  expect(toPublicState(state, legacySeat.userId).gamePaused).toBe(true);
 });
 
 test("live poker JWTs require the dedicated configured secret", async () => {

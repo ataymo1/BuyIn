@@ -6,9 +6,12 @@ import {
   Loader2,
   LogOut,
   Minus,
+  Pause,
+  Play,
   Plus,
   Power,
   RefreshCw,
+  Trophy,
   UserX,
   WifiOff,
   X,
@@ -261,6 +264,13 @@ function chip(value: number) {
   });
 }
 
+function tableControlLabel(state: PublicLivePokerState) {
+  if (!state.gamePaused) {
+    return state.phase === "waiting" ? "Pause table" : "Pause after hand";
+  }
+  return state.handNumber === 0 ? "Start table" : "Resume table";
+}
+
 function connectionLabel(
   status: ConnectionStatus,
   attempt: number,
@@ -479,6 +489,54 @@ function CenterPot({
   );
 }
 
+function WinnerAnnouncement({ state }: { state: PublicLivePokerState }) {
+  if (state.phase !== "showdown" || state.lastWinners.length === 0) {
+    return null;
+  }
+
+  const seatIndexes = [
+    ...new Set(state.lastWinners.map((winner) => winner.seatIndex)),
+  ];
+  const names = seatIndexes.map(
+    (seatIndex) => state.seats[seatIndex]?.name ?? `Seat ${seatIndex + 1}`
+  );
+  const amount = state.lastWinners.reduce(
+    (total, winner) => total + winner.amount,
+    0
+  );
+  const descriptions = [
+    ...new Set(
+      state.lastWinners
+        .map((winner) => winner.description)
+        .filter((description): description is string => Boolean(description))
+    ),
+  ];
+
+  return (
+    <output
+      aria-live="assertive"
+      className="live-poker-winner-announcement pointer-events-none flex max-w-72 items-center gap-3 rounded-xl border border-amber-200/50 bg-zinc-950/95 px-4 py-3 text-left text-white shadow-[0_0_40px_rgba(251,191,36,0.35)]"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-zinc-950 shadow-amber-400/30 shadow-lg">
+        <Trophy aria-hidden="true" className="h-5 w-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate font-bold text-amber-300 text-sm">
+          {names.join(" & ")} {names.length > 1 ? "split the pot" : "wins"}
+        </span>
+        <span className="block font-black text-xl tabular-nums">
+          {chip(amount)}
+        </span>
+        {descriptions.length > 0 ? (
+          <span className="block truncate text-[11px] text-zinc-300">
+            {descriptions.join(" · ")}
+          </span>
+        ) : null}
+      </span>
+    </output>
+  );
+}
+
 function timerBarColor(isTimeBank: boolean, progress: number) {
   if (isTimeBank) {
     return "bg-amber-400";
@@ -514,8 +572,10 @@ function Seat({
           ? "border-emerald-500 ring-2 ring-emerald-300/60"
           : ""
       } ${isActive ? "border-amber-300 ring-2 ring-amber-200/70" : ""} ${
-        seat.folded ? "opacity-70" : ""
-      }`}
+        winAmount !== undefined
+          ? "live-poker-winner-seat border-amber-300 ring-2 ring-amber-300"
+          : ""
+      } ${seat.folded ? "opacity-70" : ""}`}
     >
       <p className="truncate font-semibold text-xs">{seat.name}</p>
       <p className="mt-0.5 truncate font-bold text-base tabular-nums sm:text-lg">
@@ -527,9 +587,9 @@ function Seat({
           Disconnected
         </p>
       )}
-      {winAmount ? (
-        <p className="mt-0.5 font-semibold text-[11px] text-amber-700">
-          Won {chip(winAmount)}
+      {winAmount !== undefined ? (
+        <p className="live-poker-winner-badge mt-1 rounded-full bg-amber-400 px-2 py-0.5 font-black text-[10px] text-zinc-950 uppercase tracking-wide">
+          Winner · +{chip(winAmount)}
         </p>
       ) : null}
       {turnProgress !== undefined ? (
@@ -1460,21 +1520,55 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               {chip(state.bigBlind)}
             </p>
           </div>
-          <div
-            aria-live="polite"
-            className={`flex items-center gap-2 rounded-full px-3 py-1 font-medium text-xs ${
-              isConnected
-                ? "bg-emerald-950 text-emerald-100"
-                : "bg-amber-950 text-amber-100"
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={`h-2 w-2 rounded-full ${
-                isConnected ? "bg-emerald-400" : "bg-amber-400"
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {state.isHost ? (
+              <Button
+                className={
+                  state.gamePaused
+                    ? "h-8 bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+                    : "h-8 border-white/15 bg-white/5 text-white hover:bg-white/10"
+                }
+                disabled={!isConnected}
+                onClick={() =>
+                  send({
+                    paused: !state.gamePaused,
+                    type: "setTablePaused",
+                  })
+                }
+                size="sm"
+                type="button"
+                variant={state.gamePaused ? "default" : "outline"}
+              >
+                {state.gamePaused ? (
+                  <Play aria-hidden="true" className="h-3.5 w-3.5" />
+                ) : (
+                  <Pause aria-hidden="true" className="h-3.5 w-3.5" />
+                )}
+                {tableControlLabel(state)}
+              </Button>
+            ) : null}
+            {!state.isHost && state.gamePaused ? (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-md bg-amber-400/15 px-3 font-semibold text-amber-200 text-xs ring-1 ring-amber-300/20">
+                <Pause aria-hidden="true" className="h-3.5 w-3.5" />
+                Paused by host
+              </span>
+            ) : null}
+            <div
+              aria-live="polite"
+              className={`flex items-center gap-2 rounded-full px-3 py-1 font-medium text-xs ${
+                isConnected
+                  ? "bg-emerald-950 text-emerald-100"
+                  : "bg-amber-950 text-amber-100"
               }`}
-            />
-            {connectionLabel(connectionStatus, connectionAttempt)}
+            >
+              <span
+                aria-hidden="true"
+                className={`h-2 w-2 rounded-full ${
+                  isConnected ? "bg-emerald-400" : "bg-amber-400"
+                }`}
+              />
+              {connectionLabel(connectionStatus, connectionAttempt)}
+            </div>
           </div>
         </div>
 
@@ -1494,9 +1588,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             <div className="absolute inset-10 rounded-full border border-emerald-100/20 border-dashed" />
 
             <div
-              className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 text-center"
+              className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-3 text-center"
               style={tableCenterStyle}
             >
+              <WinnerAnnouncement state={state} />
               <CenterPot
                 amount={state?.pot ?? 0}
                 phase={state?.phase ?? "connecting"}
@@ -1521,6 +1616,22 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 )}
               </div>
             </div>
+
+            {state.transition === "deal" ? (
+              <output
+                aria-label="Dealer is dealing cards"
+                aria-live="polite"
+                className="live-poker-deck pointer-events-none absolute top-1/2 left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+              >
+                <div className="flex items-end">
+                  <PlayingCard className="-mr-12" hidden rotate={-6} />
+                  <PlayingCard hidden rotate={3} />
+                </div>
+                <span className="mt-2 rounded-full bg-zinc-950/85 px-3 py-1 font-bold text-[10px] text-amber-200 uppercase tracking-[0.18em] ring-1 ring-white/10">
+                  Dealing
+                </span>
+              </output>
+            ) : null}
           </div>
 
           {state.isHost && typedPendingBuyInRequests.length > 0 ? (

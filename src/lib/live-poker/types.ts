@@ -4,6 +4,7 @@ export const cardSchema = z.string().regex(/^[2-9TJQKA][SHDC]$/);
 
 export const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("joinTable") }),
+  z.object({ type: z.literal("setTablePaused"), paused: z.boolean() }),
   z.object({
     type: z.literal("sit"),
     seatIndex: z.number().int().min(0).max(8),
@@ -126,6 +127,7 @@ export interface LivePokerState {
   currentBet: number;
   dealerSeatIndex: number | null;
   deck: string[];
+  gamePaused?: boolean;
   handNumber: number;
   hostUserId: string;
   lastAggressorSeatIndex: number | null;
@@ -158,6 +160,7 @@ export interface PublicLivePokerState {
   communityCards: string[];
   currentBet: number;
   dealerSeatIndex: number | null;
+  gamePaused: boolean;
   handNumber: number;
   isHost: boolean;
   lastWinners: PublicLivePokerWinner[];
@@ -208,6 +211,7 @@ export function toPublicState(
     communityCards: state.communityCards,
     currentBet: state.currentBet,
     dealerSeatIndex: state.dealerSeatIndex,
+    gamePaused: state.gamePaused ?? false,
     handNumber: state.handNumber,
     isHost: state.hostUserId === currentUserId,
     lastWinners: (state.lastWinners ?? []).map(

@@ -48,6 +48,7 @@ function makeState(overrides: Partial<LivePokerState> = {}) {
       seatCount: 6,
       smallBlind: 5,
     }),
+    gamePaused: false,
     ...overrides,
   };
 }
@@ -83,6 +84,50 @@ function totalChips(state: LivePokerState) {
 }
 
 test.describe("live poker automatic hand eligibility", () => {
+  test("new tables wait for the host to press play", () => {
+    const state = createInitialState({
+      bigBlind: 10,
+      hostUserId: "host",
+      maxBuyIn: 500,
+      minBuyIn: 0.01,
+      seatCount: 2,
+      smallBlind: 5,
+    });
+    addSeat(state, 0, 100);
+    addSeat(state, 1, 100);
+
+    expect(state.gamePaused).toBe(true);
+    expect(canStartHand(state)).toBe(false);
+    expect(reconcileNextHandTransition(state, 1000)).toBe(false);
+    expect(state.transition).toBeNull();
+
+    state.gamePaused = false;
+    expect(reconcileNextHandTransition(state, 1000)).toBe(true);
+    expect(state.transition).toBe("nextHand");
+  });
+
+  test("host pause cancels the next hand without interrupting this hand", () => {
+    const waiting = makeState({ seatCount: 2, seats: [null, null] });
+    addSeat(waiting, 0, 100);
+    addSeat(waiting, 1, 100);
+    reconcileNextHandTransition(waiting, 1000);
+
+    waiting.gamePaused = true;
+    expect(reconcileNextHandTransition(waiting, 1500)).toBe(true);
+    expect(waiting.transition).toBeNull();
+
+    waiting.gamePaused = false;
+    reconcileNextHandTransition(waiting, 2000);
+    expect(startAutomaticHand(waiting, 5000)).toBe(true);
+    const activeHand = structuredClone(waiting);
+    waiting.gamePaused = true;
+
+    expect(reconcileNextHandTransition(waiting, 5100)).toBe(false);
+    expect(waiting.phase).toBe("preflop");
+    expect(waiting.handNumber).toBe(activeHand.handNumber);
+    expect(waiting.seats).toEqual(activeHand.seats);
+  });
+
   test("deals every seated player with chips without a ready flag", () => {
     const state = makeState({ seatCount: 3, seats: [null, null, null] });
     const first = addSeat(state, 0, 100);

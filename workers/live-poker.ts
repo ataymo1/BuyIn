@@ -508,6 +508,20 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       return;
     }
 
+    if (message.type === "setTablePaused") {
+      this.requireHost(auth.userId);
+      this.state.gamePaused = message.paused;
+      let pauseMessage = "The host resumed the table";
+      if (message.paused) {
+        pauseMessage =
+          this.state.phase === "waiting"
+            ? "The host paused the table"
+            : "The host will pause the table after this hand";
+      }
+      this.state.actionLog.push(pauseMessage);
+      return;
+    }
+
     if (message.type === "kickSeat") {
       this.requireHost(auth.userId);
       if (this.state.phase !== "waiting") {
