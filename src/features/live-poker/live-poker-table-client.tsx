@@ -200,6 +200,7 @@ function getMarkerLayout(position: { x: number; y: number }) {
   if (zone === "top") {
     return {
       bet: towardCenter(position, 0.48, 0, 1),
+      blind: towardCenter(position, 0.2, sideNudge, 1),
       cards: {
         x: clamp(position.x, 8, 92),
         y: clamp(position.y - 8, 7, 92),
@@ -212,6 +213,7 @@ function getMarkerLayout(position: { x: number; y: number }) {
   if (zone === "bottom") {
     return {
       bet: towardCenter(position, 0.5, 0, -3),
+      blind: towardCenter(position, 0.2, sideNudge, -1),
       cards: {
         x: clamp(position.x, 8, 92),
         y: clamp(position.y - 8, 7, 92),
@@ -223,6 +225,7 @@ function getMarkerLayout(position: { x: number; y: number }) {
 
   return {
     bet: towardCenter(position, 0.5, sideNudge, 0),
+    blind: towardCenter(position, 0.2, sideNudge, 0),
     cards: {
       x: clamp(position.x, 8, 92),
       y: clamp(position.y - 8, 7, 92),
@@ -684,6 +687,10 @@ function TableSeatMarkers({
       phase !== "showdown" &&
       seat.bet > 0 &&
       Boolean(currentStreetAction));
+  const isBlind =
+    currentStreetAction?.type === "smallBlind" ||
+    currentStreetAction?.type === "bigBlind";
+  const badgePosition = isBlind ? markerLayout.blind : markerLayout.bet;
 
   return (
     <>
@@ -691,8 +698,8 @@ function TableSeatMarkers({
         <div
           className="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
           style={{
-            left: `${markerLayout.bet.x}%`,
-            top: `${markerLayout.bet.y}%`,
+            left: `${badgePosition.x}%`,
+            top: `${badgePosition.y}%`,
           }}
         >
           <CurrentBetBadge
