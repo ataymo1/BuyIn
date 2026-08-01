@@ -9,15 +9,31 @@ import {
   Play,
   Plus,
   Power,
+  RefreshCw,
   UserX,
+  WifiOff,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConvexUser } from "@/lib/convex-hooks";
+import {
+  getLivePokerReconnectDelay,
+  LIVE_POKER_MAX_RECONNECT_ATTEMPTS,
+} from "@/lib/live-poker/reconnect";
 import type {
   LivePokerClientMessage,
   LivePokerServerMessage,
@@ -36,6 +52,12 @@ interface LivePokerTableClientProps {
   tableId: string;
 }
 
+type ConnectionStatus =
+  | "connected"
+  | "connecting"
+  | "disconnected"
+  | "reconnecting";
+
 const Card = dynamic(
   () => import("@heruka_urgyen/react-playing-cards/lib/FcB"),
   { ssr: false }
@@ -44,7 +66,6 @@ const Card = dynamic(
 const tableStageStyle = {
   background:
     "radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.12), transparent 34%), linear-gradient(145deg, #18181b, #050505)",
-  minHeight: 660,
 } satisfies CSSProperties;
 
 const tableVignetteStyle = {
@@ -56,7 +77,6 @@ const tableFeltStyle = {
   backgroundColor: "#047857",
   boxShadow:
     "0 0 0 1px rgba(255, 255, 255, 0.14), 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 0 0 8px rgba(255, 255, 255, 0.07), inset 0 0 45px rgba(0, 0, 0, 0.36)",
-  height: 440,
 } satisfies CSSProperties;
 
 const tableFeltSurfaceStyle = {
@@ -241,6 +261,27 @@ function chip(value: number) {
   });
 }
 
+function connectionLabel(
+  status: ConnectionStatus,
+  attempt: number,
+  detailed = false
+) {
+  switch (status) {
+    case "connected":
+      return "Connected";
+    case "connecting":
+      return detailed ? "Connecting to the live table…" : "Connecting";
+    case "disconnected":
+      return detailed ? "Live table disconnected" : "Disconnected";
+    case "reconnecting":
+      return detailed
+        ? `Reconnecting to the live table (attempt ${attempt} of ${LIVE_POKER_MAX_RECONNECT_ATTEMPTS})…`
+        : `Reconnecting (${attempt}/${LIVE_POKER_MAX_RECONNECT_ATTEMPTS})`;
+    default:
+      return "Disconnected";
+  }
+}
+
 function getBetTargetBounds(
   state: PublicLivePokerState,
   seat: PublicLivePokerSeat
@@ -420,6 +461,12 @@ function Seat({
       <p className="mt-0.5 text-[11px] text-muted-foreground">
         Stack {chip(seat.stack)}
       </p>
+      {seat.connected ? null : (
+        <p className="mt-0.5 flex items-center justify-center gap-1 font-medium text-[10px] text-red-600">
+          <WifiOff aria-hidden="true" className="h-3 w-3" />
+          Disconnected
+        </p>
+      )}
       {winAmount ? (
         <p className="mt-0.5 font-semibold text-[11px] text-amber-700">
           Won {chip(winAmount)}
@@ -532,7 +579,7 @@ function BettingControlsOverlay({
   }
 
   return (
-    <div className="absolute right-3 bottom-[-6.25rem] left-3 z-40 flex justify-center sm:right-6 sm:left-6">
+    <div className="absolute right-0 bottom-[-11rem] left-0 z-40 flex justify-center px-1 sm:right-6 sm:left-6 sm:px-0 md:bottom-[-6.25rem]">
       <div className="flex w-full max-w-3xl flex-col gap-1.5 rounded-lg border border-white/10 bg-zinc-950/90 p-2 text-white shadow-2xl backdrop-blur-md md:flex-row md:items-stretch">
         <div className="grid grid-cols-3 gap-1 md:w-64">
           <Button
@@ -588,7 +635,51 @@ function BettingControlsOverlay({
             </button>
           </div>
 
-          <div className="mt-1.5 grid grid-cols-[auto_minmax(7rem,1fr)_auto_auto_auto] items-center gap-2">
+          <div className="mt-1.5 space-y-1.5 md:hidden">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+              <button
+                aria-label="Decrease bet"
+                className="flex h-8 w-8 touch-manipulation items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
+                onClick={() => setTarget(clampedAmount - step)}
+                type="button"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <input
+                aria-label="Bet amount"
+                className="h-2 w-full min-w-0 accent-emerald-400"
+                max={maxTarget}
+                min={minTarget}
+                onChange={(event) => setTarget(Number(event.target.value))}
+                step={step}
+                type="range"
+                value={clampedAmount}
+              />
+              <button
+                aria-label="Increase bet"
+                className="flex h-8 w-8 touch-manipulation items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
+                onClick={() => setTarget(clampedAmount + step)}
+                type="button"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <div className="flex h-8 min-w-0 items-center justify-center rounded-md bg-black px-2 font-bold text-white shadow-inner ring-1 ring-white/10">
+                {chip(clampedAmount)}
+              </div>
+              <Button
+                className="h-8 bg-emerald-500 px-4 text-zinc-950 hover:bg-emerald-400"
+                disabled={maxTarget <= 0}
+                onClick={submitBetOrRaise}
+                type="button"
+              >
+                {clampedAmount >= maxTarget ? "All In" : actionLabel}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-1.5 hidden grid-cols-[auto_minmax(7rem,1fr)_auto_auto_auto] items-center gap-2 md:grid">
             <button
               aria-label="Decrease bet"
               className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
@@ -598,6 +689,7 @@ function BettingControlsOverlay({
               <Minus className="h-4 w-4" />
             </button>
             <input
+              aria-label="Bet amount"
               className="h-2 min-w-0 accent-emerald-400"
               max={maxTarget}
               min={minTarget}
@@ -649,12 +741,14 @@ function requestTypeLabel(type: LivePokerBuyInRequestRow["type"]) {
 
 function PendingBuyInRequestsPanel({
   approvingId,
+  disabled,
   onApprove,
   onReject,
   rejectingId,
   requests,
 }: {
   approvingId: string | null;
+  disabled: boolean;
   onApprove: (requestId: string) => void;
   onReject: (requestId: string) => void;
   rejectingId: string | null;
@@ -692,7 +786,7 @@ function PendingBuyInRequestsPanel({
             <div className="flex gap-2">
               <Button
                 disabled={
-                  approvingId === request._id || rejectingId === request._id
+                  disabled || approvingId !== null || rejectingId !== null
                 }
                 onClick={() => onReject(request._id)}
                 size="sm"
@@ -709,7 +803,7 @@ function PendingBuyInRequestsPanel({
               </Button>
               <Button
                 disabled={
-                  approvingId === request._id || rejectingId === request._id
+                  disabled || approvingId !== null || rejectingId !== null
                 }
                 onClick={() => onApprove(request._id)}
                 size="sm"
@@ -764,6 +858,10 @@ function UserBuyInRequestStatus({
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component owns the socket lifecycle and compact v1 table controls.
 export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const socketRef = useRef<WebSocket | null>(null);
+  const socketLifecycleRef = useRef(0);
+  const approvalInFlightRef = useRef(false);
+  const tableIdRef = useRef(tableId);
+  tableIdRef.current = tableId;
   const { userId } = useConvexUser();
   const tableConvexId = tableId as Id<"livePokerTables">;
   const [playerId, setPlayerId] = useState<Id<"players"> | null>(null);
@@ -772,14 +870,21 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const [approvingRequestId, setApprovingRequestId] = useState<string | null>(
     null
   );
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(true);
   const [isRequestingBuyIn, setIsRequestingBuyIn] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [kickingSeatIndex, setKickingSeatIndex] = useState<number | null>(null);
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(
     null
   );
-  const [state, setState] = useState<PublicLivePokerState | null>(null);
+  const [stateSnapshot, setStateSnapshot] = useState<{
+    state: PublicLivePokerState;
+    tableId: string;
+  } | null>(null);
+  const state = stateSnapshot?.tableId === tableId ? stateSnapshot.state : null;
   const createBuyInRequest = useCreateLivePokerBuyInRequest();
   const respondToBuyInRequest = useRespondToLivePokerBuyInRequest();
   const { requests: pendingBuyInRequests } = usePendingLivePokerBuyInRequests(
@@ -792,122 +897,221 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   );
 
   const send = useCallback((message: LivePokerClientMessage) => {
-    socketRef.current?.send(JSON.stringify(message));
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setError(
+        "The table is disconnected. Wait for it to reconnect and try again."
+      );
+      return false;
+    }
+
+    socket.send(JSON.stringify(message));
+    return true;
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
+    const nextTableId = tableId;
+    setStateSnapshot(null);
+    setPlayerId(null);
+    setBetTargetAmount(0);
+    setApprovingRequestId(null);
+    setRejectingRequestId(null);
+    setKickingSeatIndex(null);
+    setIsRequestingBuyIn(false);
+    setError(nextTableId ? null : "A table ID is required.");
+    approvalInFlightRef.current = false;
+  }, [tableId]);
 
-    async function connect() {
-      setIsConnecting(true);
-      const response = await fetch("/api/live-poker/token", {
-        body: JSON.stringify({ tableId }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
+  useEffect(() => {
+    let active = true;
+    let reconnectAttempt = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let tokenController: AbortController | null = null;
+    const lifecycle = socketLifecycleRef.current + retryNonce + 1;
+    socketLifecycleRef.current = lifecycle;
 
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        throw new Error(body?.error ?? "Unable to join live table");
-      }
-
-      const body = (await response.json()) as {
-        config: {
-          bigBlind: number;
-          createdById: string;
-          maxBuyIn: number;
-          minBuyIn: number;
-          seatCount: number;
-          smallBlind: number;
-        };
-        player: {
-          id: Id<"players">;
-          name: string;
-        };
-        token: string;
-      };
-
-      setPlayerId(body.player.id);
-
-      const workerUrl = new URL(
-        `/live-poker/${encodeURIComponent(tableId)}`,
-        process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL ?? "ws://localhost:8787"
-      );
-      workerUrl.searchParams.set("bigBlind", String(body.config.bigBlind));
-      workerUrl.searchParams.set("hostUserId", body.config.createdById);
-      workerUrl.searchParams.set("maxBuyIn", String(body.config.maxBuyIn));
-      workerUrl.searchParams.set("minBuyIn", String(body.config.minBuyIn));
-      workerUrl.searchParams.set("seatCount", String(body.config.seatCount));
-      workerUrl.searchParams.set("smallBlind", String(body.config.smallBlind));
-      workerUrl.searchParams.set("token", body.token);
-
-      const socket = new WebSocket(workerUrl);
-
-      socket.addEventListener("open", () => {
-        if (!isMounted) {
-          return;
-        }
-        setError(null);
-        setIsConnecting(false);
-        socket.send(JSON.stringify({ type: "joinTable" }));
-      });
-
-      socket.addEventListener("message", (event) => {
-        const message = JSON.parse(
-          String(event.data)
-        ) as LivePokerServerMessage;
-        if (message.type === "tableState") {
-          setState(message.state);
-          setError(null);
-        }
-        if (message.type === "actionRejected") {
-          setError(message.message);
-        }
-      });
-
-      socket.addEventListener("close", () => {
-        if (isMounted) {
-          setIsConnecting(true);
-        }
-      });
-
-      socket.addEventListener("error", () => {
-        if (isMounted) {
-          setError("Unable to connect to the live table");
-          setIsConnecting(false);
-        }
-      });
-
-      socketRef.current = socket;
+    function isCurrentLifecycle() {
+      return active && socketLifecycleRef.current === lifecycle;
     }
 
-    connect().catch((connectError) => {
-      if (isMounted) {
+    function scheduleReconnect(message: string) {
+      if (!isCurrentLifecycle()) {
+        return;
+      }
+      if (reconnectAttempt >= LIVE_POKER_MAX_RECONNECT_ATTEMPTS) {
+        setConnectionStatus("disconnected");
         setError(
+          `${message} Automatic reconnect stopped after ${LIVE_POKER_MAX_RECONNECT_ATTEMPTS} attempts.`
+        );
+        return;
+      }
+
+      const delay = getLivePokerReconnectDelay(reconnectAttempt);
+      reconnectAttempt += 1;
+      setConnectionAttempt(reconnectAttempt);
+      setConnectionStatus("reconnecting");
+      reconnectTimer = setTimeout(connect, delay);
+    }
+
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: The socket setup keeps fetch, WebSocket, and stale-lifecycle guards together.
+    async function connect() {
+      if (!isCurrentLifecycle()) {
+        return;
+      }
+
+      setConnectionStatus(
+        reconnectAttempt === 0 ? "connecting" : "reconnecting"
+      );
+      tokenController = new AbortController();
+
+      try {
+        const response = await fetch("/api/live-poker/token", {
+          body: JSON.stringify({ tableId }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+          signal: tokenController.signal,
+        });
+
+        if (!response.ok) {
+          const errorBody = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(errorBody?.error ?? "Unable to join live table");
+        }
+
+        const body = (await response.json()) as {
+          config: {
+            bigBlind: number;
+            createdById: string;
+            maxBuyIn: number;
+            minBuyIn: number;
+            seatCount: number;
+            smallBlind: number;
+          };
+          player: {
+            id: Id<"players">;
+            name: string;
+          };
+          token: string;
+        };
+
+        if (!isCurrentLifecycle()) {
+          return;
+        }
+        setPlayerId(body.player.id);
+
+        const workerUrl = new URL(
+          `/live-poker/${encodeURIComponent(tableId)}`,
+          process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL ?? "ws://localhost:8787"
+        );
+        workerUrl.searchParams.set("bigBlind", String(body.config.bigBlind));
+        workerUrl.searchParams.set("hostUserId", body.config.createdById);
+        workerUrl.searchParams.set("maxBuyIn", String(body.config.maxBuyIn));
+        workerUrl.searchParams.set("minBuyIn", String(body.config.minBuyIn));
+        workerUrl.searchParams.set("seatCount", String(body.config.seatCount));
+        workerUrl.searchParams.set(
+          "smallBlind",
+          String(body.config.smallBlind)
+        );
+        workerUrl.searchParams.set("token", body.token);
+
+        const socket = new WebSocket(workerUrl);
+        socketRef.current = socket;
+
+        function isCurrentSocket() {
+          return isCurrentLifecycle() && socketRef.current === socket;
+        }
+
+        socket.addEventListener("open", () => {
+          if (!isCurrentSocket()) {
+            socket.close();
+            return;
+          }
+          reconnectAttempt = 0;
+          setConnectionAttempt(0);
+          setConnectionStatus("connected");
+          setError(null);
+          socket.send(JSON.stringify({ type: "joinTable" }));
+        });
+
+        socket.addEventListener("message", (event) => {
+          if (!isCurrentSocket()) {
+            return;
+          }
+          try {
+            const message = JSON.parse(
+              String(event.data)
+            ) as LivePokerServerMessage;
+            if (message.type === "tableState") {
+              setStateSnapshot({ state: message.state, tableId });
+            } else if (message.type === "actionRejected") {
+              setError(message.message);
+            }
+          } catch {
+            setError("The live table sent an unreadable update.");
+          }
+        });
+
+        socket.addEventListener("close", () => {
+          if (!isCurrentSocket()) {
+            return;
+          }
+          socketRef.current = null;
+          scheduleReconnect("Connection to the live table was lost.");
+        });
+
+        socket.addEventListener("error", () => {
+          if (!isCurrentSocket()) {
+            return;
+          }
+          setError("Unable to connect to the live table. Retrying…");
+          socket.close();
+        });
+      } catch (connectError) {
+        if (
+          !isCurrentLifecycle() ||
+          (connectError instanceof DOMException &&
+            connectError.name === "AbortError")
+        ) {
+          return;
+        }
+        const message =
           connectError instanceof Error
             ? connectError.message
-            : "Unable to connect"
-        );
-        setIsConnecting(false);
+            : "Unable to connect to the live table.";
+        setError(message);
+        scheduleReconnect(message);
       }
-    });
+    }
+
+    setConnectionAttempt(0);
+    setConnectionStatus("connecting");
+    connect();
 
     return () => {
-      isMounted = false;
-      socketRef.current?.close();
+      active = false;
+      socketLifecycleRef.current += 1;
+      tokenController?.abort();
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      const socket = socketRef.current;
       socketRef.current = null;
+      socket?.close();
     };
-  }, [tableId]);
+  }, [retryNonce, tableId]);
 
   const currentSeat = useMemo(
     () => state?.seats.find((seat) => seat?.isCurrentUser) ?? null,
     [state]
   );
+  const isConnected = connectionStatus === "connected";
+  const numericBuyIn = Number(buyIn);
+  const hasFiniteBuyIn = Number.isFinite(numericBuyIn);
   const callAmount =
     currentSeat && state ? state.currentBet - currentSeat.bet : 0;
   const canAct =
+    isConnected &&
     Boolean(currentSeat && state?.activeSeatIndex === currentSeat.seatIndex) &&
     state?.phase !== "waiting";
   const betTargetBounds =
@@ -925,25 +1129,36 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     state?.phase,
   ].join(":");
   const canRequestAddOn =
+    isConnected &&
     Boolean(currentSeat && state?.phase === "waiting") &&
-    Number(buyIn) > 0 &&
-    Number(buyIn) <= (state?.maxBuyIn ?? Number.POSITIVE_INFINITY) &&
+    hasFiniteBuyIn &&
+    numericBuyIn > 0 &&
+    numericBuyIn <= (state?.maxBuyIn ?? Number.POSITIVE_INFINITY) &&
     !isRequestingBuyIn;
   const canRequestInitialBuyIn =
+    isConnected &&
     Boolean(!currentSeat && state?.phase === "waiting") &&
-    Number(buyIn) >= (state?.minBuyIn ?? 0) &&
-    Number(buyIn) <= (state?.maxBuyIn ?? 0) &&
+    hasFiniteBuyIn &&
+    numericBuyIn >= (state?.minBuyIn ?? 0) &&
+    numericBuyIn <= (state?.maxBuyIn ?? 0) &&
     !isRequestingBuyIn;
   const canToggleReady = Boolean(
-    state?.phase === "waiting" &&
+    isConnected &&
+      state?.phase === "waiting" &&
       currentSeat &&
       !currentSeat.sitOut &&
       (currentSeat.ready || currentSeat.stack > 0)
   );
-  const readyPlayerCount =
+  const readySeats =
     state?.seats.filter(
       (seat) => seat && !seat.sitOut && seat.ready && seat.stack > 0
-    ).length ?? 0;
+    ) ?? [];
+  const readyPlayerCount = readySeats.length;
+  const disconnectedReadyPlayerCount = readySeats.filter(
+    (seat) => !seat?.connected
+  ).length;
+  const kickCandidate =
+    kickingSeatIndex === null ? null : (state?.seats[kickingSeatIndex] ?? null);
   const winnerAmountsBySeat = useMemo(() => {
     const amounts = new Map<number, number>();
     for (const winner of state?.lastWinners ?? []) {
@@ -967,7 +1182,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     setBetTargetAmount(betTargetMin);
   }, [betTargetMin, betTargetResetKey, canAct]);
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Validation and stale-table guards keep the request atomic.
   async function requestInitialBuyIn(seatIndex: number) {
+    const requestTableId = tableId;
     if (!(state && userId && playerId)) {
       setError("Sign in with a player profile before requesting a seat");
       return;
@@ -989,28 +1206,33 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     setError(null);
     try {
       const requestId = await createBuyInRequest({
-        amount: Number(buyIn),
+        amount: numericBuyIn,
         playerId,
         seatIndex: firstOpenSeat,
         tableId: tableConvexId,
         type: "INITIAL",
         userId,
       });
-      if (state.isHost) {
+      if (state.isHost && tableIdRef.current === requestTableId) {
         await approveBuyInRequest(String(requestId));
       }
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to request buy-in"
-      );
+      if (tableIdRef.current === requestTableId) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to request buy-in"
+        );
+      }
     } finally {
-      setIsRequestingBuyIn(false);
+      if (tableIdRef.current === requestTableId) {
+        setIsRequestingBuyIn(false);
+      }
     }
   }
 
   async function requestAddOn() {
+    const requestTableId = tableId;
     if (!(userId && playerId && currentSeat)) {
       setError("Take a seat before requesting chips");
       return;
@@ -1024,27 +1246,42 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     setError(null);
     try {
       const requestId = await createBuyInRequest({
-        amount: Number(buyIn),
+        amount: numericBuyIn,
         playerId,
         tableId: tableConvexId,
         type: "ADD_ON",
         userId,
       });
-      if (state?.isHost) {
+      if (state?.isHost && tableIdRef.current === requestTableId) {
         await approveBuyInRequest(String(requestId));
       }
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to request chips"
-      );
+      if (tableIdRef.current === requestTableId) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to request chips"
+        );
+      }
     } finally {
-      setIsRequestingBuyIn(false);
+      if (tableIdRef.current === requestTableId) {
+        setIsRequestingBuyIn(false);
+      }
     }
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Approval locking and stale-table guards prevent duplicate side effects.
   async function approveBuyInRequest(requestId: string) {
+    const requestTableId = tableId;
+    if (approvalInFlightRef.current) {
+      return;
+    }
+    if (!isConnected) {
+      setError("Reconnect before approving a buy-in request.");
+      return;
+    }
+
+    approvalInFlightRef.current = true;
     setApprovingRequestId(requestId);
     setError(null);
     try {
@@ -1059,19 +1296,27 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         } | null;
         throw new Error(body?.error ?? "Unable to approve buy-in request");
       }
-      send({ type: "requestSync" });
+      if (tableIdRef.current === requestTableId) {
+        send({ type: "requestSync" });
+      }
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to approve buy-in request"
-      );
+      if (tableIdRef.current === requestTableId) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to approve buy-in request"
+        );
+      }
     } finally {
-      setApprovingRequestId(null);
+      if (tableIdRef.current === requestTableId) {
+        approvalInFlightRef.current = false;
+        setApprovingRequestId(null);
+      }
     }
   }
 
   async function rejectBuyInRequest(requestId: string) {
+    const requestTableId = tableId;
     if (!userId) {
       return;
     }
@@ -1084,13 +1329,17 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         userId,
       });
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to reject buy-in request"
-      );
+      if (tableIdRef.current === requestTableId) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to reject buy-in request"
+        );
+      }
     } finally {
-      setRejectingRequestId(null);
+      if (tableIdRef.current === requestTableId) {
+        setRejectingRequestId(null);
+      }
     }
   }
 
@@ -1099,10 +1348,33 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     send({ seatIndex, type: "kickSeat" });
   }
 
-  if (isConnecting && !state) {
+  if (!state) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex min-h-[24rem] items-center justify-center p-4 text-center">
+        <div aria-live="polite" className="space-y-3">
+          {connectionStatus !== "disconnected" ? (
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+          ) : (
+            <WifiOff className="mx-auto h-8 w-8 text-destructive" />
+          )}
+          <p className="font-medium">
+            {connectionLabel(connectionStatus, connectionAttempt, true)}
+          </p>
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          {connectionStatus === "disconnected" ? (
+            <Button
+              onClick={() => {
+                setError(null);
+                setRetryNonce((value) => value + 1);
+              }}
+              type="button"
+              variant="outline"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Try again
+            </Button>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -1110,28 +1382,42 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   return (
     <div>
       <section
-        className="rounded-lg bg-zinc-950 p-4 text-white shadow-inner"
+        className="rounded-lg bg-zinc-950 p-2 text-white shadow-inner sm:p-4"
         style={{ minHeight: 640 }}
       >
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-2 px-1 sm:px-0">
           <div>
             <h1 className="font-bold text-2xl">Live Poker</h1>
             <p className="text-emerald-100 text-sm">
-              {state?.phase ?? "connecting"} · Blinds{" "}
-              {state
-                ? `${chip(state.smallBlind)} / ${chip(state.bigBlind)}`
-                : ""}
+              {state.phase} · Blinds {chip(state.smallBlind)} /{" "}
+              {chip(state.bigBlind)}
             </p>
+          </div>
+          <div
+            aria-live="polite"
+            className={`flex items-center gap-2 rounded-full px-3 py-1 font-medium text-xs ${
+              isConnected
+                ? "bg-emerald-950 text-emerald-100"
+                : "bg-amber-950 text-amber-100"
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`h-2 w-2 rounded-full ${
+                isConnected ? "bg-emerald-400" : "bg-amber-400"
+              }`}
+            />
+            {connectionLabel(connectionStatus, connectionAttempt)}
           </div>
         </div>
 
         <div
-          className="relative mx-auto mb-32 max-w-7xl overflow-visible rounded-lg border border-white/10 bg-zinc-950 px-8 py-20 shadow-2xl sm:px-16 sm:py-24 lg:px-24"
+          className="relative mx-auto mb-48 min-h-[36rem] max-w-7xl overflow-visible rounded-lg border border-white/10 bg-zinc-950 px-2 py-16 shadow-2xl sm:min-h-[41.25rem] sm:px-16 sm:py-24 md:mb-32 lg:px-24"
           style={tableStageStyle}
         >
           <div className="absolute inset-0" style={tableVignetteStyle} />
           <div
-            className="relative rounded-full border-8 border-zinc-800 bg-emerald-700"
+            className="relative h-[24rem] rounded-full border-8 border-zinc-800 bg-emerald-700 sm:h-[27.5rem]"
             style={tableFeltStyle}
           >
             <div
@@ -1181,10 +1467,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                   seat={seat}
                 />
                 <button
-                  className="absolute z-20 w-32 -translate-x-1/2 -translate-y-1/2 text-left transition-transform hover:z-30 hover:scale-105 focus:z-30 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-36"
-                  onClick={() =>
-                    seat ? undefined : requestInitialBuyIn(index)
-                  }
+                  className="absolute z-20 w-24 -translate-x-1/2 -translate-y-1/2 touch-manipulation text-left transition-transform focus:z-30 focus:outline-none focus:ring-2 focus:ring-emerald-200 enabled:hover:z-30 enabled:hover:scale-105 sm:w-36 min-[380px]:w-28"
+                  disabled={Boolean(seat) || !canRequestInitialBuyIn}
+                  onClick={() => requestInitialBuyIn(index)}
                   style={{
                     left: `${position.x}%`,
                     top: `${position.y}%`,
@@ -1201,21 +1486,13 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                   <button
                     aria-label={`Kick ${seat.name} from seat ${index + 1}`}
                     className="absolute z-30 flex h-7 w-7 -translate-x-1/2 translate-y-5 items-center justify-center rounded-md bg-red-600 text-white shadow-lg ring-1 ring-white/20 transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-zinc-700"
-                    disabled={state.phase !== "waiting"}
-                    onClick={() =>
-                      kickingSeatIndex === index
-                        ? kickSeat(index)
-                        : setKickingSeatIndex(index)
-                    }
+                    disabled={!isConnected || state.phase !== "waiting"}
+                    onClick={() => setKickingSeatIndex(index)}
                     style={{
                       left: `${position.x}%`,
                       top: `${position.y}%`,
                     }}
-                    title={
-                      kickingSeatIndex === index
-                        ? "Click again to confirm"
-                        : "Kick seat"
-                    }
+                    title="Kick seat"
                     type="button"
                   >
                     <UserX className="h-3.5 w-3.5" />
@@ -1237,10 +1514,47 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
           ) : null}
         </div>
 
+        <AlertDialog
+          onOpenChange={(open) => {
+            if (!open) {
+              setKickingSeatIndex(null);
+            }
+          }}
+          open={kickingSeatIndex !== null}
+        >
+          <AlertDialogContent className="max-w-[calc(100%-2rem)] rounded-lg sm:max-w-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove player from table?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {kickCandidate
+                  ? `${kickCandidate.name} will be removed from seat ${kickCandidate.seatIndex + 1}. This cannot be undone.`
+                  : "This seat is no longer occupied."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={
+                  !isConnected || state.phase !== "waiting" || !kickCandidate
+                }
+                onClick={() => {
+                  if (kickingSeatIndex !== null) {
+                    kickSeat(kickingSeatIndex);
+                  }
+                }}
+              >
+                Remove player
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <div className="space-y-3 rounded-lg bg-background p-3 text-foreground">
-          {state?.isHost ? (
+          {state.isHost ? (
             <PendingBuyInRequestsPanel
               approvingId={approvingRequestId}
+              disabled={!isConnected}
               onApprove={approveBuyInRequest}
               onReject={rejectBuyInRequest}
               rejectingId={rejectingRequestId}
@@ -1251,7 +1565,11 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             <div className="flex flex-wrap gap-2">
               {state?.isHost ? (
                 <Button
-                  disabled={state.phase !== "waiting" || readyPlayerCount < 2}
+                  disabled={
+                    !isConnected ||
+                    state.phase !== "waiting" ||
+                    readyPlayerCount < 2
+                  }
                   onClick={() => send({ type: "startHand" })}
                 >
                   <Play className="h-4 w-4" />
@@ -1288,6 +1606,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 </>
               ) : null}
               <Button
+                disabled={!isConnected}
                 onClick={() =>
                   send({ sitOut: !currentSeat.sitOut, type: "sitOut" })
                 }
@@ -1297,7 +1616,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 {currentSeat.sitOut ? "Return" : "Sit out"}
               </Button>
               <Button
-                disabled={state?.phase !== "waiting"}
+                disabled={!isConnected || state.phase !== "waiting"}
                 onClick={() => send({ type: "leaveSeat" })}
                 variant="outline"
               >
@@ -1324,8 +1643,37 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             </div>
           )}
           <UserBuyInRequestStatus requests={typedUserBuyInRequests} />
+          {state.isHost && disconnectedReadyPlayerCount > 0 ? (
+            <p className="text-amber-700 text-sm">
+              {disconnectedReadyPlayerCount} disconnected ready player
+              {disconnectedReadyPlayerCount === 1 ? " is" : "s are"} still
+              eligible to be dealt in, matching table rules.
+            </p>
+          ) : null}
           {error ? (
-            <p className="mt-2 text-destructive text-sm">{error}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p
+                aria-live="assertive"
+                className="text-destructive text-sm"
+                role="alert"
+              >
+                {error}
+              </p>
+              {connectionStatus === "disconnected" ? (
+                <Button
+                  onClick={() => {
+                    setError(null);
+                    setRetryNonce((value) => value + 1);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Reconnect
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </section>
