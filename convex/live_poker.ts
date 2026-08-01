@@ -1,7 +1,8 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { action, internalMutation, query } from "./_generated/server";
 
 const winnerValidator = v.object({
   playerId: v.id("players"),
@@ -16,7 +17,7 @@ const buyInRequestTypeValidator = v.union(
   v.literal("ADD_ON")
 );
 
-export const recordCompletedHand = mutation({
+export const recordCompletedHandInternal = internalMutation({
   args: {
     gameId: v.optional(v.id("games")),
     tableId: v.optional(v.id("livePokerTables")),
@@ -61,6 +62,17 @@ function validateTableSettings(args: {
   seatCount: number;
   smallBlind: number;
 }) {
+  if (
+    [
+      args.bigBlind,
+      args.maxBuyIn,
+      args.minBuyIn,
+      args.seatCount,
+      args.smallBlind,
+    ].some((value) => !Number.isFinite(value))
+  ) {
+    throw new Error("Live poker settings must be finite numbers");
+  }
   if (args.smallBlind <= 0 || args.bigBlind < args.smallBlind) {
     throw new Error("Live poker requires valid blinds");
   }
@@ -126,7 +138,7 @@ async function handleExistingPendingBuyInRequest(
   return args.pendingRequestId;
 }
 
-export const createLivePokerTable = mutation({
+export const createLivePokerTableInternal = internalMutation({
   args: {
     title: v.string(),
     createdById: v.id("users"),
@@ -259,7 +271,7 @@ export const getLivePokerAccess = query({
   },
 });
 
-export const createLivePokerBuyInRequest = mutation({
+export const createLivePokerBuyInRequestInternal = internalMutation({
   args: {
     tableId: v.id("livePokerTables"),
     userId: v.id("users"),
@@ -279,8 +291,8 @@ export const createLivePokerBuyInRequest = mutation({
       throw new Error("Player profile does not match this user");
     }
 
-    if (args.amount <= 0) {
-      throw new Error("Buy-in amount must be positive");
+    if (!Number.isFinite(args.amount) || args.amount <= 0) {
+      throw new Error("Buy-in amount must be a positive finite number");
     }
 
     if (args.type === "INITIAL") {
@@ -409,7 +421,7 @@ export const getLivePokerBuyInRequestForClaim = query({
     if (
       !request ||
       request.userId !== args.userId ||
-      request.status !== "APPROVED"
+      !["APPROVED", "CLAIMED"].includes(request.status)
     ) {
       return null;
     }
@@ -442,7 +454,7 @@ export const getLivePokerBuyInRequestForApproval = query({
   },
   handler: async (ctx, args) => {
     const request = await ctx.db.get(args.requestId);
-    if (!request || request.status !== "PENDING") {
+    if (!(request && ["PENDING", "CLAIMED"].includes(request.status))) {
       return null;
     }
 
@@ -475,7 +487,7 @@ export const getLivePokerBuyInRequestForApproval = query({
   },
 });
 
-export const respondToLivePokerBuyInRequest = mutation({
+export const respondToLivePokerBuyInRequestInternal = internalMutation({
   args: {
     requestId: v.id("livePokerBuyInRequests"),
     userId: v.id("users"),
@@ -508,7 +520,7 @@ export const respondToLivePokerBuyInRequest = mutation({
   },
 });
 
-export const markLivePokerBuyInRequestClaimed = mutation({
+export const markLivePokerBuyInRequestClaimedInternal = internalMutation({
   args: {
     requestId: v.id("livePokerBuyInRequests"),
     userId: v.id("users"),
@@ -520,6 +532,9 @@ export const markLivePokerBuyInRequestClaimed = mutation({
     }
     if (request.userId !== args.userId) {
       throw new Error("Only the requester can claim this buy-in");
+    }
+    if (request.status === "CLAIMED") {
+      return request;
     }
     if (request.status !== "APPROVED") {
       throw new Error("Request is not approved");
@@ -535,42 +550,46 @@ export const markLivePokerBuyInRequestClaimed = mutation({
   },
 });
 
-export const approveAndMarkLivePokerBuyInRequestClaimed = mutation({
-  args: {
-    requestId: v.id("livePokerBuyInRequests"),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const request = await ctx.db.get(args.requestId);
-    if (!request) {
-      throw new Error("Request not found");
-    }
+export const approveAndMarkLivePokerBuyInRequestClaimedInternal =
+  internalMutation({
+    args: {
+      requestId: v.id("livePokerBuyInRequests"),
+      userId: v.id("users"),
+    },
+    handler: async (ctx, args) => {
+      const request = await ctx.db.get(args.requestId);
+      if (!request) {
+        throw new Error("Request not found");
+      }
 
-    const table = await ctx.db.get(request.tableId);
-    if (!table) {
-      throw new Error("Table not found");
-    }
-    if (table.createdById !== args.userId) {
-      throw new Error("Only the table creator can approve buy-ins");
-    }
-    if (request.status !== "PENDING") {
-      throw new Error("Request is not pending");
-    }
+      const table = await ctx.db.get(request.tableId);
+      if (!table) {
+        throw new Error("Table not found");
+      }
+      if (table.createdById !== args.userId) {
+        throw new Error("Only the table creator can approve buy-ins");
+      }
+      if (request.status === "CLAIMED") {
+        return request;
+      }
+      if (request.status !== "PENDING") {
+        throw new Error("Request is not pending");
+      }
 
-    const now = Date.now();
-    await ctx.db.patch(args.requestId, {
-      status: "CLAIMED",
-      respondedAt: now,
-      respondedById: args.userId,
-      claimedAt: now,
-      claimedById: request.userId,
-    });
+      const now = Date.now();
+      await ctx.db.patch(args.requestId, {
+        status: "CLAIMED",
+        respondedAt: now,
+        respondedById: args.userId,
+        claimedAt: now,
+        claimedById: request.userId,
+      });
 
-    return await ctx.db.get(args.requestId);
-  },
-});
+      return await ctx.db.get(args.requestId);
+    },
+  });
 
-export const updateLivePokerStatus = mutation({
+export const updateLivePokerStatusInternal = internalMutation({
   args: {
     tableId: v.id("livePokerTables"),
     liveStatus: v.union(
@@ -598,7 +617,7 @@ export const updateLivePokerStatus = mutation({
   },
 });
 
-export const deleteLivePokerTable = mutation({
+export const deleteLivePokerTableInternal = internalMutation({
   args: {
     tableId: v.id("livePokerTables"),
     userId: v.id("users"),
@@ -613,38 +632,17 @@ export const deleteLivePokerTable = mutation({
       throw new Error("Only the table creator can delete this table");
     }
 
-    const tablePlayers = await ctx.db
-      .query("livePokerTablePlayers")
-      .withIndex("by_tableId", (q) => q.eq("tableId", args.tableId))
-      .collect();
-
-    for (const tablePlayer of tablePlayers) {
-      await ctx.db.delete(tablePlayer._id);
-    }
-
-    const buyInRequests = await ctx.db
-      .query("livePokerBuyInRequests")
-      .withIndex("by_tableId", (q) => q.eq("tableId", args.tableId))
-      .collect();
-
-    for (const buyInRequest of buyInRequests) {
-      await ctx.db.delete(buyInRequest._id);
-    }
-
-    const hands = await ctx.db
-      .query("livePokerHands")
-      .withIndex("by_tableId", (q) => q.eq("tableId", args.tableId))
-      .collect();
-
-    for (const hand of hands) {
-      await ctx.db.delete(hand._id);
-    }
-
-    await ctx.db.delete(args.tableId);
+    // Preserve the ledger and hand history. The worker has already closed
+    // admissions and durably queued every seat settlement before this runs.
+    await ctx.db.patch(args.tableId, {
+      liveStatus: "CLOSED",
+      status: "CANCELLED",
+      updatedAt: Date.now(),
+    });
   },
 });
 
-export const settlePlayerStack = mutation({
+export const settlePlayerStackInternal = internalMutation({
   args: {
     gameId: v.optional(v.id("games")),
     tableId: v.optional(v.id("livePokerTables")),
@@ -652,10 +650,16 @@ export const settlePlayerStack = mutation({
     userId: v.id("users"),
     buyIn: v.number(),
     cashOut: v.number(),
+    settledAt: v.optional(v.number()),
+    settlementId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    if (args.buyIn < 0 || args.cashOut < 0) {
-      throw new Error("Amounts must be non-negative");
+    if (
+      !(Number.isFinite(args.buyIn) && Number.isFinite(args.cashOut)) ||
+      args.buyIn < 0 ||
+      args.cashOut < 0
+    ) {
+      throw new Error("Amounts must be finite and non-negative");
     }
 
     if (args.tableId) {
@@ -672,15 +676,31 @@ export const settlePlayerStack = mutation({
         )
         .first();
 
-      const updates = {
-        buyIn: args.buyIn,
-        cashOut: args.cashOut,
-        profit: args.cashOut - args.buyIn,
+      if (
+        (args.settlementId !== undefined &&
+          existing?.lastSettlementId === args.settlementId) ||
+        (existing?.lastSettledAt !== undefined &&
+          args.settledAt !== undefined &&
+          existing.lastSettledAt > args.settledAt)
+      ) {
+        return existing;
+      }
+
+      const settlementMetadata = {
+        lastSettledAt: args.settledAt,
+        lastSettlementId: args.settlementId,
         updatedAt: Date.now(),
       };
 
       if (existing) {
-        await ctx.db.patch(existing._id, updates);
+        const buyIn = existing.buyIn + args.buyIn;
+        const cashOut = (existing.cashOut ?? 0) + args.cashOut;
+        await ctx.db.patch(existing._id, {
+          ...settlementMetadata,
+          buyIn,
+          cashOut,
+          profit: cashOut - buyIn,
+        });
         return await ctx.db.get(existing._id);
       }
 
@@ -688,7 +708,10 @@ export const settlePlayerStack = mutation({
         tableId,
         playerId: args.playerId,
         userId: args.userId,
-        ...updates,
+        ...settlementMetadata,
+        buyIn: args.buyIn,
+        cashOut: args.cashOut,
+        profit: args.cashOut - args.buyIn,
       });
     }
 
@@ -729,5 +752,170 @@ export const settlePlayerStack = mutation({
     });
 
     return await ctx.db.get(gamePlayer._id);
+  },
+});
+
+function assertLivePokerServerSecret(secret: string) {
+  const expected =
+    process.env.LIVE_POKER_CONVEX_SECRET ??
+    process.env.LIVE_POKER_WEBHOOK_SECRET;
+  if (!expected || secret !== expected) {
+    throw new Error("Unauthorized live poker server operation");
+  }
+}
+
+export const serverCreateLivePokerTable = action({
+  args: {
+    bigBlind: v.number(),
+    createdById: v.id("users"),
+    maxBuyIn: v.number(),
+    minBuyIn: v.number(),
+    seatCount: v.number(),
+    secret: v.string(),
+    smallBlind: v.number(),
+    title: v.string(),
+  },
+  handler: async (ctx, { secret, ...args }): Promise<Id<"livePokerTables">> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runMutation(
+      internal.live_poker.createLivePokerTableInternal,
+      args
+    );
+  },
+});
+
+export const serverCreateLivePokerBuyInRequest = action({
+  args: {
+    amount: v.number(),
+    playerId: v.id("players"),
+    seatIndex: v.optional(v.number()),
+    secret: v.string(),
+    tableId: v.id("livePokerTables"),
+    type: buyInRequestTypeValidator,
+    userId: v.id("users"),
+  },
+  handler: async (
+    ctx,
+    { secret, ...args }
+  ): Promise<Id<"livePokerBuyInRequests">> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runMutation(
+      internal.live_poker.createLivePokerBuyInRequestInternal,
+      args
+    );
+  },
+});
+
+export const serverRejectLivePokerBuyInRequest = action({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    secret: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (
+    ctx,
+    { secret, ...args }
+  ): Promise<Doc<"livePokerBuyInRequests"> | null> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runMutation(
+      internal.live_poker.respondToLivePokerBuyInRequestInternal,
+      { ...args, status: "REJECTED" }
+    );
+  },
+});
+
+export const serverMarkLivePokerBuyInRequestClaimed = action({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    secret: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (
+    ctx,
+    { secret, ...args }
+  ): Promise<Doc<"livePokerBuyInRequests"> | null> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runMutation(
+      internal.live_poker.markLivePokerBuyInRequestClaimedInternal,
+      args
+    );
+  },
+});
+
+export const serverApproveLivePokerBuyInRequest = action({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    secret: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (
+    ctx,
+    { secret, ...args }
+  ): Promise<Doc<"livePokerBuyInRequests"> | null> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runMutation(
+      internal.live_poker.approveAndMarkLivePokerBuyInRequestClaimedInternal,
+      args
+    );
+  },
+});
+
+export const serverDeleteLivePokerTable = action({
+  args: {
+    secret: v.string(),
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, { secret, ...args }): Promise<void> => {
+    assertLivePokerServerSecret(secret);
+    await ctx.runMutation(
+      internal.live_poker.deleteLivePokerTableInternal,
+      args
+    );
+  },
+});
+
+export const serverRecordCompletedHand = action({
+  args: {
+    actionLog: v.array(v.string()),
+    bigBlind: v.number(),
+    communityCards: v.array(v.string()),
+    completedAt: v.number(),
+    dealerSeat: v.number(),
+    gameId: v.optional(v.id("games")),
+    handNumber: v.number(),
+    pot: v.number(),
+    secret: v.string(),
+    smallBlind: v.number(),
+    tableId: v.optional(v.id("livePokerTables")),
+    winners: v.array(winnerValidator),
+  },
+  handler: async (ctx, { secret, ...args }): Promise<Id<"livePokerHands">> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runMutation(
+      internal.live_poker.recordCompletedHandInternal,
+      args
+    );
+  },
+});
+
+export const serverSettlePlayerStack = action({
+  args: {
+    buyIn: v.number(),
+    cashOut: v.number(),
+    gameId: v.optional(v.id("games")),
+    playerId: v.id("players"),
+    secret: v.string(),
+    settledAt: v.optional(v.number()),
+    settlementId: v.optional(v.string()),
+    tableId: v.optional(v.id("livePokerTables")),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, { secret, ...args }): Promise<unknown> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runMutation(
+      internal.live_poker.settlePlayerStackInternal,
+      args
+    );
   },
 });

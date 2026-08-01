@@ -1,18 +1,17 @@
-import { ConvexHttpClient } from "convex/browser";
 import { NextResponse } from "next/server";
+import {
+  getLivePokerConvexSecret,
+  livePokerConvex,
+} from "@/lib/live-poker/server-auth";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-if (!convexUrl) {
-  throw new Error("NEXT_PUBLIC_CONVEX_URL is not defined");
-}
-
-const convex = new ConvexHttpClient(convexUrl);
-
 export async function POST(request: Request) {
-  const secret = process.env.LIVE_POKER_WEBHOOK_SECRET;
-  if (!secret || request.headers.get("x-live-poker-secret") !== secret) {
+  const webhookSecret = process.env.LIVE_POKER_WEBHOOK_SECRET;
+  if (
+    !webhookSecret ||
+    request.headers.get("x-live-poker-secret") !== webhookSecret
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -20,6 +19,7 @@ export async function POST(request: Request) {
     actionLog: string[];
     bigBlind: number;
     communityCards: string[];
+    completedAt: number;
     dealerSeat: number;
     gameId?: string;
     handNumber: number;
@@ -35,15 +35,16 @@ export async function POST(request: Request) {
     }>;
   };
 
-  await convex.mutation(api.live_poker.recordCompletedHand, {
+  await livePokerConvex.action(api.live_poker.serverRecordCompletedHand, {
     actionLog: body.actionLog,
     bigBlind: body.bigBlind,
     communityCards: body.communityCards,
-    completedAt: Date.now(),
+    completedAt: body.completedAt,
     dealerSeat: body.dealerSeat,
     gameId: body.gameId as Id<"games"> | undefined,
     handNumber: body.handNumber,
     pot: body.pot,
+    secret: getLivePokerConvexSecret(),
     smallBlind: body.smallBlind,
     tableId: body.tableId as Id<"livePokerTables"> | undefined,
     winners: body.winners.map((winner) => ({

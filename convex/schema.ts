@@ -184,6 +184,8 @@ export default defineSchema({
     buyIn: v.number(),
     cashOut: v.optional(v.number()),
     profit: v.optional(v.number()),
+    lastSettledAt: v.optional(v.number()),
+    lastSettlementId: v.optional(v.string()),
     updatedAt: v.number(),
   })
     .index("by_tableId", ["tableId"])

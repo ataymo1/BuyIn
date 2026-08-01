@@ -52,8 +52,18 @@ export interface LivePokerStreetAction {
   type: LivePokerStreetActionType;
 }
 
+export interface LivePokerTableConfig {
+  bigBlind: number;
+  hostUserId: string;
+  maxBuyIn: number;
+  minBuyIn: number;
+  seatCount: number;
+  smallBlind: number;
+}
+
 export interface LivePokerAuthToken {
   exp: number;
+  tableConfig: LivePokerTableConfig;
   tableId: string;
   playerId: string;
   playerName: string;
@@ -94,8 +104,12 @@ export interface LivePokerWinner {
   userId: string;
 }
 
+export type PublicLivePokerWinner = Omit<LivePokerWinner, "userId">;
+
 export interface LivePokerState {
   actionLog: string[];
+  admissionsClosed?: boolean;
+  appliedRequestIds?: string[];
   activeSeatIndex: number | null;
   bigBlind: number;
   bigBlindSeatIndex: number | null;
@@ -116,6 +130,7 @@ export interface LivePokerState {
   showdownSeatIndexes?: number[];
   smallBlind: number;
   smallBlindSeatIndex: number | null;
+  turnDeadlineAt?: number | null;
 }
 
 export interface PublicLivePokerState {
@@ -128,7 +143,7 @@ export interface PublicLivePokerState {
   dealerSeatIndex: number | null;
   handNumber: number;
   isHost: boolean;
-  lastWinners: LivePokerWinner[];
+  lastWinners: PublicLivePokerWinner[];
   maxBuyIn: number;
   minBuyIn: number;
   minRaise: number;
@@ -139,6 +154,7 @@ export interface PublicLivePokerState {
   showdownSeatIndexes: number[];
   smallBlind: number;
   smallBlindSeatIndex: number | null;
+  turnDeadlineAt: number | null;
 }
 
 export type LivePokerServerMessage =
@@ -146,7 +162,7 @@ export type LivePokerServerMessage =
   | { type: "privateCards"; cards: string[] }
   | { type: "actionRejected"; message: string }
   | { type: "handStarted"; handNumber: number }
-  | { type: "handEnded"; winners: LivePokerWinner[] }
+  | { type: "handEnded"; winners: PublicLivePokerWinner[] }
   | { type: "playerPresence"; userId: string; connected: boolean }
   | { type: "ledgerUpdated"; playerId: string; stack: number; buyIn: number };
 
@@ -170,7 +186,9 @@ export function toPublicState(
     dealerSeatIndex: state.dealerSeatIndex,
     handNumber: state.handNumber,
     isHost: state.hostUserId === currentUserId,
-    lastWinners: state.lastWinners ?? [],
+    lastWinners: (state.lastWinners ?? []).map(
+      ({ userId: _userId, ...winner }) => winner
+    ),
     maxBuyIn: state.maxBuyIn,
     minBuyIn: state.minBuyIn,
     minRaise: state.minRaise,
@@ -209,5 +227,6 @@ export function toPublicState(
     showdownSeatIndexes,
     smallBlind: state.smallBlind,
     smallBlindSeatIndex: state.smallBlindSeatIndex ?? null,
+    turnDeadlineAt: state.turnDeadlineAt ?? null,
   };
 }

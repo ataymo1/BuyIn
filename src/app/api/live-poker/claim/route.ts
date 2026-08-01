@@ -1,20 +1,16 @@
-import { ConvexHttpClient } from "convex/browser";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { applyLivePokerBuyInRequest } from "@/lib/live-poker/apply-buy-in-request";
+import {
+  getAuthenticatedLivePokerUser,
+  getLivePokerConvexSecret,
+  livePokerConvex,
+} from "@/lib/live-poker/server-auth";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-if (!convexUrl) {
-  throw new Error("NEXT_PUBLIC_CONVEX_URL is not defined");
-}
-
-const convex = new ConvexHttpClient(convexUrl);
-
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.email) {
+  const user = await getAuthenticatedLivePokerUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -27,20 +23,11 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+  const requestId = body.requestId as Id<"livePokerBuyInRequests">;
 
-  const user = await convex.query(api.auth.getUserByEmail, {
-    email: session.user.email,
-  });
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-
-  const buyInRequest = await convex.query(
+  const buyInRequest = await livePokerConvex.query(
     api.live_poker.getLivePokerBuyInRequestForClaim,
-    {
-      requestId: body.requestId as Id<"livePokerBuyInRequests">,
-      userId: user._id,
-    }
+    { requestId, userId: user._id }
   );
   if (!buyInRequest) {
     return NextResponse.json(
@@ -48,8 +35,11 @@ export async function POST(request: Request) {
       { status: 404 }
     );
   }
+  if (buyInRequest.status === "CLAIMED") {
+    return NextResponse.json({ idempotent: true, ok: true });
+  }
 
-  const player = await convex.query(api.players.getPlayerByUserId, {
+  const player = await livePokerConvex.query(api.players.getPlayerByUserId, {
     userId: user._id,
   });
   if (!player || player._id !== buyInRequest.playerId) {
@@ -70,10 +60,13 @@ export async function POST(request: Request) {
     );
   }
 
-  await convex.mutation(api.live_poker.markLivePokerBuyInRequestClaimed, {
-    requestId: body.requestId as Id<"livePokerBuyInRequests">,
-    userId: user._id,
-  });
-
+  await livePokerConvex.action(
+    api.live_poker.serverMarkLivePokerBuyInRequestClaimed,
+    {
+      requestId,
+      secret: getLivePokerConvexSecret(),
+      userId: user._id,
+    }
+  );
   return NextResponse.json({ ok: true });
 }
