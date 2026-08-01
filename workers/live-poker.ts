@@ -10,8 +10,11 @@ import {
   revealNextRunoutStage,
   seatPlayer,
   settleShowdown,
-  startHand,
 } from "../src/lib/live-poker/engine";
+import {
+  reconcileNextHandTransition,
+  startAutomaticHand,
+} from "../src/lib/live-poker/lifecycle";
 import {
   assertLivePokerActionAvailable,
   clearLivePokerTiming,
@@ -210,7 +213,11 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       this.state = (stored.get("state") as LivePokerState | undefined) ?? null;
       this.outbox =
         (stored.get("outbox") as OutboxDelivery[] | undefined) ?? [];
-      await this.scheduleAlarm();
+      if (this.repairTimingState(Date.now())) {
+        await this.persist();
+      } else {
+        await this.scheduleAlarm();
+      }
     });
   }
 
@@ -314,6 +321,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         this.broadcast();
       }
       this.handleMessage(auth, parsed.data, now);
+      this.reconcileNextHand(now);
       await this.persist();
       this.broadcast();
       this.ctx.waitUntil(this.flushOutbox());
@@ -364,6 +372,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
       this.applyApprovedClaim(claim);
       if (this.state) {
+        this.reconcileNextHand(Date.now());
         this.state.appliedRequestIds = [
           ...(this.state.appliedRequestIds ?? []),
           claim.requestId,
@@ -499,24 +508,6 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       return;
     }
 
-    if (message.type === "startHand") {
-      this.requireHost(auth.userId);
-      if (this.state.phase !== "waiting") {
-        throw new Error("A hand is already in progress");
-      }
-      startHand(this.state);
-      startLivePokerTransition(
-        this.state,
-        "deal",
-        now + this.timing().initialDealMs
-      );
-      this.broadcastMessage({
-        type: "handStarted",
-        handNumber: this.state.handNumber,
-      });
-      return;
-    }
-
     if (message.type === "kickSeat") {
       this.requireHost(auth.userId);
       if (this.state.phase !== "waiting") {
@@ -591,26 +582,8 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       return true;
     }
 
-    if (message.type === "ready") {
-      if (this.state.phase !== "waiting") {
-        throw new Error("You can ready up between hands");
-      }
-      if (message.ready && seat.sitOut) {
-        throw new Error("Return before readying for the next hand");
-      }
-      if (message.ready && seat.stack <= 0) {
-        throw new Error("Add chips before readying for the next hand");
-      }
-      seat.ready = message.ready;
-      this.state.actionLog.push(
-        `${seat.name} is ${message.ready ? "ready" : "not ready"}`
-      );
-      return true;
-    }
-
     if (message.type === "sitOut") {
       seat.sitOut = message.sitOut;
-      seat.ready = false;
       return true;
     }
     return false;
@@ -897,9 +870,22 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
       this.state.transition = null;
       this.state.transitionDeadlineAt = null;
+      if (event.transition === "nextHand") {
+        if (!startAutomaticHand(this.state, event.at, this.timing())) {
+          clearLivePokerTiming(this.state);
+          continue;
+        }
+        this.broadcastMessage({
+          type: "handStarted",
+          handNumber: this.state.handNumber,
+        });
+        continue;
+      }
+
       if (event.transition === "showdown") {
         cleanupShowdown(this.state);
         clearLivePokerTiming(this.state);
+        this.reconcileNextHand(event.at);
         continue;
       }
 
@@ -945,18 +931,27 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
     const timing = this.timing();
     let changed = repairLivePokerTimeBanks(this.state, timing);
-    if (this.state.transition) {
-      return changed;
-    }
     if (this.state.phase === "waiting") {
+      const hasValidNextHand =
+        this.state.transition === "nextHand" &&
+        Number.isFinite(this.state.transitionDeadlineAt);
       if (
-        this.state.turnDeadlineAt ||
-        this.state.transitionDeadlineAt ||
-        this.state.timeBankActive
+        (!hasValidNextHand &&
+          Boolean(
+            this.state.transition || this.state.transitionDeadlineAt !== null
+          )) ||
+        Boolean(
+          this.state.turnDeadlineAt ||
+            this.state.turnStartedAt ||
+            this.state.timeBankActive
+        )
       ) {
         clearLivePokerTiming(this.state);
         changed = true;
       }
+      return this.reconcileNextHand(now) || changed;
+    }
+    if (this.state.transition) {
       return changed;
     }
     if (this.state.phase === "showdown") {
@@ -976,6 +971,12 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       return true;
     }
     return changed;
+  }
+
+  private reconcileNextHand(now: number) {
+    return this.state
+      ? reconcileNextHandTransition(this.state, now, this.timing())
+      : false;
   }
 
   private timing(): LivePokerTimingConfig {

@@ -13,9 +13,22 @@ interface RankResult {
   rank: number;
 }
 
-function activeSeats(state: LivePokerState) {
-  return state.seats.filter((seat): seat is LivePokerSeat =>
-    Boolean(seat && !seat.sitOut)
+export function isEligibleForNextHand(seat: LivePokerSeat) {
+  return !seat.sitOut && seat.stack > 0;
+}
+
+export function getEligibleSeats(state: LivePokerState) {
+  return state.seats.filter(
+    (seat): seat is LivePokerSeat =>
+      seat !== null && isEligibleForNextHand(seat)
+  );
+}
+
+export function canStartHand(state: LivePokerState) {
+  return (
+    state.phase === "waiting" &&
+    !state.admissionsClosed &&
+    getEligibleSeats(state).length >= 2
   );
 }
 
@@ -267,7 +280,6 @@ export function seatPlayer(
     isAllIn: false,
     name: player.name,
     playerId: player.playerId,
-    ready: false,
     seatIndex,
     sitOut: false,
     stack: buyIn,
@@ -301,20 +313,26 @@ export function addChips(
   }
 
   seat.buyIn = fromChipUnits(toChipUnits(seat.buyIn) + toChipUnits(addOn));
-  seat.ready = false;
   seat.stack = nextStack;
   state.actionLog.push(`${seat.name} added ${addOn} chips`);
 }
 
-export function startHand(state: LivePokerState) {
-  const eligible = activeSeats(state).filter(
-    (seat) => seat.stack > 0 && seat.ready
-  );
-  if (eligible.length < 2) {
-    throw new Error(
-      "At least two active ready players with chips are required"
-    );
+function requireEligibleSeatsForHand(state: LivePokerState) {
+  if (state.phase !== "waiting") {
+    throw new Error("A hand is already in progress");
   }
+  if (state.admissionsClosed) {
+    throw new Error("Table is closed");
+  }
+  const eligible = getEligibleSeats(state);
+  if (eligible.length < 2) {
+    throw new Error("At least two active players with chips are required");
+  }
+  return eligible;
+}
+
+export function startHand(state: LivePokerState) {
+  const eligible = requireEligibleSeatsForHand(state);
 
   state.phase = "preflop";
   state.handNumber += 1;
@@ -348,7 +366,7 @@ export function startHand(state: LivePokerState) {
   const dealerSeatIndex = nextSeatIndex(
     state,
     previousDealer,
-    (seat) => !seat.sitOut && seat.stack > 0 && seat.ready
+    isEligibleForNextHand
   );
   if (dealerSeatIndex === null) {
     throw new Error("No dealer seat available");
@@ -357,18 +375,14 @@ export function startHand(state: LivePokerState) {
   const smallBlindSeatIndex =
     eligible.length === 2
       ? dealerSeatIndex
-      : nextSeatIndex(
-          state,
-          dealerSeatIndex,
-          (seat) => !seat.sitOut && seat.stack > 0 && seat.ready
-        );
+      : nextSeatIndex(state, dealerSeatIndex, isEligibleForNextHand);
   if (smallBlindSeatIndex === null) {
     throw new Error("No small blind seat available");
   }
   const bigBlindSeatIndex = nextSeatIndex(
     state,
     smallBlindSeatIndex,
-    (seat) => !seat.sitOut && seat.stack > 0 && seat.ready
+    isEligibleForNextHand
   );
   if (bigBlindSeatIndex === null) {
     throw new Error("No big blind seat available");
@@ -382,7 +396,7 @@ export function startHand(state: LivePokerState) {
     for (let offset = 0; offset < state.seatCount; offset += 1) {
       const index = (dealerSeatIndex + 1 + offset) % state.seatCount;
       const seat = state.seats[index];
-      if (seat && !seat.sitOut && seat.stack > 0 && seat.ready) {
+      if (seat && isEligibleForNextHand(seat)) {
         seat.cards = [...(seat.cards ?? []), state.deck.pop() as string];
       }
     }
@@ -715,7 +729,6 @@ export function settleShowdown(state: LivePokerState) {
       seat.bet = 0;
       seat.committed = 0;
       seat.hasActedThisStreet = false;
-      seat.ready = false;
     }
   }
   return winners;
@@ -743,12 +756,4 @@ export function cleanupShowdown(state: LivePokerState) {
   state.showdownPot = null;
   state.showdownSeatIndexes = [];
   state.showdownSettled = false;
-}
-
-export function maybeStartNextHand(state: LivePokerState) {
-  return (
-    state.phase === "waiting" &&
-    activeSeats(state).filter((seat) => seat.stack > 0 && seat.ready).length >=
-      2
-  );
 }

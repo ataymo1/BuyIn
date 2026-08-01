@@ -4,7 +4,6 @@ export const cardSchema = z.string().regex(/^[2-9TJQKA][SHDC]$/);
 
 export const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("joinTable") }),
-  z.object({ type: z.literal("startHand") }),
   z.object({
     type: z.literal("sit"),
     seatIndex: z.number().int().min(0).max(8),
@@ -16,7 +15,6 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("kickSeat"),
     seatIndex: z.number().int().min(0).max(8),
   }),
-  z.object({ type: z.literal("ready"), ready: z.boolean() }),
   z.object({ type: z.literal("fold") }),
   z.object({ type: z.literal("check") }),
   z.object({ type: z.literal("call") }),
@@ -40,6 +38,7 @@ export type LivePokerPhase =
 export type LivePokerTransition =
   | "actionSettle"
   | "deal"
+  | "nextHand"
   | "runout"
   | "showdown";
 
@@ -87,7 +86,6 @@ export interface LivePokerSeat {
   isAllIn: boolean;
   name: string;
   playerId: string;
-  ready: boolean;
   seatIndex: number;
   sitOut: boolean;
   stack: number;
@@ -246,7 +244,6 @@ export function toPublicState(
         isCurrentUser: seat.userId === currentUserId,
         name: seat.name,
         playerId: seat.playerId,
-        ready: seat.ready,
         seatIndex: seat.seatIndex,
         sitOut: seat.sitOut,
         stack: seat.stack,

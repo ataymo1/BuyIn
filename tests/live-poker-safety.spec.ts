@@ -3,8 +3,11 @@ import {
   signLivePokerToken,
   verifyLivePokerToken,
 } from "../src/lib/live-poker/auth";
-import { createInitialState } from "../src/lib/live-poker/engine";
-import { toPublicState } from "../src/lib/live-poker/types";
+import { createInitialState, seatPlayer } from "../src/lib/live-poker/engine";
+import {
+  clientMessageSchema,
+  toPublicState,
+} from "../src/lib/live-poker/types";
 
 const config = {
   bigBlind: 2,
@@ -31,6 +34,29 @@ test("public winner state omits internal user ids", () => {
     { amount: 40, playerId: "player-1", seatIndex: 0 },
   ]);
   expect(publicState.lastWinners[0]).not.toHaveProperty("userId");
+});
+
+test("ready state and manual starts are absent from the public protocol", () => {
+  const state = createInitialState(config);
+  seatPlayer(state, 0, {
+    buyIn: 100,
+    name: "Legacy Player",
+    playerId: "player-legacy",
+    userId: "user-legacy",
+  });
+  const legacySeat = state.seats[0] as NonNullable<(typeof state.seats)[0]> & {
+    ready?: boolean;
+  };
+  legacySeat.ready = true;
+
+  const publicSeat = toPublicState(state, legacySeat.userId).seats[0];
+  expect(publicSeat).not.toHaveProperty("ready");
+  expect(clientMessageSchema.safeParse({ type: "startHand" }).success).toBe(
+    false
+  );
+  expect(
+    clientMessageSchema.safeParse({ ready: true, type: "ready" }).success
+  ).toBe(false);
 });
 
 test("live poker JWTs require the dedicated configured secret", async () => {

@@ -4,6 +4,7 @@ export const LIVE_POKER_ACTION_TIME_MS = 20_000;
 export const LIVE_POKER_TIME_BANK_MS = 10_000;
 export const LIVE_POKER_ACTION_SETTLE_MS = 800;
 export const LIVE_POKER_INITIAL_DEAL_MS = 2300;
+export const LIVE_POKER_NEXT_HAND_MS = 3000;
 export const LIVE_POKER_SHOWDOWN_MS = 6000;
 export const LIVE_POKER_RUNOUT_STAGE_MS = 1000;
 
@@ -11,6 +12,7 @@ export interface LivePokerTimingConfig {
   actionTimeMs: number;
   actionSettleMs: number;
   initialDealMs: number;
+  nextHandMs: number;
   runoutStageMs: number;
   showdownMs: number;
   timeBankMs: number;
@@ -20,6 +22,7 @@ export const DEFAULT_LIVE_POKER_TIMING = {
   actionTimeMs: LIVE_POKER_ACTION_TIME_MS,
   actionSettleMs: LIVE_POKER_ACTION_SETTLE_MS,
   initialDealMs: LIVE_POKER_INITIAL_DEAL_MS,
+  nextHandMs: LIVE_POKER_NEXT_HAND_MS,
   runoutStageMs: LIVE_POKER_RUNOUT_STAGE_MS,
   showdownMs: LIVE_POKER_SHOWDOWN_MS,
   timeBankMs: LIVE_POKER_TIME_BANK_MS,

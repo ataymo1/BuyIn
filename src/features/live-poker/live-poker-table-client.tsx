@@ -6,7 +6,6 @@ import {
   Loader2,
   LogOut,
   Minus,
-  Play,
   Plus,
   Power,
   RefreshCw,
@@ -34,6 +33,7 @@ import {
   getLivePokerReconnectDelay,
   LIVE_POKER_MAX_RECONNECT_ATTEMPTS,
 } from "@/lib/live-poker/reconnect";
+import { LIVE_POKER_INITIAL_DEAL_MS } from "@/lib/live-poker/timing";
 import type {
   LivePokerClientMessage,
   LivePokerServerMessage,
@@ -296,14 +296,28 @@ function getBetTargetBounds(
   };
 }
 
-function getPresetBetTarget(
-  multiplier: number,
-  state: PublicLivePokerState,
-  seat: PublicLivePokerSeat
-) {
-  const baseline = state.currentBet > 0 ? state.currentBet : state.bigBlind;
+function getBetPresets(state: PublicLivePokerState, seat: PublicLivePokerSeat) {
   const { maxTarget, minTarget } = getBetTargetBounds(state, seat);
-  return clamp(baseline * multiplier, minTarget, maxTarget);
+  const toTarget = (value: number) =>
+    clamp(Math.round(value * 100) / 100, minTarget, maxTarget);
+  if (state.phase === "preflop") {
+    return [2, 2.5, 3].map((blinds) => ({
+      label: `${blinds} BB`,
+      target: toTarget(state.bigBlind * blinds),
+    }));
+  }
+
+  const callAmount = Math.max(0, state.currentBet - seat.bet);
+  const potAfterCall = state.pot + callAmount;
+  return [
+    { fraction: 1 / 3, label: "⅓ Pot" },
+    { fraction: 1 / 2, label: "½ Pot" },
+    { fraction: 3 / 4, label: "¾ Pot" },
+    { fraction: 1, label: "Pot" },
+  ].map(({ fraction, label }) => ({
+    label,
+    target: toTarget(seat.bet + callAmount + potAfterCall * fraction),
+  }));
 }
 
 function getSeatPosition(index: number, seatCount: number) {
@@ -332,14 +346,37 @@ function getViewerSeatPosition(
   return getSeatPosition(displayIndex, seatCount);
 }
 
+function communityCardAnimationDelay(
+  state: PublicLivePokerState,
+  cardIndex: number
+) {
+  if (state.transition !== "actionSettle" && state.transition !== "runout") {
+    return undefined;
+  }
+  if (state.phase === "flop" && cardIndex < 3) {
+    return cardIndex * 140;
+  }
+  if (state.phase === "turn" && cardIndex === 3) {
+    return 0;
+  }
+  if (state.phase === "river" && cardIndex === 4) {
+    return 0;
+  }
+  return undefined;
+}
+
 function PlayingCard({
+  animationDelayMs,
   card,
   className = "",
+  dealFrom,
   hidden,
   rotate = 0,
 }: {
+  animationDelayMs?: number;
   card?: string;
   className?: string;
+  dealFrom?: { x: number; y: number };
   hidden?: boolean;
   rotate?: number;
 }) {
@@ -351,8 +388,20 @@ function PlayingCard({
 
   return (
     <span
-      className={`inline-flex rounded-md shadow-lg ring-1 ring-black/20 drop-shadow-[0_8px_10px_rgba(0,0,0,0.28)] ${className}`}
-      style={{ transform: `rotate(${rotate}deg)` }}
+      className={`inline-flex rounded-md shadow-lg ring-1 ring-black/20 drop-shadow-[0_8px_10px_rgba(0,0,0,0.28)] ${
+        animationDelayMs === undefined ? "" : "live-poker-card-deal"
+      } ${className}`}
+      style={
+        {
+          "--card-deal-x": `${dealFrom?.x ?? 0}px`,
+          "--card-deal-y": `${dealFrom?.y ?? -24}px`,
+          animationDelay:
+            animationDelayMs === undefined
+              ? undefined
+              : `${animationDelayMs}ms`,
+          transform: `rotate(${rotate}deg)`,
+        } as CSSProperties
+      }
     >
       <Card
         back={hidden || !packageCard}
@@ -506,11 +555,13 @@ function Seat({
 }
 
 function TableSeatMarkers({
+  dealElapsedMs,
   phase,
   position,
   seat,
   settledAction,
 }: {
+  dealElapsedMs?: number;
   phase: PublicLivePokerState["phase"];
   position: { x: number; y: number };
   seat: PublicLivePokerSeat | null;
@@ -556,24 +607,47 @@ function TableSeatMarkers({
           zIndex: markerLayout.cardsZIndex,
         }}
       >
-        {seat.cards?.map((card) => (
+        {seat.cards?.map((card, cardIndex) => (
           <PlayingCard
+            animationDelayMs={
+              dealElapsedMs === undefined
+                ? undefined
+                : 180 + seat.seatIndex * 90 + cardIndex * 760 - dealElapsedMs
+            }
             card={card}
             className="-mx-0.5 first:translate-y-1.5 last:translate-y-0"
+            dealFrom={{
+              x: (50 - position.x) * 6,
+              y: (50 - position.y) * 3,
+            }}
             key={card}
-            rotate={card === seat.cards?.[0] ? -7 : 7}
+            rotate={cardIndex === 0 ? -7 : 7}
           />
         ))}
-        {!seat.cards && seat.hasCards ? (
-          <>
-            <PlayingCard
-              className="-mx-0.5 translate-y-1.5"
-              hidden
-              rotate={-7}
-            />
-            <PlayingCard className="-mx-0.5 translate-y-0" hidden rotate={7} />
-          </>
-        ) : null}
+        {!seat.cards && seat.hasCards
+          ? [0, 1].map((cardIndex) => (
+              <PlayingCard
+                animationDelayMs={
+                  dealElapsedMs === undefined
+                    ? undefined
+                    : 180 +
+                      seat.seatIndex * 90 +
+                      cardIndex * 760 -
+                      dealElapsedMs
+                }
+                className={`-mx-0.5 ${
+                  cardIndex === 0 ? "translate-y-1.5" : "translate-y-0"
+                }`}
+                dealFrom={{
+                  x: (50 - position.x) * 6,
+                  y: (50 - position.y) * 3,
+                }}
+                hidden
+                key={cardIndex}
+                rotate={cardIndex === 0 ? -7 : 7}
+              />
+            ))
+          : null}
       </div>
     </>
   );
@@ -595,13 +669,15 @@ function BettingControlsOverlay({
   state: PublicLivePokerState;
 }) {
   const { maxTarget, minTarget } = getBetTargetBounds(state, currentSeat);
-  const step = Math.max(1, state.bigBlind || 1);
+  const step = Math.max(0.01, state.bigBlind || 0.01);
   const hasCallAmount = callAmount > 0;
   const clampedAmount = clamp(amount, minTarget, maxTarget);
   const actionLabel = state.currentBet > 0 ? "Raise" : "Bet";
 
   function setTarget(nextAmount: number) {
-    onAmountChange(clamp(nextAmount, minTarget, maxTarget));
+    onAmountChange(
+      clamp(Math.round(nextAmount * 100) / 100, minTarget, maxTarget)
+    );
   }
 
   function submitBetOrRaise() {
@@ -616,111 +692,16 @@ function BettingControlsOverlay({
     });
   }
 
+  const presets = getBetPresets(state, currentSeat);
+
   return (
-    <div className="absolute right-0 bottom-[-11rem] left-0 z-40 flex justify-center px-1 sm:right-6 sm:left-6 sm:px-0 md:bottom-[-6.25rem]">
-      <div className="flex w-full max-w-3xl flex-col gap-1.5 rounded-lg border border-white/10 bg-zinc-950/90 p-2 text-white shadow-2xl backdrop-blur-md md:flex-row md:items-stretch">
-        <div className="grid grid-cols-3 gap-1 md:w-64">
-          <Button
-            className="h-9 border-white/10 bg-zinc-900/90 text-white hover:bg-zinc-800"
-            onClick={() => onSend({ type: "fold" })}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            Fold
-          </Button>
-          <Button
-            className="h-9 border-white/10 bg-zinc-900/90 text-white hover:bg-zinc-800"
-            disabled={hasCallAmount}
-            onClick={() => onSend({ type: "check" })}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            Check
-          </Button>
-          <Button
-            className="h-9 bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
-            disabled={!hasCallAmount}
-            onClick={() => onSend({ type: "call" })}
-            size="sm"
-            type="button"
-          >
-            Call {chip(Math.max(0, callAmount))}
-          </Button>
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="grid grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-zinc-900/80">
-            {[2, 3, 4].map((multiplier) => (
-              <button
-                className="h-8 border-white/10 border-r font-semibold text-sm text-zinc-200 transition-colors hover:bg-white/10"
-                key={multiplier}
-                onClick={() =>
-                  setTarget(getPresetBetTarget(multiplier, state, currentSeat))
-                }
-                type="button"
-              >
-                {multiplier}x
-              </button>
-            ))}
-            <button
-              className="h-8 font-semibold text-sm text-zinc-200 transition-colors hover:bg-white/10"
-              onClick={() => setTarget(maxTarget)}
-              type="button"
-            >
-              All-In
-            </button>
-          </div>
-
-          <div className="mt-1.5 space-y-1.5 md:hidden">
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
-              <button
-                aria-label="Decrease bet"
-                className="flex h-8 w-8 touch-manipulation items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
-                onClick={() => setTarget(clampedAmount - step)}
-                type="button"
-              >
-                <Minus className="h-4 w-4" />
-              </button>
-              <input
-                aria-label="Bet amount"
-                className="h-2 w-full min-w-0 accent-emerald-400"
-                max={maxTarget}
-                min={minTarget}
-                onChange={(event) => setTarget(Number(event.target.value))}
-                step={step}
-                type="range"
-                value={clampedAmount}
-              />
-              <button
-                aria-label="Increase bet"
-                className="flex h-8 w-8 touch-manipulation items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
-                onClick={() => setTarget(clampedAmount + step)}
-                type="button"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-              <div className="flex h-8 min-w-0 items-center justify-center rounded-md bg-black px-2 font-bold text-white shadow-inner ring-1 ring-white/10">
-                {chip(clampedAmount)}
-              </div>
-              <Button
-                className="h-8 bg-emerald-500 px-4 text-zinc-950 hover:bg-emerald-400"
-                disabled={maxTarget <= 0}
-                onClick={submitBetOrRaise}
-                type="button"
-              >
-                {clampedAmount >= maxTarget ? "All In" : actionLabel}
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-1.5 hidden grid-cols-[auto_minmax(7rem,1fr)_auto_auto_auto] items-center gap-2 md:grid">
+    <div className="absolute right-0 bottom-[-13.5rem] left-0 z-40 flex justify-center px-1 sm:right-6 sm:left-6 sm:px-0 md:bottom-[-8rem]">
+      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-white/15 bg-zinc-950/95 text-white shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        <div className="grid gap-2 border-white/10 border-b p-2.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:px-3">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               aria-label="Decrease bet"
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-white/15"
               onClick={() => setTarget(clampedAmount - step)}
               type="button"
             >
@@ -728,7 +709,7 @@ function BettingControlsOverlay({
             </button>
             <input
               aria-label="Bet amount"
-              className="h-2 min-w-0 accent-emerald-400"
+              className="h-2 min-w-0 flex-1 cursor-pointer accent-amber-400"
               max={maxTarget}
               min={minTarget}
               onChange={(event) => setTarget(Number(event.target.value))}
@@ -738,24 +719,71 @@ function BettingControlsOverlay({
             />
             <button
               aria-label="Increase bet"
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900/90 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-zinc-800"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-white/15"
               onClick={() => setTarget(clampedAmount + step)}
               type="button"
             >
               <Plus className="h-4 w-4" />
             </button>
-            <div className="flex h-8 min-w-24 items-center justify-center rounded-md bg-black px-3 font-bold text-white shadow-inner ring-1 ring-white/10">
-              {chip(clampedAmount)}
+            <div className="min-w-20 text-right">
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider">
+                {actionLabel} to
+              </p>
+              <p className="font-bold text-base tabular-nums">
+                {chip(clampedAmount)}
+              </p>
             </div>
-            <Button
-              className="h-8 bg-emerald-500 px-5 text-zinc-950 hover:bg-emerald-400"
-              disabled={maxTarget <= 0}
-              onClick={submitBetOrRaise}
-              type="button"
-            >
-              {clampedAmount >= maxTarget ? "All In" : actionLabel}
-            </Button>
           </div>
+
+          <div className="grid grid-cols-4 gap-1 overflow-hidden rounded-lg bg-white/5 p-1 ring-1 ring-white/10">
+            {presets.map((preset) => (
+              <button
+                className="h-8 rounded-md px-2 font-semibold text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                key={preset.label}
+                onClick={() => setTarget(preset.target)}
+                type="button"
+              >
+                {preset.label}
+              </button>
+            ))}
+            {state.phase === "preflop" ? (
+              <button
+                className="h-8 rounded-md px-2 font-semibold text-amber-300 text-xs transition-colors hover:bg-amber-400/10"
+                onClick={() => setTarget(maxTarget)}
+                type="button"
+              >
+                All in
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 p-2.5 md:p-3">
+          <Button
+            className="h-12 rounded-xl border-red-400/25 bg-red-500/10 font-bold text-red-200 text-sm hover:bg-red-500/20 md:h-14 md:text-base"
+            onClick={() => onSend({ type: "fold" })}
+            type="button"
+            variant="outline"
+          >
+            Fold
+          </Button>
+          <Button
+            className="h-12 rounded-xl border-sky-300/20 bg-sky-500/90 font-bold text-sm text-white hover:bg-sky-400 md:h-14 md:text-base"
+            onClick={() =>
+              onSend(hasCallAmount ? { type: "call" } : { type: "check" })
+            }
+            type="button"
+          >
+            {hasCallAmount ? `Call ${chip(callAmount)}` : "Check"}
+          </Button>
+          <Button
+            className="h-12 rounded-xl bg-amber-400 font-bold text-sm text-zinc-950 hover:bg-amber-300 md:h-14 md:text-base"
+            disabled={maxTarget <= 0}
+            onClick={submitBetOrRaise}
+            type="button"
+          >
+            {clampedAmount >= maxTarget ? "All in" : actionLabel}
+          </Button>
         </div>
       </div>
     </div>
@@ -1182,21 +1210,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     numericBuyIn >= (state?.minBuyIn ?? 0) &&
     numericBuyIn <= (state?.maxBuyIn ?? 0) &&
     !isRequestingBuyIn;
-  const canToggleReady = Boolean(
-    isConnected &&
-      state?.phase === "waiting" &&
-      currentSeat &&
-      !currentSeat.sitOut &&
-      (currentSeat.ready || currentSeat.stack > 0)
-  );
-  const readySeats =
+  const disconnectedEligiblePlayerCount =
     state?.seats.filter(
-      (seat) => seat && !seat.sitOut && seat.ready && seat.stack > 0
-    ) ?? [];
-  const readyPlayerCount = readySeats.length;
-  const disconnectedReadyPlayerCount = readySeats.filter(
-    (seat) => !seat?.connected
-  ).length;
+      (seat) => seat && !seat.connected && !seat.sitOut && seat.stack > 0
+    ).length ?? 0;
   const kickCandidate =
     kickingSeatIndex === null ? null : (state?.seats[kickingSeatIndex] ?? null);
   const winnerAmountsBySeat = useMemo(() => {
@@ -1486,8 +1503,16 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               />
               <div className="flex min-h-16 max-w-full flex-wrap items-center justify-center gap-1.5 rounded-md border border-white/5 bg-black/10 px-3 py-3 shadow-inner sm:gap-2 sm:px-5">
                 {state?.communityCards.length ? (
-                  state.communityCards.map((card) => (
-                    <PlayingCard card={card} key={card} />
+                  state.communityCards.map((card, cardIndex) => (
+                    <PlayingCard
+                      animationDelayMs={communityCardAnimationDelay(
+                        state,
+                        cardIndex
+                      )}
+                      card={card}
+                      dealFrom={{ x: 0, y: -70 }}
+                      key={card}
+                    />
                   ))
                 ) : (
                   <span className="font-medium text-emerald-50/55 text-sm">
@@ -1525,6 +1550,12 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                   <DealerButton position={dealerButtonPosition} />
                 ) : null}
                 <TableSeatMarkers
+                  dealElapsedMs={
+                    state.transition === "deal" && state.transitionDeadlineAt
+                      ? LIVE_POKER_INITIAL_DEAL_MS -
+                        (state.transitionDeadlineAt - serverClockNow)
+                      : undefined
+                  }
                   phase={state.phase}
                   position={position}
                   seat={seat}
@@ -1633,29 +1664,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         <div className="space-y-3 rounded-lg bg-background p-3 text-foreground">
           {currentSeat ? (
             <div className="flex flex-wrap gap-2">
-              {state?.isHost ? (
-                <Button
-                  disabled={
-                    !isConnected ||
-                    state.phase !== "waiting" ||
-                    readyPlayerCount < 2
-                  }
-                  onClick={() => send({ type: "startHand" })}
-                >
-                  <Play className="h-4 w-4" />
-                  Start Hand
-                </Button>
-              ) : null}
-              <Button
-                disabled={!canToggleReady}
-                onClick={() =>
-                  send({ ready: !currentSeat.ready, type: "ready" })
-                }
-                variant={currentSeat.ready ? "outline" : "default"}
-              >
-                <Play className="h-4 w-4" />
-                {currentSeat.ready ? "Unready" : "Ready"}
-              </Button>
               {state?.phase === "waiting" ? (
                 <>
                   <Input
@@ -1713,10 +1721,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             </div>
           )}
           <UserBuyInRequestStatus requests={typedUserBuyInRequests} />
-          {state.isHost && disconnectedReadyPlayerCount > 0 ? (
+          {state.isHost && disconnectedEligiblePlayerCount > 0 ? (
             <p className="text-amber-700 text-sm">
-              {disconnectedReadyPlayerCount} disconnected ready player
-              {disconnectedReadyPlayerCount === 1 ? " is" : "s are"} still
+              {disconnectedEligiblePlayerCount} disconnected seated player
+              {disconnectedEligiblePlayerCount === 1 ? " is" : "s are"} still
               eligible to be dealt in, matching table rules.
             </p>
           ) : null}

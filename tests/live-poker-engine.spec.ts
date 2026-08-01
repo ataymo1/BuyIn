@@ -1,13 +1,19 @@
 import { expect, test } from "@playwright/test";
 import {
   applyAction,
+  canStartHand,
   cleanupShowdown,
   createInitialState,
+  getEligibleSeats,
   revealNextRunoutStage,
   seatPlayer,
   settleShowdown,
   startHand,
 } from "../src/lib/live-poker/engine";
+import {
+  reconcileNextHandTransition,
+  startAutomaticHand,
+} from "../src/lib/live-poker/lifecycle";
 import {
   assertLivePokerActionAvailable,
   consumeLivePokerTimeBank,
@@ -18,6 +24,7 @@ import {
   LIVE_POKER_ACTION_SETTLE_MS,
   LIVE_POKER_ACTION_TIME_MS,
   LIVE_POKER_INITIAL_DEAL_MS,
+  LIVE_POKER_NEXT_HAND_MS,
   LIVE_POKER_RUNOUT_STAGE_MS,
   LIVE_POKER_SHOWDOWN_MS,
   LIVE_POKER_TIME_BANK_MS,
@@ -45,21 +52,14 @@ function makeState(overrides: Partial<LivePokerState> = {}) {
   };
 }
 
-function addSeat(
-  state: LivePokerState,
-  seatIndex: number,
-  buyIn: number,
-  ready = false
-) {
+function addSeat(state: LivePokerState, seatIndex: number, buyIn: number) {
   seatPlayer(state, seatIndex, {
     buyIn,
     name: `Player ${seatIndex}`,
     playerId: `player-${seatIndex}`,
     userId: `user-${seatIndex}`,
   });
-  const seat = state.seats[seatIndex] as LivePokerSeat;
-  seat.ready = ready;
-  return seat;
+  return state.seats[seatIndex] as LivePokerSeat;
 }
 
 function prepareSeat(
@@ -81,6 +81,86 @@ function totalChips(state: LivePokerState) {
     0
   );
 }
+
+test.describe("live poker automatic hand eligibility", () => {
+  test("deals every seated player with chips without a ready flag", () => {
+    const state = makeState({ seatCount: 3, seats: [null, null, null] });
+    const first = addSeat(state, 0, 100);
+    const second = addSeat(state, 1, 100);
+    const legacySecond = second as LivePokerSeat & { ready?: boolean };
+    legacySecond.ready = false;
+
+    expect(canStartHand(state)).toBe(true);
+    expect(getEligibleSeats(state).map((seat) => seat.seatIndex)).toEqual([
+      0, 1,
+    ]);
+
+    startHand(state);
+
+    expect(first.cards).toHaveLength(2);
+    expect(second.cards).toHaveLength(2);
+    expect(state.handNumber).toBe(1);
+  });
+
+  test("excludes sit-out and busted seats until they return or add chips", () => {
+    const state = makeState({ seatCount: 4, seats: [null, null, null, null] });
+    addSeat(state, 0, 100);
+    const sittingOut = addSeat(state, 1, 100);
+    const busted = addSeat(state, 2, 100);
+    sittingOut.sitOut = true;
+    busted.stack = 0;
+
+    expect(getEligibleSeats(state).map((seat) => seat.seatIndex)).toEqual([0]);
+    expect(canStartHand(state)).toBe(false);
+
+    sittingOut.sitOut = false;
+    expect(canStartHand(state)).toBe(true);
+    sittingOut.sitOut = true;
+    busted.stack = 25;
+    expect(canStartHand(state)).toBe(true);
+  });
+
+  test("keeps a player who sits out in the current hand dealt in", () => {
+    const state = makeState({ seatCount: 2, seats: [null, null] });
+    const first = addSeat(state, 0, 100);
+    addSeat(state, 1, 100);
+    startHand(state);
+
+    first.sitOut = true;
+
+    expect(first.cards).toHaveLength(2);
+    expect(state.activeSeatIndex).toBe(first.seatIndex);
+    expect(() =>
+      applyAction(state, first.userId, { type: "call" })
+    ).not.toThrow();
+    expect(first.cards).toHaveLength(2);
+  });
+
+  test("prevents a duplicate hand start without mutating the hand", () => {
+    const state = makeState({ seatCount: 2, seats: [null, null] });
+    addSeat(state, 0, 100);
+    addSeat(state, 1, 100);
+    startHand(state);
+    const started = structuredClone(state);
+
+    expect(canStartHand(state)).toBe(false);
+    expect(() => startHand(state)).toThrow("A hand is already in progress");
+    expect(state).toEqual(started);
+  });
+
+  test("never starts automatically after admissions close", () => {
+    const state = makeState({
+      admissionsClosed: true,
+      seatCount: 2,
+      seats: [null, null],
+    });
+    addSeat(state, 0, 100);
+    addSeat(state, 1, 100);
+
+    expect(canStartHand(state)).toBe(false);
+    expect(() => startHand(state)).toThrow("Table is closed");
+  });
+});
 
 test.describe("live poker betting correctness", () => {
   test("rejects a raise target above the player's stack without mutation", () => {
@@ -110,8 +190,8 @@ test.describe("live poker betting correctness", () => {
 
   test("keeps the nominal big-blind bring-in when the big blind is short", () => {
     const state = makeState({ seatCount: 2, seats: [null, null] });
-    const smallBlind = addSeat(state, 0, 100, true);
-    const bigBlind = addSeat(state, 1, 7, true);
+    const smallBlind = addSeat(state, 0, 100);
+    const bigBlind = addSeat(state, 1, 7);
 
     startHand(state);
 
@@ -132,8 +212,8 @@ test.describe("live poker betting correctness", () => {
 
   test("stages an all-in board runout one street at a time", () => {
     const state = makeState({ seatCount: 2, seats: [null, null] });
-    addSeat(state, 0, 3, true);
-    addSeat(state, 1, 7, true);
+    addSeat(state, 0, 3);
+    addSeat(state, 1, 7);
 
     startHand(state);
 
@@ -162,8 +242,8 @@ test.describe("live poker betting correctness", () => {
 
   test("queues a runout when only a matched big blind still has chips", () => {
     const state = makeState({ seatCount: 2, seats: [null, null] });
-    addSeat(state, 0, 3, true);
-    addSeat(state, 1, 100, true);
+    addSeat(state, 0, 3);
+    addSeat(state, 1, 100);
 
     startHand(state);
 
@@ -296,6 +376,7 @@ test.describe("live poker server timing", () => {
       actionSettleMs: LIVE_POKER_ACTION_SETTLE_MS,
       actionTimeMs: LIVE_POKER_ACTION_TIME_MS,
       initialDealMs: LIVE_POKER_INITIAL_DEAL_MS,
+      nextHandMs: LIVE_POKER_NEXT_HAND_MS,
       runoutStageMs: LIVE_POKER_RUNOUT_STAGE_MS,
       showdownMs: LIVE_POKER_SHOWDOWN_MS,
       timeBankMs: LIVE_POKER_TIME_BANK_MS,
@@ -304,6 +385,7 @@ test.describe("live poker server timing", () => {
       actionSettleMs: 800,
       actionTimeMs: 20_000,
       initialDealMs: 2300,
+      nextHandMs: 3000,
       runoutStageMs: 1000,
       showdownMs: 6000,
       timeBankMs: 10_000,
@@ -377,8 +459,8 @@ test.describe("live poker server timing", () => {
 
   test("does not regrant a consumed time bank when a later hand starts", () => {
     const state = makeState({ seatCount: 2, seats: [null, null] });
-    const seat = addSeat(state, 0, 100, true);
-    addSeat(state, 1, 100, true);
+    const seat = addSeat(state, 0, 100);
+    addSeat(state, 1, 100);
     expect(seat.timeBankRemainingMs).toBe(10_000);
     seat.timeBankRemainingMs = 3200;
 
@@ -418,6 +500,50 @@ test.describe("live poker server timing", () => {
 
     startLivePokerTurn(state, 4100);
     expect(() => assertLivePokerActionAvailable(state)).not.toThrow();
+  });
+
+  test("persists a next-hand deadline without scheduling duplicates", () => {
+    const state = makeState({ seatCount: 2, seats: [null, null] });
+    addSeat(state, 0, 100);
+    addSeat(state, 1, 100);
+
+    expect(reconcileNextHandTransition(state, 1000)).toBe(true);
+    expect(state.transition).toBe("nextHand");
+    expect(state.transitionDeadlineAt).toBe(4000);
+    expect(getNextLivePokerDeadline(structuredClone(state))).toBe(4000);
+    expect(getDueLivePokerTimingEvent(state, 3999)).toBeNull();
+    expect(getDueLivePokerTimingEvent(state, 4000)).toEqual({
+      at: 4000,
+      transition: "nextHand",
+      type: "transition",
+    });
+
+    expect(reconcileNextHandTransition(state, 2000)).toBe(false);
+    expect(state.transitionDeadlineAt).toBe(4000);
+
+    expect(startAutomaticHand(state, 4000)).toBe(true);
+    expect(state.handNumber).toBe(1);
+    expect(state.phase).toBe("preflop");
+    expect(state.transition).toBe("deal");
+    expect(state.transitionDeadlineAt).toBe(6300);
+    const started = structuredClone(state);
+    expect(startAutomaticHand(state, 4000)).toBe(false);
+    expect(state).toEqual(started);
+  });
+
+  test("cancels a pending next hand when eligibility drops", () => {
+    const state = makeState({ seatCount: 2, seats: [null, null] });
+    addSeat(state, 0, 100);
+    const second = addSeat(state, 1, 100);
+    reconcileNextHandTransition(state, 1000);
+
+    second.sitOut = true;
+
+    expect(reconcileNextHandTransition(state, 2000)).toBe(true);
+    expect(state.phase).toBe("waiting");
+    expect(state.transition).toBeNull();
+    expect(state.transitionDeadlineAt).toBeNull();
+    expect(getNextLivePokerDeadline(state)).toBe(Number.POSITIVE_INFINITY);
   });
 
   test("persists transition kinds and exact alarm deadlines", () => {
