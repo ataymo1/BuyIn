@@ -204,8 +204,8 @@ export const getDetailedStats = query({
       .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
       .collect();
 
-    const filteredGamePlayers = gamePlayers.filter((gp) =>
-      gameMap.has(gp.gameId)
+    const filteredGamePlayers = gamePlayers.filter(
+      (gp) => gameMap.get(gp.gameId)?.status === "COMPLETED"
     );
 
     const gamesPlayed = filteredGamePlayers.length;
@@ -363,6 +363,10 @@ export const getPlayerStats = query({
           .map((game) => [game._id, game])
       );
     }
+
+    filteredGamePlayers = filteredGamePlayers.filter(
+      (gp) => gameMap.get(gp.gameId)?.status === "COMPLETED"
+    );
 
     const gamesPlayed = filteredGamePlayers.length;
     const totalBuyIns = filteredGamePlayers.reduce(
