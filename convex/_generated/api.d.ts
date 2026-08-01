@@ -13,6 +13,7 @@ import type * as games from "../games.js";
 import type * as groups from "../groups.js";
 import type * as helpers from "../helpers.js";
 import type * as players from "../players.js";
+import type * as poker_now_imports from "../poker_now_imports.js";
 import type * as stats from "../stats.js";
 import type * as transactions from "../transactions.js";
 
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   groups: typeof groups;
   helpers: typeof helpers;
   players: typeof players;
+  poker_now_imports: typeof poker_now_imports;
   stats: typeof stats;
   transactions: typeof transactions;
 }>;
