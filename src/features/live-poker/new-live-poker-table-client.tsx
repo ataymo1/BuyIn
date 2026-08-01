@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useNotification } from "@/components/providers/notification-provider";
 import { useConvexUser } from "@/lib/convex-hooks";
 import { useCreateLivePokerTable } from "@/lib/live-poker-hooks";
@@ -14,28 +15,31 @@ export function NewLivePokerTableClient() {
   const { showNotification } = useNotification();
   const { userId, isLoading } = useConvexUser();
   const createLivePokerTable = useCreateLivePokerTable();
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function handleCreateTable(data: LivePokerTableFormValues) {
+    setSubmitError(null);
     if (!userId) {
-      throw new Error("Unauthorized");
+      setSubmitError("Your account is still loading. Please try again.");
+      return;
     }
 
     try {
       const tableId = await createLivePokerTable({
         title: data.title,
-        smallBlind: Number(data.smallBlind),
-        bigBlind: Number(data.bigBlind),
-        minBuyIn: Number(data.minBuyIn),
-        maxBuyIn: Number(data.maxBuyIn),
-        seatCount: Number(data.seatCount),
+        smallBlind: data.smallBlind,
+        bigBlind: data.bigBlind,
+        minBuyIn: data.minBuyIn,
+        maxBuyIn: data.maxBuyIn,
+        seatCount: data.seatCount,
         createdById: userId,
       });
       router.push(`/live-poker/${tableId}`);
     } catch (error) {
       console.error("Failed to create live poker table:", error);
-      showNotification("Failed to create live poker table. Please try again.", {
-        type: "error",
-      });
+      const message = "Failed to create live poker table. Please try again.";
+      setSubmitError(message);
+      showNotification(message, { type: "error" });
     }
   }
 
@@ -43,5 +47,10 @@ export function NewLivePokerTableClient() {
     return null;
   }
 
-  return <LivePokerTableForm onSubmit={handleCreateTable} />;
+  return (
+    <LivePokerTableForm
+      onSubmit={handleCreateTable}
+      submitError={submitError}
+    />
+  );
 }
