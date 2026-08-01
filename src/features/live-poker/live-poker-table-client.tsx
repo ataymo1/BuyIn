@@ -499,6 +499,34 @@ function CenterPot({
   );
 }
 
+function NextHandIntermission({
+  serverNow,
+  state,
+}: {
+  serverNow: number;
+  state: PublicLivePokerState;
+}) {
+  if (state.transition !== "nextHand" || !state.transitionDeadlineAt) {
+    return null;
+  }
+
+  const seconds = Math.max(
+    1,
+    Math.ceil((state.transitionDeadlineAt - serverNow) / 1000)
+  );
+  return (
+    <output
+      aria-live="polite"
+      className="rounded-xl border border-amber-200/20 bg-zinc-950/90 px-5 py-2 text-white shadow-xl ring-1 ring-black/30 backdrop-blur-sm"
+    >
+      <span className="block font-semibold text-[10px] text-amber-200 uppercase tracking-[0.2em]">
+        {state.handNumber === 0 ? "Game starts in" : "Next hand"}
+      </span>
+      <span className="font-black text-2xl tabular-nums">{seconds}</span>
+    </output>
+  );
+}
+
 function WinnerAnnouncement({ state }: { state: PublicLivePokerState }) {
   if (state.phase !== "showdown" || state.lastWinners.length === 0) {
     return null;
@@ -724,6 +752,7 @@ function BettingControlsOverlay({
   amount,
   callAmount,
   currentSeat,
+  disabled,
   onAmountChange,
   onSend,
   state,
@@ -731,6 +760,7 @@ function BettingControlsOverlay({
   amount: number;
   callAmount: number;
   currentSeat: PublicLivePokerSeat;
+  disabled: boolean;
   onAmountChange: (amount: number) => void;
   onSend: (message: LivePokerClientMessage) => void;
   state: PublicLivePokerState;
@@ -740,6 +770,16 @@ function BettingControlsOverlay({
   const hasCallAmount = callAmount > 0;
   const clampedAmount = clamp(amount, minTarget, maxTarget);
   const actionLabel = state.currentBet > 0 ? "Raise" : "Bet";
+  const activeSeat =
+    state.activeSeatIndex === null ? null : state.seats[state.activeSeatIndex];
+  let status = activeSeat ? `Waiting for ${activeSeat.name}` : "Waiting";
+  if (!disabled) {
+    status = "Your turn";
+  } else if (state.transition === "deal") {
+    status = "Dealing cards";
+  } else if (state.phase === "showdown") {
+    status = "Hand complete";
+  }
 
   function setTarget(nextAmount: number) {
     onAmountChange(
@@ -763,12 +803,24 @@ function BettingControlsOverlay({
 
   return (
     <div className="absolute right-0 bottom-[-13.5rem] left-0 z-40 flex justify-center px-1 sm:right-6 sm:left-6 sm:px-0 md:bottom-[-8rem]">
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-white/15 bg-zinc-950/95 text-white shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+      <div
+        aria-disabled={disabled}
+        className={`w-full max-w-4xl overflow-hidden rounded-2xl border border-white/15 bg-zinc-950/95 text-white shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-[opacity,filter] ${
+          disabled ? "opacity-55 saturate-50" : ""
+        }`}
+      >
+        <div className="flex items-center justify-between border-white/10 border-b px-3 py-1.5">
+          <span className="font-semibold text-[10px] text-zinc-400 uppercase tracking-[0.16em]">
+            Betting controls
+          </span>
+          <span className="font-semibold text-xs text-zinc-300">{status}</span>
+        </div>
         <div className="grid gap-2 border-white/10 border-b p-2.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:px-3">
           <div className="flex min-w-0 items-center gap-2">
             <button
               aria-label="Decrease bet"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-white/15"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:hover:bg-white/8"
+              disabled={disabled}
               onClick={() => setTarget(clampedAmount - step)}
               type="button"
             >
@@ -777,6 +829,7 @@ function BettingControlsOverlay({
             <input
               aria-label="Bet amount"
               className="h-2 min-w-0 flex-1 cursor-pointer accent-amber-400"
+              disabled={disabled}
               max={maxTarget}
               min={minTarget}
               onChange={(event) => setTarget(Number(event.target.value))}
@@ -786,7 +839,8 @@ function BettingControlsOverlay({
             />
             <button
               aria-label="Increase bet"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-white/15"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:hover:bg-white/8"
+              disabled={disabled}
               onClick={() => setTarget(clampedAmount + step)}
               type="button"
             >
@@ -806,6 +860,7 @@ function BettingControlsOverlay({
             {presets.map((preset) => (
               <button
                 className="h-8 rounded-md px-2 font-semibold text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                disabled={disabled}
                 key={preset.label}
                 onClick={() => setTarget(preset.target)}
                 type="button"
@@ -816,6 +871,7 @@ function BettingControlsOverlay({
             {state.phase === "preflop" ? (
               <button
                 className="h-8 rounded-md px-2 font-semibold text-amber-300 text-xs transition-colors hover:bg-amber-400/10"
+                disabled={disabled}
                 onClick={() => setTarget(maxTarget)}
                 type="button"
               >
@@ -828,6 +884,7 @@ function BettingControlsOverlay({
         <div className="grid grid-cols-3 gap-2 p-2.5 md:p-3">
           <Button
             className="h-12 rounded-xl border-red-400/25 bg-red-500/10 font-bold text-red-200 text-sm hover:bg-red-500/20 md:h-14 md:text-base"
+            disabled={disabled}
             onClick={() => onSend({ type: "fold" })}
             type="button"
             variant="outline"
@@ -836,6 +893,7 @@ function BettingControlsOverlay({
           </Button>
           <Button
             className="h-12 rounded-xl border-sky-300/20 bg-sky-500/90 font-bold text-sm text-white hover:bg-sky-400 md:h-14 md:text-base"
+            disabled={disabled}
             onClick={() =>
               onSend(hasCallAmount ? { type: "call" } : { type: "check" })
             }
@@ -845,7 +903,7 @@ function BettingControlsOverlay({
           </Button>
           <Button
             className="h-12 rounded-xl bg-amber-400 font-bold text-sm text-zinc-950 hover:bg-amber-300 md:h-14 md:text-base"
-            disabled={maxTarget <= 0}
+            disabled={disabled || maxTarget <= 0}
             onClick={submitBetOrRaise}
             type="button"
           >
@@ -1613,6 +1671,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               style={tableCenterStyle}
             >
               <WinnerAnnouncement state={state} />
+              <NextHandIntermission serverNow={serverClockNow} state={state} />
               <CenterPot
                 amount={state?.pot ?? 0}
                 phase={state?.phase ?? "connecting"}
@@ -1734,11 +1793,15 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             );
           })}
 
-          {state && currentSeat && canAct && betTargetBounds ? (
+          {state &&
+          currentSeat &&
+          state.phase !== "waiting" &&
+          betTargetBounds ? (
             <BettingControlsOverlay
               amount={betTargetAmount || betTargetBounds.minTarget}
               callAmount={Math.max(0, callAmount)}
               currentSeat={currentSeat}
+              disabled={!canAct}
               onAmountChange={setBetTargetAmount}
               onSend={send}
               state={state}
