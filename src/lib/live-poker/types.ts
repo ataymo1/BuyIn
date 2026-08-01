@@ -123,6 +123,7 @@ export interface LivePokerState {
   activeSeatIndex: number | null;
   bigBlind: number;
   bigBlindSeatIndex: number | null;
+  communityCardRevealStartIndex?: number | null;
   communityCards: string[];
   currentBet: number;
   dealerSeatIndex: number | null;
@@ -157,6 +158,7 @@ export interface PublicLivePokerState {
   activeSeatIndex: number | null;
   bigBlind: number;
   bigBlindSeatIndex: number | null;
+  communityCardRevealStartIndex: number | null;
   communityCards: string[];
   currentBet: number;
   dealerSeatIndex: number | null;
@@ -208,6 +210,7 @@ export function toPublicState(
     activeSeatIndex: state.activeSeatIndex,
     bigBlind: state.bigBlind,
     bigBlindSeatIndex: state.bigBlindSeatIndex ?? null,
+    communityCardRevealStartIndex: state.communityCardRevealStartIndex ?? null,
     communityCards: state.communityCards,
     currentBet: state.currentBet,
     dealerSeatIndex: state.dealerSeatIndex,

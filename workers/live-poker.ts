@@ -555,7 +555,12 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     assertLivePokerActionAvailable(this.state);
 
     const actingSeatIndex = this.state.activeSeatIndex;
+    const previousCommunityCardCount = this.state.communityCards.length;
     applyAction(this.state, auth.userId, message);
+    this.state.communityCardRevealStartIndex =
+      this.state.communityCards.length > previousCommunityCardCount
+        ? previousCommunityCardCount
+        : null;
     if (actingSeatIndex !== null) {
       consumeLivePokerTimeBank(this.state, actingSeatIndex, now, this.timing());
     }
@@ -904,7 +909,12 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       }
 
       if (event.transition === "runout") {
+        const previousCommunityCardCount = this.state.communityCards.length;
         revealNextRunoutStage(this.state);
+        this.state.communityCardRevealStartIndex =
+          this.state.communityCards.length > previousCommunityCardCount
+            ? previousCommunityCardCount
+            : null;
         if (this.state.phase === "showdown") {
           this.finishShowdown(event.at);
         } else {
@@ -918,6 +928,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       }
 
       if (event.transition === "actionSettle") {
+        this.state.communityCardRevealStartIndex = null;
         this.state.settledAction = null;
       }
       if (this.state.phase === "showdown") {

@@ -36,7 +36,11 @@ import {
   getLivePokerReconnectDelay,
   LIVE_POKER_MAX_RECONNECT_ATTEMPTS,
 } from "@/lib/live-poker/reconnect";
-import { LIVE_POKER_INITIAL_DEAL_MS } from "@/lib/live-poker/timing";
+import {
+  LIVE_POKER_ACTION_SETTLE_MS,
+  LIVE_POKER_INITIAL_DEAL_MS,
+  LIVE_POKER_RUNOUT_STAGE_MS,
+} from "@/lib/live-poker/timing";
 import type {
   LivePokerClientMessage,
   LivePokerServerMessage,
@@ -356,37 +360,45 @@ function getViewerSeatPosition(
   return getSeatPosition(displayIndex, seatCount);
 }
 
-function communityCardAnimationDelay(
+function visibleCommunityCardCount(
   state: PublicLivePokerState,
-  cardIndex: number
+  serverNow: number
 ) {
+  const total = state.communityCards.length;
+  const revealStart = state.communityCardRevealStartIndex;
+  if (revealStart === null || !state.transitionDeadlineAt) {
+    return total;
+  }
+
+  const transitionDuration =
+    state.transition === "runout"
+      ? LIVE_POKER_RUNOUT_STAGE_MS
+      : LIVE_POKER_ACTION_SETTLE_MS;
   if (state.transition !== "actionSettle" && state.transition !== "runout") {
-    return undefined;
+    return total;
   }
-  if (state.phase === "flop" && cardIndex < 3) {
-    return cardIndex * 140;
+
+  const elapsed = transitionDuration - (state.transitionDeadlineAt - serverNow);
+  const revealCount = total - revealStart;
+  if (elapsed < 100) {
+    return revealStart;
   }
-  if (state.phase === "turn" && cardIndex === 3) {
-    return 0;
+  if (revealCount === 3) {
+    return revealStart + Math.min(3, 1 + Math.floor((elapsed - 100) / 190));
   }
-  if (state.phase === "river" && cardIndex === 4) {
-    return 0;
-  }
-  return undefined;
+  return elapsed < 140 ? revealStart : total;
 }
 
 function PlayingCard({
   animationDelayMs,
   card,
   className = "",
-  dealFrom,
   hidden,
   rotate = 0,
 }: {
   animationDelayMs?: number;
   card?: string;
   className?: string;
-  dealFrom?: { x: number; y: number };
   hidden?: boolean;
   rotate?: number;
 }) {
@@ -403,8 +415,6 @@ function PlayingCard({
       } ${className}`}
       style={
         {
-          "--card-deal-x": `${dealFrom?.x ?? 0}px`,
-          "--card-deal-y": `${dealFrom?.y ?? -24}px`,
           animationDelay:
             animationDelayMs === undefined
               ? undefined
@@ -616,12 +626,16 @@ function Seat({
 
 function TableSeatMarkers({
   dealElapsedMs,
+  dealOrder,
+  dealtSeatCount,
   phase,
   position,
   seat,
   settledAction,
 }: {
   dealElapsedMs?: number;
+  dealOrder?: number;
+  dealtSeatCount: number;
   phase: PublicLivePokerState["phase"];
   position: { x: number; y: number };
   seat: PublicLivePokerSeat | null;
@@ -670,16 +684,14 @@ function TableSeatMarkers({
         {seat.cards?.map((card, cardIndex) => (
           <PlayingCard
             animationDelayMs={
-              dealElapsedMs === undefined
+              dealElapsedMs === undefined || dealOrder === undefined
                 ? undefined
-                : 180 + seat.seatIndex * 90 + cardIndex * 760 - dealElapsedMs
+                : 100 +
+                  (dealOrder + cardIndex * dealtSeatCount) * 95 -
+                  dealElapsedMs
             }
             card={card}
             className="-mx-0.5 first:translate-y-1.5 last:translate-y-0"
-            dealFrom={{
-              x: (50 - position.x) * 6,
-              y: (50 - position.y) * 3,
-            }}
             key={card}
             rotate={cardIndex === 0 ? -7 : 7}
           />
@@ -688,20 +700,15 @@ function TableSeatMarkers({
           ? [0, 1].map((cardIndex) => (
               <PlayingCard
                 animationDelayMs={
-                  dealElapsedMs === undefined
+                  dealElapsedMs === undefined || dealOrder === undefined
                     ? undefined
-                    : 180 +
-                      seat.seatIndex * 90 +
-                      cardIndex * 760 -
+                    : 100 +
+                      (dealOrder + cardIndex * dealtSeatCount) * 95 -
                       dealElapsedMs
                 }
                 className={`-mx-0.5 ${
                   cardIndex === 0 ? "translate-y-1.5" : "translate-y-0"
                 }`}
-                dealFrom={{
-                  x: (50 - position.x) * 6,
-                  y: (50 - position.y) * 3,
-                }}
                 hidden
                 key={cardIndex}
                 rotate={cardIndex === 0 ? -7 : 7}
@@ -1276,6 +1283,20 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     ).length ?? 0;
   const kickCandidate =
     kickingSeatIndex === null ? null : (state?.seats[kickingSeatIndex] ?? null);
+  const dealSequence = useMemo(() => {
+    const orderBySeat = new Map<number, number>();
+    if (!state || state.dealerSeatIndex === null) {
+      return { count: 0, orderBySeat };
+    }
+
+    for (let offset = 1; offset <= state.seatCount; offset += 1) {
+      const seatIndex = (state.dealerSeatIndex + offset) % state.seatCount;
+      if (state.seats[seatIndex]?.hasCards) {
+        orderBySeat.set(seatIndex, orderBySeat.size);
+      }
+    }
+    return { count: orderBySeat.size, orderBySeat };
+  }, [state]);
   const winnerAmountsBySeat = useMemo(() => {
     const amounts = new Map<number, number>();
     for (const winner of state?.lastWinners ?? []) {
@@ -1598,17 +1619,20 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
               />
               <div className="flex min-h-16 max-w-full flex-wrap items-center justify-center gap-1.5 rounded-md border border-white/5 bg-black/10 px-3 py-3 shadow-inner sm:gap-2 sm:px-5">
                 {state?.communityCards.length ? (
-                  state.communityCards.map((card, cardIndex) => (
-                    <PlayingCard
-                      animationDelayMs={communityCardAnimationDelay(
-                        state,
-                        cardIndex
-                      )}
-                      card={card}
-                      dealFrom={{ x: 0, y: -70 }}
-                      key={card}
-                    />
-                  ))
+                  state.communityCards
+                    .slice(0, visibleCommunityCardCount(state, serverClockNow))
+                    .map((card, cardIndex) => (
+                      <PlayingCard
+                        animationDelayMs={
+                          state.communityCardRevealStartIndex !== null &&
+                          cardIndex >= state.communityCardRevealStartIndex
+                            ? 0
+                            : undefined
+                        }
+                        card={card}
+                        key={card}
+                      />
+                    ))
                 ) : (
                   <span className="font-medium text-emerald-50/55 text-sm">
                     Community cards
@@ -1616,22 +1640,6 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                 )}
               </div>
             </div>
-
-            {state.transition === "deal" ? (
-              <output
-                aria-label="Dealer is dealing cards"
-                aria-live="polite"
-                className="live-poker-deck pointer-events-none absolute top-1/2 left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
-              >
-                <div className="flex items-end">
-                  <PlayingCard className="-mr-12" hidden rotate={-6} />
-                  <PlayingCard hidden rotate={3} />
-                </div>
-                <span className="mt-2 rounded-full bg-zinc-950/85 px-3 py-1 font-bold text-[10px] text-amber-200 uppercase tracking-[0.18em] ring-1 ring-white/10">
-                  Dealing
-                </span>
-              </output>
-            ) : null}
           </div>
 
           {state.isHost && typedPendingBuyInRequests.length > 0 ? (
@@ -1667,6 +1675,8 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
                         (state.transitionDeadlineAt - serverClockNow)
                       : undefined
                   }
+                  dealOrder={dealSequence.orderBySeat.get(index)}
+                  dealtSeatCount={dealSequence.count}
                   phase={state.phase}
                   position={position}
                   seat={seat}

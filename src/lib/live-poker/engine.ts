@@ -201,6 +201,7 @@ export function createInitialState(config: {
     activeSeatIndex: null,
     bigBlind,
     bigBlindSeatIndex: null,
+    communityCardRevealStartIndex: null,
     communityCards: [],
     currentBet: 0,
     dealerSeatIndex: null,
@@ -341,6 +342,7 @@ export function startHand(state: LivePokerState) {
 
   state.phase = "preflop";
   state.handNumber += 1;
+  state.communityCardRevealStartIndex = null;
   state.communityCards = [];
   state.deck = shuffleDeck();
   state.currentBet = 0;
@@ -753,6 +755,7 @@ export function cleanupShowdown(state: LivePokerState) {
     }
   }
   state.activeSeatIndex = null;
+  state.communityCardRevealStartIndex = null;
   state.communityCards = [];
   state.deck = [];
   state.lastWinners = [];

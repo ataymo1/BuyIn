@@ -77,40 +77,14 @@
 
 @keyframes live-poker-card-deal {
   0% {
-    filter: blur(3px) brightness(1.2);
     opacity: 0;
-    rotate: -18deg;
-    scale: 0.58;
-    translate: var(--card-deal-x) var(--card-deal-y);
-  }
-  45% {
-    filter: blur(1px) brightness(1.08);
-    opacity: 1;
-    rotate: 5deg;
-    scale: 0.88;
-  }
-  78% {
-    filter: blur(0) brightness(1);
-    rotate: -2deg;
-    scale: 1.06;
-    translate: 4px -3px;
+    scale: 0.96;
+    translate: 0 -5px;
   }
   100% {
     opacity: 1;
-    rotate: 0deg;
     scale: 1;
     translate: 0 0;
-  }
-}
-
-@keyframes live-poker-deck-pulse {
-  0%, 100% {
-    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 35%));
-    scale: 1;
-  }
-  50% {
-    filter: drop-shadow(0 12px 18px rgb(251 191 36 / 28%));
-    scale: 1.04;
   }
 }
 
@@ -142,12 +116,8 @@
 }
 
 .live-poker-card-deal {
-  animation: live-poker-card-deal 560ms cubic-bezier(0.16, 0.84, 0.24, 1) both;
-  will-change: filter, opacity, rotate, scale, translate;
-}
-
-.live-poker-deck {
-  animation: live-poker-deck-pulse 900ms ease-in-out infinite;
+  animation: live-poker-card-deal 160ms ease-out both;
+  will-change: opacity, scale, translate;
 }
 
 .live-poker-winner-announcement,
@@ -161,7 +131,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .live-poker-card-deal,
-  .live-poker-deck,
   .live-poker-winner-announcement,
   .live-poker-winner-badge,
   .live-poker-winner-seat {
