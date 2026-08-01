@@ -11,6 +11,7 @@ import {
   GroupHeader,
   GroupSettingsSection,
   GroupStandingsSection,
+  PendingImportRequestsSection,
   PendingJoinRequestsSection,
   RecentSessionsSection,
 } from "./group-detail-sections";
@@ -75,8 +76,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
 
       <GroupStandingsSection standings={standings ?? []} />
 
-      {isOwner ? (
-        <PendingJoinRequestsSection groupId={groupId as Id<"groups">} />
+      {isOwner && userId ? (
+        <>
+          <PendingImportRequestsSection
+            groupId={groupId as Id<"groups">}
+            userId={userId}
+          />
+          <PendingJoinRequestsSection groupId={groupId as Id<"groups">} />
+        </>
       ) : null}
 
       <RecentSessionsSection games={completedGames.slice(0, 5)} />

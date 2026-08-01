@@ -1,7 +1,17 @@
 "use client";
 
+import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
-import { MapPin, Plus, Settings, Trophy, UserPlus } from "lucide-react";
+import {
+  Check,
+  FileUp,
+  MapPin,
+  Plus,
+  Settings,
+  Trophy,
+  UserPlus,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { DeleteGroupDialog } from "@/components/group/delete-group-dialog";
 import { EditGroupDialog } from "@/components/group/edit-group-dialog";
@@ -17,6 +27,7 @@ import {
 } from "@/components/ui/card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { getDisplayName } from "@/lib/utils";
+import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 function GameTypeBadge({ gameType }: { gameType?: string | null }) {
@@ -195,14 +206,22 @@ export function GroupHeader({
           <p className="text-muted-foreground">{description}</p>
         ) : null}
       </div>
-      {isOwner ? (
-        <Link href={`/games/new?groupId=${groupId}`}>
-          <Button className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            New Session
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Link href={`/games/import?groupId=${groupId}`}>
+          <Button className="w-full sm:w-auto" variant="outline">
+            <FileUp className="mr-2 h-4 w-4" />
+            Import New Session
           </Button>
         </Link>
-      ) : null}
+        {isOwner ? (
+          <Link href={`/games/new?groupId=${groupId}`}>
+            <Button className="w-full sm:w-auto">
+              <Plus className="mr-2 h-4 w-4" />
+              New Session
+            </Button>
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -343,6 +362,74 @@ export function GroupStandingsSection({
             renderCard={renderStandingCard}
           />
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function PendingImportRequestsSection({
+  groupId,
+  userId,
+}: {
+  groupId: Id<"groups">;
+  userId: Id<"users">;
+}) {
+  const requests = useQuery(api.poker_now_imports.getPendingRequests, {
+    groupId,
+    userId,
+  });
+  const respond = useMutation(api.poker_now_imports.respondToRequest);
+
+  if (!requests?.length) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Pending Session Imports</CardTitle>
+        <CardDescription>
+          Review PokerNow sessions submitted by group members.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {requests.map((request) => (
+          <div
+            className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+            key={request._id}
+          >
+            <div>
+              <p className="font-medium">
+                {request.requesterName} · {request.players.length} players
+              </p>
+              <p className="text-muted-foreground text-sm">
+                {format(new Date(request.date), "MMM dd, yyyy")} ·{" "}
+                {request.handCount} hands
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() =>
+                  respond({ requestId: request._id, userId, approve: false })
+                }
+                size="sm"
+                variant="outline"
+              >
+                <X className="mr-1 h-4 w-4" />
+                Reject
+              </Button>
+              <Button
+                onClick={() =>
+                  respond({ requestId: request._id, userId, approve: true })
+                }
+                size="sm"
+              >
+                <Check className="mr-1 h-4 w-4" />
+                Approve
+              </Button>
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

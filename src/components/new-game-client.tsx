@@ -1,9 +1,11 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Calendar } from "lucide-react";
+import { Calendar, FileUp } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GameForm } from "@/components/game/game-form";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FormFieldSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useConvexUser, useUserGroups } from "@/lib/convex-hooks";
@@ -176,7 +178,23 @@ export function NewGameClient() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto max-w-2xl px-4 py-8">
+      <div className="container mx-auto max-w-2xl space-y-5 px-4 py-8">
+        <div className="flex items-center justify-between rounded-xl border bg-muted/30 p-4">
+          <div>
+            <p className="font-medium">Already played on PokerNow?</p>
+            <p className="text-muted-foreground text-sm">
+              Import a downloaded log as a completed session.
+            </p>
+          </div>
+          <Link
+            href={`/games/import${defaultGroupId ? `?groupId=${defaultGroupId}` : ""}`}
+          >
+            <Button variant="outline">
+              <FileUp className="mr-2 h-4 w-4" />
+              Import New Session
+            </Button>
+          </Link>
+        </div>
         <GameForm
           defaultGroupId={defaultGroupId ?? undefined}
           groups={memberGroups.map((g) => ({
