@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { FileUp, Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, FileUp, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -23,12 +36,110 @@ import {
 } from "@/components/ui/select";
 import { useConvexUser, useUserGroups } from "@/lib/convex-hooks";
 import { type PokerNowSession, parsePokerNowLog } from "@/lib/poker-now/parser";
+import { cn } from "@/lib/utils";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
 const CREATE_EXTRA = "__extra__";
 const normalize = (value: string) =>
   value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+
+interface PlayerCandidate {
+  email?: string;
+  id: Id<"players">;
+  name: string;
+}
+
+function PlayerCombobox({
+  candidates,
+  importedName,
+  onChange,
+  value,
+}: {
+  candidates: PlayerCandidate[];
+  importedName: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = candidates.find((candidate) => candidate.id === value);
+  const label =
+    value === CREATE_EXTRA
+      ? `Add as extra player “${importedName}”`
+      : (selected?.name ?? "Select a player");
+
+  function select(nextValue: string) {
+    onChange(nextValue);
+    setOpen(false);
+  }
+
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+          role="combobox"
+          variant="outline"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+      >
+        <Command>
+          <CommandInput placeholder="Search players..." />
+          <CommandList>
+            <CommandEmpty>No player found.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                keywords={[importedName, "extra", "new"]}
+                onSelect={() => select(CREATE_EXTRA)}
+                value={CREATE_EXTRA}
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-4 w-4",
+                    value === CREATE_EXTRA ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                <span className="truncate">
+                  Add as extra player “{importedName}”
+                </span>
+              </CommandItem>
+              {candidates.map((candidate) => (
+                <CommandItem
+                  key={candidate.id}
+                  keywords={candidate.email ? [candidate.email] : undefined}
+                  onSelect={() => select(candidate.id)}
+                  value={candidate.name}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === candidate.id ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate">{candidate.name}</span>
+                    {candidate.email ? (
+                      <span className="block truncate text-muted-foreground text-xs">
+                        {candidate.email}
+                      </span>
+                    ) : null}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function PokerNowImportClient() {
   const router = useRouter();
@@ -204,29 +315,17 @@ export function PokerNowImportClient() {
                     {player.cashOut.toFixed(2)}
                   </p>
                 </div>
-                <Select
-                  onValueChange={(value) =>
+                <PlayerCombobox
+                  candidates={candidates?.players ?? []}
+                  importedName={player.name}
+                  onChange={(value) =>
                     setMapping((current) => ({
                       ...current,
                       [player.sourceId]: value,
                     }))
                   }
                   value={mapping[player.sourceId] ?? CREATE_EXTRA}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={CREATE_EXTRA}>
-                      Add as extra player “{player.name}”
-                    </SelectItem>
-                    {candidates?.players.map((candidate) => (
-                      <SelectItem key={candidate.id} value={candidate.id}>
-                        {candidate.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             ))}
             <div className="flex justify-end pt-2">
