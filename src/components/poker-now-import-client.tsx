@@ -55,25 +55,62 @@ const normalize = (value: string) =>
 interface PlayerCandidate {
   email?: string;
   id: Id<"players">;
+  isExtra: boolean;
   name: string;
+}
+
+function PlayerCandidateItem({
+  candidate,
+  onSelect,
+  selected,
+}: {
+  candidate: PlayerCandidate;
+  onSelect: () => void;
+  selected: boolean;
+}) {
+  return (
+    <CommandItem
+      keywords={
+        candidate.email ? [candidate.name, candidate.email] : [candidate.name]
+      }
+      onSelect={onSelect}
+      value={candidate.id}
+    >
+      <Check
+        className={cn("mr-2 h-4 w-4", selected ? "opacity-100" : "opacity-0")}
+      />
+      <span className="min-w-0">
+        <span className="block truncate">{candidate.name}</span>
+        {candidate.email ? (
+          <span className="block truncate text-muted-foreground text-xs">
+            {candidate.email}
+          </span>
+        ) : null}
+      </span>
+    </CommandItem>
+  );
 }
 
 function PlayerCombobox({
   candidates,
+  extraName,
   importedName,
   onChange,
   value,
 }: {
   candidates: PlayerCandidate[];
+  extraName: string;
   importedName: string;
   onChange: (value: string) => void;
   value: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = candidates.find((candidate) => candidate.id === value);
+  const groupPlayers = candidates.filter((candidate) => !candidate.isExtra);
+  const extraPlayers = candidates.filter((candidate) => candidate.isExtra);
   let label = selected?.name ?? "Select a player";
   if (value === CREATE_EXTRA) {
-    label = `Add as extra player “${importedName}”`;
+    label = `Add as extra player “${extraName.trim() || importedName}”`;
   } else if (value === EXCLUDE_PLAYER) {
     label = "Exclude from import";
   }
@@ -105,48 +142,44 @@ function PlayerCombobox({
           <CommandList>
             <CommandEmpty>No player found.</CommandEmpty>
             <CommandGroup heading="Group players">
-              {candidates.map((candidate) => (
-                <CommandItem
+              {groupPlayers.map((candidate) => (
+                <PlayerCandidateItem
+                  candidate={candidate}
                   key={candidate.id}
-                  keywords={
-                    candidate.email
-                      ? [candidate.name, candidate.email]
-                      : [candidate.name]
-                  }
                   onSelect={() => select(candidate.id)}
-                  value={candidate.id}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === candidate.id ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate">{candidate.name}</span>
-                    {candidate.email ? (
-                      <span className="block truncate text-muted-foreground text-xs">
-                        {candidate.email}
-                      </span>
-                    ) : null}
-                  </span>
-                </CommandItem>
+                  selected={value === candidate.id}
+                />
               ))}
             </CommandGroup>
+            {extraPlayers.length > 0 ? (
+              <CommandGroup
+                className="border-t"
+                heading="Unclaimed players from past sessions"
+              >
+                {extraPlayers.map((candidate) => (
+                  <PlayerCandidateItem
+                    candidate={candidate}
+                    key={candidate.id}
+                    onSelect={() => select(candidate.id)}
+                    selected={value === candidate.id}
+                  />
+                ))}
+              </CommandGroup>
+            ) : null}
             <CommandGroup
               className="border-t bg-muted/30"
               heading="Other options"
             >
               <CommandItem
                 className="py-2.5"
-                keywords={[importedName, "extra", "new"]}
+                keywords={[importedName, extraName, "extra", "new"]}
                 onSelect={() => select(CREATE_EXTRA)}
                 value={CREATE_EXTRA}
               >
                 <UserPlus className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">
-                    Add “{importedName}” as an extra player
+                    Add “{extraName.trim() || importedName}” as an extra player
                   </span>
                   <span className="block text-muted-foreground text-xs">
                     Keep this entry without linking an account
@@ -195,6 +228,7 @@ export function PokerNowImportClient() {
   const [groupId, setGroupId] = useState(searchParams.get("groupId") ?? "");
   const [session, setSession] = useState<PokerNowSession>();
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [extraNames, setExtraNames] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -211,7 +245,9 @@ export function PokerNowImportClient() {
     try {
       const parsed = parsePokerNowLog(await file.text(), file.name);
       const nextMapping: Record<string, string> = {};
+      const nextExtraNames: Record<string, string> = {};
       for (const imported of parsed.players) {
+        nextExtraNames[imported.sourceId] = imported.name;
         const alias = candidates?.aliases.find(
           (item) => item.sourcePlayerId === imported.sourceId
         );
@@ -224,6 +260,7 @@ export function PokerNowImportClient() {
       }
       setSession(parsed);
       setMapping(nextMapping);
+      setExtraNames(nextExtraNames);
       setError(undefined);
     } catch (caught) {
       setSession(undefined);
@@ -235,6 +272,15 @@ export function PokerNowImportClient() {
 
   async function submit() {
     if (!(session && groupId && userId)) {
+      return;
+    }
+    const invalidExtra = session.players.some(
+      (player) =>
+        mapping[player.sourceId] === CREATE_EXTRA &&
+        !(extraNames[player.sourceId] ?? "").trim()
+    );
+    if (invalidExtra) {
+      setError("Every extra player needs a name");
       return;
     }
     setSaving(true);
@@ -253,7 +299,10 @@ export function PokerNowImportClient() {
           .filter((player) => mapping[player.sourceId] !== EXCLUDE_PLAYER)
           .map((player) => ({
             sourcePlayerId: player.sourceId,
-            displayName: player.name,
+            displayName:
+              mapping[player.sourceId] === CREATE_EXTRA
+                ? (extraNames[player.sourceId] ?? player.name).trim()
+                : player.name,
             buyIn: player.buyIn,
             cashOut: player.cashOut,
             playerId:
@@ -269,6 +318,8 @@ export function PokerNowImportClient() {
       }
       setSuccess("Import sent to the group leader for approval.");
       setSession(undefined);
+      setMapping({});
+      setExtraNames({});
       setSaving(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Import failed");
@@ -286,6 +337,11 @@ export function PokerNowImportClient() {
       return target === CREATE_EXTRA ? `extra:${player.sourceId}` : target;
     })
   ).size;
+  const hasInvalidExtraNames = includedPlayers.some(
+    (player) =>
+      mapping[player.sourceId] === CREATE_EXTRA &&
+      !(extraNames[player.sourceId] ?? "").trim()
+  );
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-10">
@@ -315,6 +371,8 @@ export function PokerNowImportClient() {
               onValueChange={(value) => {
                 setGroupId(value);
                 setSession(undefined);
+                setMapping({});
+                setExtraNames({});
               }}
               value={groupId}
             >
@@ -379,17 +437,49 @@ export function PokerNowImportClient() {
                     {player.cashOut.toFixed(2)}
                   </p>
                 </div>
-                <PlayerCombobox
-                  candidates={candidates?.players ?? []}
-                  importedName={player.name}
-                  onChange={(value) =>
-                    setMapping((current) => ({
-                      ...current,
-                      [player.sourceId]: value,
-                    }))
-                  }
-                  value={mapping[player.sourceId] ?? CREATE_EXTRA}
-                />
+                <div className="space-y-2">
+                  <PlayerCombobox
+                    candidates={candidates?.players ?? []}
+                    extraName={extraNames[player.sourceId] ?? player.name}
+                    importedName={player.name}
+                    onChange={(value) =>
+                      setMapping((current) => ({
+                        ...current,
+                        [player.sourceId]: value,
+                      }))
+                    }
+                    value={mapping[player.sourceId] ?? CREATE_EXTRA}
+                  />
+                  {mapping[player.sourceId] === CREATE_EXTRA ? (
+                    <div className="space-y-1">
+                      <Label htmlFor={`extra-name-${player.sourceId}`}>
+                        Extra player name
+                      </Label>
+                      <Input
+                        id={`extra-name-${player.sourceId}`}
+                        maxLength={80}
+                        onChange={(event) =>
+                          setExtraNames((current) => ({
+                            ...current,
+                            [player.sourceId]: event.target.value,
+                          }))
+                        }
+                        placeholder="Enter a name"
+                        value={extraNames[player.sourceId] ?? player.name}
+                      />
+                      {(extraNames[player.sourceId] ?? "").trim() ? (
+                        <p className="text-muted-foreground text-xs">
+                          This can be anyone, even if they have not joined the
+                          group yet.
+                        </p>
+                      ) : (
+                        <p className="text-destructive text-xs">
+                          Enter a name for this extra player.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ))}
             <div className="flex items-center justify-between gap-4 pt-2">
@@ -401,7 +491,9 @@ export function PokerNowImportClient() {
                 <span />
               )}
               <Button
-                disabled={saving || includedPlayerCount < 2}
+                disabled={
+                  saving || includedPlayerCount < 2 || hasInvalidExtraNames
+                }
                 onClick={submit}
               >
                 {saving ? (
