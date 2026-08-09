@@ -144,6 +144,8 @@ export default defineSchema({
     createdById: v.id("users"),
     importSource: v.optional(v.literal("POKER_NOW")),
     importSourceId: v.optional(v.string()),
+    smallBlind: v.optional(v.number()),
+    bigBlind: v.optional(v.number()),
   })
     .index("by_groupId", ["groupId"])
     .index("by_groupId_status", ["groupId", "status"])

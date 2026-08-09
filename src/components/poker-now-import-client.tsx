@@ -41,6 +41,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
 const CREATE_EXTRA = "__extra__";
+const EXCLUDE_PLAYER = "__exclude__";
 const normalize = (value: string) =>
   value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
 
@@ -63,10 +64,12 @@ function PlayerCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const selected = candidates.find((candidate) => candidate.id === value);
-  const label =
-    value === CREATE_EXTRA
-      ? `Add as extra player “${importedName}”`
-      : (selected?.name ?? "Select a player");
+  let label = selected?.name ?? "Select a player";
+  if (value === CREATE_EXTRA) {
+    label = `Add as extra player “${importedName}”`;
+  } else if (value === EXCLUDE_PLAYER) {
+    label = "Exclude from import";
+  }
 
   function select(nextValue: string) {
     onChange(nextValue);
@@ -96,6 +99,19 @@ function PlayerCombobox({
             <CommandEmpty>No player found.</CommandEmpty>
             <CommandGroup>
               <CommandItem
+                keywords={["exclude", "ignore", "remove"]}
+                onSelect={() => select(EXCLUDE_PLAYER)}
+                value={EXCLUDE_PLAYER}
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-4 w-4",
+                    value === EXCLUDE_PLAYER ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                <span className="truncate">Exclude from import</span>
+              </CommandItem>
+              <CommandItem
                 keywords={[importedName, "extra", "new"]}
                 onSelect={() => select(CREATE_EXTRA)}
                 value={CREATE_EXTRA}
@@ -113,9 +129,13 @@ function PlayerCombobox({
               {candidates.map((candidate) => (
                 <CommandItem
                   key={candidate.id}
-                  keywords={candidate.email ? [candidate.email] : undefined}
+                  keywords={
+                    candidate.email
+                      ? [candidate.name, candidate.email]
+                      : [candidate.name]
+                  }
                   onSelect={() => select(candidate.id)}
-                  value={candidate.name}
+                  value={candidate.id}
                 >
                   <Check
                     className={cn(
@@ -203,17 +223,19 @@ export function PokerNowImportClient() {
         smallBlind: session.smallBlind,
         bigBlind: session.bigBlind,
         handCount: session.handCount,
-        players: session.players.map((player) => ({
-          sourcePlayerId: player.sourceId,
-          displayName: player.name,
-          buyIn: player.buyIn,
-          cashOut: player.cashOut,
-          playerId:
-            mapping[player.sourceId] &&
-            mapping[player.sourceId] !== CREATE_EXTRA
-              ? (mapping[player.sourceId] as Id<"players">)
-              : undefined,
-        })),
+        players: session.players
+          .filter((player) => mapping[player.sourceId] !== EXCLUDE_PLAYER)
+          .map((player) => ({
+            sourcePlayerId: player.sourceId,
+            displayName: player.name,
+            buyIn: player.buyIn,
+            cashOut: player.cashOut,
+            playerId:
+              mapping[player.sourceId] &&
+              mapping[player.sourceId] !== CREATE_EXTRA
+                ? (mapping[player.sourceId] as Id<"players">)
+                : undefined,
+          })),
       });
       if (result.status === "APPROVED") {
         router.push(`/games/${result.gameId}`);
@@ -227,6 +249,17 @@ export function PokerNowImportClient() {
       setSaving(false);
     }
   }
+
+  const includedPlayers =
+    session?.players.filter(
+      (player) => mapping[player.sourceId] !== EXCLUDE_PLAYER
+    ) ?? [];
+  const includedPlayerCount = new Set(
+    includedPlayers.map((player) => {
+      const target = mapping[player.sourceId] ?? CREATE_EXTRA;
+      return target === CREATE_EXTRA ? `extra:${player.sourceId}` : target;
+    })
+  ).size;
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-10">
@@ -298,14 +331,19 @@ export function PokerNowImportClient() {
           <CardHeader>
             <CardTitle>Match players</CardTitle>
             <CardDescription>
-              {session.players.length} players · {session.handCount} hands ·{" "}
+              {includedPlayers.length} of {session.players.length} entries
+              included · {includedPlayerCount} matched players ·{" "}
+              {session.handCount} hands ·{" "}
               {new Date(session.startedAt).toLocaleString()}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {session.players.map((player) => (
               <div
-                className="grid gap-2 rounded-lg border p-4 sm:grid-cols-[1fr_1.4fr] sm:items-center"
+                className={cn(
+                  "grid gap-2 rounded-lg border p-4 sm:grid-cols-[1fr_1.4fr] sm:items-center",
+                  mapping[player.sourceId] === EXCLUDE_PLAYER && "opacity-60"
+                )}
                 key={player.sourceId}
               >
                 <div>
@@ -328,8 +366,18 @@ export function PokerNowImportClient() {
                 />
               </div>
             ))}
-            <div className="flex justify-end pt-2">
-              <Button disabled={saving} onClick={submit}>
+            <div className="flex items-center justify-between gap-4 pt-2">
+              {includedPlayerCount < 2 ? (
+                <p className="text-destructive text-sm">
+                  Include at least two different players.
+                </p>
+              ) : (
+                <span />
+              )}
+              <Button
+                disabled={saving || includedPlayerCount < 2}
+                onClick={submit}
+              >
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
