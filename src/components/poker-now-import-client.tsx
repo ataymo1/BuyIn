@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Check, ChevronsUpDown, FileUp, Loader2 } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  FileUp,
+  Loader2,
+  UserPlus,
+  UserX,
+} from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -97,35 +104,7 @@ function PlayerCombobox({
           <CommandInput placeholder="Search players..." />
           <CommandList>
             <CommandEmpty>No player found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                keywords={["exclude", "ignore", "remove"]}
-                onSelect={() => select(EXCLUDE_PLAYER)}
-                value={EXCLUDE_PLAYER}
-              >
-                <Check
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    value === EXCLUDE_PLAYER ? "opacity-100" : "opacity-0"
-                  )}
-                />
-                <span className="truncate">Exclude from import</span>
-              </CommandItem>
-              <CommandItem
-                keywords={[importedName, "extra", "new"]}
-                onSelect={() => select(CREATE_EXTRA)}
-                value={CREATE_EXTRA}
-              >
-                <Check
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    value === CREATE_EXTRA ? "opacity-100" : "opacity-0"
-                  )}
-                />
-                <span className="truncate">
-                  Add as extra player “{importedName}”
-                </span>
-              </CommandItem>
+            <CommandGroup heading="Group players">
               {candidates.map((candidate) => (
                 <CommandItem
                   key={candidate.id}
@@ -153,6 +132,53 @@ function PlayerCombobox({
                   </span>
                 </CommandItem>
               ))}
+            </CommandGroup>
+            <CommandGroup
+              className="border-t bg-muted/30"
+              heading="Other options"
+            >
+              <CommandItem
+                className="py-2.5"
+                keywords={[importedName, "extra", "new"]}
+                onSelect={() => select(CREATE_EXTRA)}
+                value={CREATE_EXTRA}
+              >
+                <UserPlus className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">
+                    Add “{importedName}” as an extra player
+                  </span>
+                  <span className="block text-muted-foreground text-xs">
+                    Keep this entry without linking an account
+                  </span>
+                </span>
+                <Check
+                  className={cn(
+                    "ml-2 h-4 w-4 shrink-0",
+                    value === CREATE_EXTRA ? "opacity-100" : "opacity-0"
+                  )}
+                />
+              </CommandItem>
+              <CommandItem
+                className="py-2.5"
+                keywords={["exclude", "ignore", "remove"]}
+                onSelect={() => select(EXCLUDE_PLAYER)}
+                value={EXCLUDE_PLAYER}
+              >
+                <UserX className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">Exclude this entry</span>
+                  <span className="block text-muted-foreground text-xs">
+                    Do not count it toward session totals
+                  </span>
+                </span>
+                <Check
+                  className={cn(
+                    "ml-2 h-4 w-4 shrink-0",
+                    value === EXCLUDE_PLAYER ? "opacity-100" : "opacity-0"
+                  )}
+                />
+              </CommandItem>
             </CommandGroup>
           </CommandList>
         </Command>
