@@ -44,6 +44,20 @@ async function findDuplicate(
   return game ?? request;
 }
 
+function validateImportedPlayer(imported: ImportedPlayer) {
+  const displayName = imported.displayName.trim();
+  if (!(displayName && displayName.length <= 80)) {
+    throw new Error("Player names must be between 1 and 80 characters");
+  }
+  if (!imported.sourcePlayerId.trim()) {
+    throw new Error("Imported players need a source ID");
+  }
+  if (!(Number.isFinite(imported.buyIn) && Number.isFinite(imported.cashOut))) {
+    throw new Error("Player totals must be valid numbers");
+  }
+  return displayName;
+}
+
 async function persistSession(ctx: MutationCtx, args: ImportData) {
   const totalsByPlayer = new Map<
     Id<"players">,
@@ -51,17 +65,13 @@ async function persistSession(ctx: MutationCtx, args: ImportData) {
   >();
 
   for (const imported of args.players) {
-    if (
-      !(Number.isFinite(imported.buyIn) && Number.isFinite(imported.cashOut))
-    ) {
-      throw new Error("Player totals must be valid numbers");
-    }
+    const displayName = validateImportedPlayer(imported);
     let playerId = imported.playerId;
     if (playerId && !(await ctx.db.get(playerId))) {
       throw new Error("A selected player no longer exists");
     }
     playerId ??= await ctx.db.insert("players", {
-      name: imported.displayName.trim(),
+      name: displayName,
     });
 
     const priorAlias = await ctx.db
@@ -75,13 +85,13 @@ async function persistSession(ctx: MutationCtx, args: ImportData) {
     if (priorAlias) {
       await ctx.db.patch(priorAlias._id, {
         playerId,
-        displayName: imported.displayName.trim(),
+        displayName,
       });
     } else {
       await ctx.db.insert("pokerNowAliases", {
         groupId: args.groupId,
         sourcePlayerId: imported.sourcePlayerId,
-        displayName: imported.displayName.trim(),
+        displayName,
         playerId,
       });
     }
@@ -160,14 +170,45 @@ export const getCandidates = query({
           : null;
       })
     );
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
+      .collect();
+    const gamePlayers = (
+      await Promise.all(
+        games.map((game) =>
+          ctx.db
+            .query("gamePlayers")
+            .withIndex("by_gameId", (q) => q.eq("gameId", game._id))
+            .collect()
+        )
+      )
+    ).flat();
+    const memberPlayerIds = new Set(
+      memberPlayers.flatMap((player) => (player ? [player.id] : []))
+    );
+    const historicalPlayerIds = [
+      ...new Set(gamePlayers.map((gamePlayer) => gamePlayer.playerId)),
+    ].filter((playerId) => !memberPlayerIds.has(playerId));
+    const historicalPlayers = await Promise.all(
+      historicalPlayerIds.map(async (playerId) => {
+        const player = await ctx.db.get(playerId);
+        return player && !player.userId
+          ? { id: player._id, name: player.name, isExtra: true as const }
+          : null;
+      })
+    );
     const aliases = await ctx.db
       .query("pokerNowAliases")
       .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
       .collect();
-    return {
-      players: memberPlayers.filter((player) => player !== null),
-      aliases,
-    };
+    const players = [
+      ...memberPlayers
+        .filter((player) => player !== null)
+        .map((player) => ({ ...player, isExtra: false as const })),
+      ...historicalPlayers.filter((player) => player !== null),
+    ].sort((a, b) => a.name.localeCompare(b.name));
+    return { players, aliases };
   },
 });
 
