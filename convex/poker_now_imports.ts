@@ -45,24 +45,10 @@ async function findDuplicate(
 }
 
 async function persistSession(ctx: MutationCtx, args: ImportData) {
-  if (args.players.length < 2) {
-    throw new Error("An imported session needs at least two players");
-  }
-  const gameId = await ctx.db.insert("games", {
-    date: args.date,
-    location: "PokerNow",
-    notes: `Imported from PokerNow · ${args.handCount} hands${
-      args.smallBlind && args.bigBlind
-        ? ` · ${args.smallBlind}/${args.bigBlind} blinds`
-        : ""
-    }`,
-    status: "COMPLETED",
-    gameType: "cash",
-    groupId: args.groupId,
-    createdById: args.createdById,
-    importSource: "POKER_NOW",
-    importSourceId: args.sourceId,
-  });
+  const totalsByPlayer = new Map<
+    Id<"players">,
+    { buyIn: number; cashOut: number }
+  >();
 
   for (const imported of args.players) {
     if (
@@ -99,16 +85,48 @@ async function persistSession(ctx: MutationCtx, args: ImportData) {
         playerId,
       });
     }
+
+    const totals = totalsByPlayer.get(playerId) ?? { buyIn: 0, cashOut: 0 };
+    totals.buyIn += imported.buyIn;
+    totals.cashOut += imported.cashOut;
+    totalsByPlayer.set(playerId, totals);
+  }
+
+  if (totalsByPlayer.size < 2) {
+    throw new Error("An imported session needs at least two different players");
+  }
+
+  const gameId = await ctx.db.insert("games", {
+    date: args.date,
+    location: "PokerNow",
+    notes: `Imported from PokerNow · ${args.handCount} hands${
+      args.smallBlind && args.bigBlind
+        ? ` · ${args.smallBlind}/${args.bigBlind} blinds`
+        : ""
+    }`,
+    status: "COMPLETED",
+    gameType: "cash",
+    groupId: args.groupId,
+    createdById: args.createdById,
+    importSource: "POKER_NOW",
+    importSourceId: args.sourceId,
+    smallBlind: args.smallBlind,
+    bigBlind: args.bigBlind,
+  });
+
+  for (const [playerId, totals] of totalsByPlayer) {
+    const buyIn = Math.round(totals.buyIn * 100) / 100;
+    const cashOut = Math.round(totals.cashOut * 100) / 100;
     await ctx.db.insert("gamePlayers", {
       gameId,
       playerId,
-      buyIn: imported.buyIn,
-      cashOut: imported.cashOut,
-      profit: Math.round((imported.cashOut - imported.buyIn) * 100) / 100,
+      buyIn,
+      cashOut,
+      profit: Math.round((cashOut - buyIn) * 100) / 100,
     });
     for (const transaction of [
-      { type: "buyin" as const, amount: imported.buyIn },
-      { type: "cashout" as const, amount: imported.cashOut },
+      { type: "buyin" as const, amount: buyIn },
+      { type: "cashout" as const, amount: cashOut },
     ]) {
       await ctx.db.insert("transactions", {
         gameId,
