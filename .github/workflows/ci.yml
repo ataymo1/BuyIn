@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run type-check
+      - run: pnpm run test:live-poker
+      - run: pnpm exec wrangler deploy --dry-run
+      - run: pnpm build
+        env:
+          AUTH_TRUST_HOST: "true"
+          GOOGLE_CLIENT_ID: ci-google-client
+          GOOGLE_CLIENT_SECRET: ci-google-secret
+          LIVE_POKER_CONVEX_SECRET: ci-convex-secret
+          LIVE_POKER_JWT_SECRET: ci-jwt-secret
+          LIVE_POKER_WEBHOOK_SECRET: ci-webhook-secret
+          LIVE_POKER_WORKER_URL: https://worker.example.com
+          NEXTAUTH_SECRET: ci-nextauth-secret
+          NEXTAUTH_URL: http://localhost:3000
+          NEXT_PUBLIC_CONVEX_URL: https://example.convex.cloud
+          NEXT_PUBLIC_LIVE_POKER_WORKER_URL: wss://worker.example.com

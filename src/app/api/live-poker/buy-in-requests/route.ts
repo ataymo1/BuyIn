@@ -7,6 +7,43 @@ import {
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
+export async function GET(request: Request) {
+  const user = await getAuthenticatedLivePokerUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const tableId = new URL(request.url).searchParams.get("tableId");
+  if (!tableId) {
+    return NextResponse.json(
+      { error: "A tableId is required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const requests = await livePokerConvex.action(
+      api.live_poker.serverGetLivePokerBuyInRequests,
+      {
+        secret: getLivePokerConvexSecret(),
+        tableId: tableId as Id<"livePokerTables">,
+        userId: user._id,
+      }
+    );
+    return NextResponse.json(requests);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to load buy-in requests",
+      },
+      { status: 400 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   const user = await getAuthenticatedLivePokerUser();
   if (!user) {

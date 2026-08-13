@@ -1125,6 +1125,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
     let reconnectAttempt = 0;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let tokenController: AbortController | null = null;
+    let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     const lifecycle = socketLifecycleRef.current + retryNonce + 1;
     socketLifecycleRef.current = lifecycle;
 
@@ -1156,6 +1157,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
       if (!isCurrentLifecycle()) {
         return;
       }
+      if (tokenRefreshTimer) {
+        clearTimeout(tokenRefreshTimer);
+        tokenRefreshTimer = null;
+      }
 
       setConnectionStatus(
         reconnectAttempt === 0 ? "connecting" : "reconnecting"
@@ -1186,6 +1191,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             seatCount: number;
             smallBlind: number;
           };
+          expiresAt: number;
           player: {
             id: Id<"players">;
             name: string;
@@ -1198,18 +1204,37 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         }
         setPlayerId(body.player.id);
 
+        const workerBaseUrl = process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL;
+        if (!workerBaseUrl) {
+          throw new Error("The live poker worker URL is not configured");
+        }
         const workerUrl = new URL(
           `/live-poker/${encodeURIComponent(tableId)}`,
-          process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL ?? "ws://localhost:8787"
+          workerBaseUrl
         );
-        workerUrl.searchParams.set("token", body.token);
 
-        const socket = new WebSocket(workerUrl);
+        const socket = new WebSocket(workerUrl, [
+          "buyin-live-poker",
+          `buyin-auth-${body.token}`,
+        ]);
         socketRef.current = socket;
 
         function isCurrentSocket() {
           return isCurrentLifecycle() && socketRef.current === socket;
         }
+
+        tokenRefreshTimer = setTimeout(
+          () => {
+            if (!isCurrentSocket()) {
+              return;
+            }
+            socketRef.current = null;
+            socket.close(4001, "Refreshing credentials");
+            setConnectionStatus("reconnecting");
+            connect();
+          },
+          Math.max(1000, body.expiresAt - Date.now() - 30_000)
+        );
 
         socket.addEventListener("open", () => {
           if (!isCurrentSocket()) {
@@ -1289,6 +1314,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
       tokenController?.abort();
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
+      }
+      if (tokenRefreshTimer) {
+        clearTimeout(tokenRefreshTimer);
       }
       const socket = socketRef.current;
       socketRef.current = null;

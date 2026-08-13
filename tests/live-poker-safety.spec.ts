@@ -3,7 +3,11 @@ import {
   signLivePokerToken,
   verifyLivePokerToken,
 } from "../src/lib/live-poker/auth";
-import { createInitialState, seatPlayer } from "../src/lib/live-poker/engine";
+import {
+  createInitialState,
+  seatPlayer,
+  shuffleDeck,
+} from "../src/lib/live-poker/engine";
 import {
   clientMessageSchema,
   toPublicState,
@@ -17,6 +21,21 @@ const config = {
   seatCount: 6,
   smallBlind: 1,
 };
+
+test("deck shuffling uses the platform cryptographic RNG", () => {
+  const originalRandom = Math.random;
+  Math.random = () => {
+    throw new Error("Math.random must not be used for cards");
+  };
+
+  try {
+    const shuffled = shuffleDeck();
+    expect(shuffled).toHaveLength(52);
+    expect(new Set(shuffled).size).toBe(52);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
 
 test("public winner state omits internal user ids", () => {
   const state = createInitialState(config);

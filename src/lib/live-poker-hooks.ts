@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -99,34 +100,75 @@ export function useCreateLivePokerBuyInRequest() {
   };
 }
 
+function useLivePokerBuyInRequests(
+  tableId: Id<"livePokerTables"> | undefined,
+  userId: Id<"users"> | undefined,
+  kind: "pending" | "user"
+) {
+  const [requests, setRequests] = useState<unknown[]>([]);
+  const [isLoading, setIsLoading] = useState(Boolean(tableId && userId));
+
+  useEffect(() => {
+    if (!(tableId && userId)) {
+      setRequests([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setRequests([]);
+    setIsLoading(true);
+    let active = true;
+    let controller: AbortController | null = null;
+
+    async function load() {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const body = await requestLivePokerApi<{
+          pending: unknown[];
+          user: unknown[];
+        }>(
+          `/api/live-poker/buy-in-requests?tableId=${encodeURIComponent(tableId as string)}`,
+          { method: "GET", signal: controller.signal }
+        );
+        if (active) {
+          setRequests(body[kind]);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (
+          active &&
+          !(error instanceof DOMException && error.name === "AbortError")
+        ) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    load();
+    const timer = window.setInterval(load, 2000);
+    return () => {
+      active = false;
+      controller?.abort();
+      window.clearInterval(timer);
+    };
+  }, [kind, tableId, userId]);
+
+  return { isLoading, requests };
+}
+
 export function usePendingLivePokerBuyInRequests(
   tableId: Id<"livePokerTables"> | undefined,
   userId: Id<"users"> | undefined
 ) {
-  const requests = useQuery(
-    api.live_poker.getPendingLivePokerBuyInRequests,
-    tableId && userId ? { tableId, userId } : "skip"
-  );
-
-  return {
-    isLoading: requests === undefined && Boolean(tableId && userId),
-    requests: requests ?? [],
-  };
+  return useLivePokerBuyInRequests(tableId, userId, "pending");
 }
 
 export function useUserLivePokerBuyInRequests(
   tableId: Id<"livePokerTables"> | undefined,
   userId: Id<"users"> | undefined
 ) {
-  const requests = useQuery(
-    api.live_poker.getUserLivePokerBuyInRequests,
-    tableId && userId ? { tableId, userId } : "skip"
-  );
-
-  return {
-    isLoading: requests === undefined && Boolean(tableId && userId),
-    requests: requests ?? [],
-  };
+  return useLivePokerBuyInRequests(tableId, userId, "user");
 }
 
 export function useRespondToLivePokerBuyInRequest() {

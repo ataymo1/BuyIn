@@ -3,6 +3,9 @@
   "name": "buyin-live-poker",
   "main": "workers/live-poker.ts",
   "compatibility_date": "2026-05-05",
+  "observability": {
+    "enabled": true
+  },
   "durable_objects": {
     "bindings": [
       {

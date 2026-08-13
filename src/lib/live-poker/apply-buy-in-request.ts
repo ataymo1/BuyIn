@@ -25,8 +25,10 @@ interface LivePokerBuyInRequestForWorker {
 function getWorkerHttpUrl(tableId: string, operation: "claim" | "close") {
   const base =
     process.env.LIVE_POKER_WORKER_URL ||
-    process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL ||
-    "http://localhost:8787";
+    process.env.NEXT_PUBLIC_LIVE_POKER_WORKER_URL;
+  if (!base) {
+    throw new Error("LIVE_POKER_WORKER_URL is not configured");
+  }
   const url = new URL(
     `/live-poker/${encodeURIComponent(tableId)}/${operation}`,
     base
@@ -64,14 +66,25 @@ async function postToWorker(
     };
   }
 
-  const workerResponse = await fetch(getWorkerHttpUrl(tableId, operation), {
-    body: JSON.stringify(body),
-    headers: {
-      "content-type": "application/json",
-      "x-live-poker-secret": secret,
-    },
-    method: "POST",
-  });
+  let workerResponse: Response;
+  try {
+    workerResponse = await fetch(getWorkerHttpUrl(tableId, operation), {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json",
+        "x-live-poker-secret": secret,
+      },
+      method: "POST",
+    });
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? `Unable to reach live poker worker: ${error.message}`
+          : "Unable to reach live poker worker",
+      status: 502,
+    };
+  }
   if (workerResponse.ok) {
     return { ok: true as const };
   }

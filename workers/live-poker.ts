@@ -48,6 +48,7 @@ declare const WebSocketPair: {
 };
 
 interface Env {
+  LIVE_POKER_ALLOWED_ORIGINS?: string;
   LIVE_POKER_JWT_SECRET?: string;
   LIVE_POKER_SETTLEMENT_URL?: string;
   LIVE_POKER_TABLE: DurableObjectNamespace<LivePokerTableDurableObject>;
@@ -90,7 +91,13 @@ const encoder = new TextEncoder();
 const LIVE_POKER_PATH_REGEX = /^\/live-poker\/([^/]+)$/;
 const LIVE_POKER_CLAIM_PATH_REGEX = /^\/live-poker\/([^/]+)\/claim$/;
 const LIVE_POKER_CLOSE_PATH_REGEX = /^\/live-poker\/([^/]+)\/close$/;
+const MAX_ACTION_LOG_ENTRIES = 200;
+const MAX_APPLIED_REQUEST_IDS = 1000;
 const MAX_OUTBOX_DELIVERIES_PER_RUN = 10;
+const MAX_PENDING_OUTBOX_DELIVERIES = 100;
+const OUTBOX_STORAGE_PREFIX = "outbox:";
+const SOCKET_PROTOCOL = "buyin-live-poker";
+const TOKEN_PROTOCOL_PREFIX = "buyin-auth-";
 
 function envString(env: Env, key: keyof Env) {
   const value = env[key];
@@ -105,22 +112,29 @@ function requireEnvString(env: Env, key: keyof Env) {
   return value;
 }
 
+function isValidChipAmount(value: number, allowZero = false) {
+  const units = Math.round(value * 100);
+  return (
+    Number.isFinite(value) &&
+    Number.isSafeInteger(units) &&
+    Math.abs(value * 100 - units) <= 1e-7 &&
+    (allowZero ? units >= 0 : units > 0)
+  );
+}
+
 function validateTableConfig(config: LivePokerTableConfig) {
-  const values = [
+  const hasValidPositiveAmounts = [
+    config.smallBlind,
     config.bigBlind,
     config.maxBuyIn,
-    config.minBuyIn,
-    config.seatCount,
-    config.smallBlind,
-  ];
-  if (values.some((value) => !Number.isFinite(value))) {
-    throw new Error("Invalid live poker table configuration");
-  }
+  ].every((amount) => isValidChipAmount(amount));
+  const hasValidIdentityAndAmounts =
+    Boolean(config.hostUserId) &&
+    hasValidPositiveAmounts &&
+    isValidChipAmount(config.minBuyIn, true);
   if (
-    !config.hostUserId ||
-    config.smallBlind <= 0 ||
+    !hasValidIdentityAndAmounts ||
     config.bigBlind < config.smallBlind ||
-    config.minBuyIn < 0 ||
     config.maxBuyIn < config.minBuyIn ||
     !Number.isInteger(config.seatCount) ||
     config.seatCount < 2 ||
@@ -175,9 +189,54 @@ function getPathTableId(pathname: string, pattern: RegExp) {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+function getSocketProtocols(request: Request) {
+  return (request.headers.get("Sec-WebSocket-Protocol") ?? "")
+    .split(",")
+    .map((protocol) => protocol.trim())
+    .filter(Boolean);
+}
+
+function getSocketToken(request: Request, url: URL) {
+  const protocolToken = getSocketProtocols(request).find((protocol) =>
+    protocol.startsWith(TOKEN_PROTOCOL_PREFIX)
+  );
+  return (
+    protocolToken?.slice(TOKEN_PROTOCOL_PREFIX.length) ??
+    url.searchParams.get("token")
+  );
+}
+
+function isAllowedSocketOrigin(request: Request, env: Env) {
+  const origin = request.headers.get("Origin");
+  const allowedOrigins = (envString(env, "LIVE_POKER_ALLOWED_ORIGINS") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return Boolean(origin && allowedOrigins.includes(origin));
+}
+
+function isRuntimeConfigured(env: Env) {
+  const required: Array<keyof Env> = [
+    "LIVE_POKER_ALLOWED_ORIGINS",
+    "LIVE_POKER_JWT_SECRET",
+    "LIVE_POKER_SETTLEMENT_URL",
+    "LIVE_POKER_WEBHOOK_SECRET",
+    "LIVE_POKER_WEBHOOK_URL",
+  ];
+  return required.every((key) => Boolean(envString(env, key)));
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/health") {
+      const configured = isRuntimeConfigured(env);
+      return Response.json(
+        { configured, ok: configured, service: "buyin-live-poker" },
+        { status: configured ? 200 : 503 }
+      );
+    }
+
     const tableId =
       getPathTableId(url.pathname, LIVE_POKER_CLAIM_PATH_REGEX) ??
       getPathTableId(url.pathname, LIVE_POKER_CLOSE_PATH_REGEX) ??
@@ -189,6 +248,9 @@ export default {
     const isSocketPath = LIVE_POKER_PATH_REGEX.test(url.pathname);
     if (isSocketPath && request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected WebSocket", { status: 400 });
+    }
+    if (isSocketPath && !isAllowedSocketOrigin(request, env)) {
+      return new Response("WebSocket origin is not allowed", { status: 403 });
     }
 
     const id = env.LIVE_POKER_TABLE.idFromName(tableId);
@@ -211,9 +273,28 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     this.ready = ctx.blockConcurrencyWhile(async () => {
       const stored = await ctx.storage.get(["state", "outbox"]);
       this.state = (stored.get("state") as LivePokerState | undefined) ?? null;
-      this.outbox =
+      const legacyOutbox =
         (stored.get("outbox") as OutboxDelivery[] | undefined) ?? [];
-      if (this.repairTimingState(Date.now())) {
+      const storedOutbox = await ctx.storage.list<OutboxDelivery>({
+        prefix: OUTBOX_STORAGE_PREFIX,
+      });
+      this.outbox = [
+        ...storedOutbox.values(),
+        ...legacyOutbox.filter(
+          (legacy) =>
+            !Array.from(storedOutbox.values()).some(
+              (delivery) => delivery.id === legacy.id
+            )
+        ),
+      ].sort(
+        (left, right) =>
+          left.nextAttemptAt - right.nextAttemptAt ||
+          left.id.localeCompare(right.id)
+      );
+      if (legacyOutbox.length > 0 && this.state) {
+        await this.persist();
+        await ctx.storage.delete("outbox");
+      } else if (this.repairTimingState(Date.now())) {
         await this.persist();
       } else {
         await this.scheduleAlarm();
@@ -233,7 +314,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         return await this.handleCloseRequest(request);
       }
 
-      const token = url.searchParams.get("token");
+      const token = getSocketToken(request, url);
       if (!token) {
         throw new Error("Missing live poker token");
       }
@@ -266,7 +347,14 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       }
 
       this.broadcast();
-      return new Response(null, { status: 101, webSocket: client });
+      const response = new Response(null, {
+        status: 101,
+        webSocket: client,
+      });
+      if (getSocketProtocols(request).includes(SOCKET_PROTOCOL)) {
+        response.headers.set("Sec-WebSocket-Protocol", SOCKET_PROTOCOL);
+      }
+      return response;
     } catch (error) {
       return new Response(
         error instanceof Error ? error.message : "Unauthorized",
@@ -277,6 +365,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
   async alarm() {
     await this.ready;
+    await this.flushOutbox();
     const now = Date.now();
     const repairedTiming = this.repairTimingState(now);
     const advancedTiming = this.advanceDueTiming(now);
@@ -284,7 +373,6 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       await this.persist();
       this.broadcast();
     }
-    await this.flushOutbox();
     await this.scheduleAlarm();
   }
 
@@ -292,7 +380,11 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     await this.ready;
 
     const auth = connection.deserializeAttachment() as ConnectionState | null;
-    if (!auth || this.state?.admissionsClosed) {
+    if (
+      !auth ||
+      auth.exp * 1000 <= Date.now() ||
+      this.state?.admissionsClosed
+    ) {
       connection.close(1008, "Unauthorized");
       return;
     }
@@ -376,7 +468,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         this.state.appliedRequestIds = [
           ...(this.state.appliedRequestIds ?? []),
           claim.requestId,
-        ];
+        ].slice(-MAX_APPLIED_REQUEST_IDS);
       }
       await this.persist();
       this.broadcast();
@@ -407,12 +499,17 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         throw new Error("Table is not ready");
       }
 
+      if (this.state.phase !== "waiting") {
+        throw new Error("Finish the current hand before closing the table");
+      }
+
+      const occupiedSeats = this.state.seats.filter(
+        (seat): seat is LivePokerSeat => seat !== null
+      );
+      this.ensureOutboxCapacity(occupiedSeats.length);
       this.state.admissionsClosed = true;
-      this.completeCurrentHand();
-      for (const seat of this.state.seats) {
-        if (seat) {
-          this.queueSettlement(seat);
-        }
+      for (const seat of occupiedSeats) {
+        this.queueSettlement(seat);
       }
       this.state.seats = this.state.seats.map(() => null);
       clearLivePokerTiming(this.state);
@@ -641,6 +738,10 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         playerId: claim.playerId,
         userId: claim.userId,
       });
+      const seat = this.findSeatByUserId(claim.userId);
+      if (seat) {
+        seat.connected = this.hasOpenConnection(claim.userId);
+      }
       return;
     }
     addChips(this.state, claim.userId, claim.amount);
@@ -654,9 +755,13 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     ) {
       return;
     }
+    const deliveryId = `${this.tableId}:hand:${this.state.handNumber}`;
+    if (!this.outbox.some((delivery) => delivery.id === deliveryId)) {
+      this.ensureOutboxCapacity(1);
+    }
     const pot = calculatePot(this.state);
-    const communityCards = [...this.state.communityCards];
     const winners = settleShowdown(this.state);
+    const communityCards = [...this.state.communityCards];
     this.state.actionLog.push(
       `Hand ${this.state.handNumber} ended: ${winners
         .map((winner) => `${winner.amount} to seat ${winner.seatIndex + 1}`)
@@ -665,18 +770,18 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     this.queueCompletedHand(pot, winners, communityCards);
   }
 
-  private completeCurrentHand() {
-    if (!this.state || this.state.phase === "waiting") {
-      return;
-    }
-    if (this.state.phase !== "showdown") {
-      this.state.phase = "showdown";
-      this.state.activeSeatIndex = null;
-    }
-    this.completeShowdown();
-    if (this.state.showdownSettled) {
-      cleanupShowdown(this.state);
-      clearLivePokerTiming(this.state);
+  private outboxStorageKey(id: string) {
+    return `${OUTBOX_STORAGE_PREFIX}${id}`;
+  }
+
+  private ensureOutboxCapacity(additionalDeliveries: number) {
+    if (
+      this.outbox.length + additionalDeliveries >
+      MAX_PENDING_OUTBOX_DELIVERIES
+    ) {
+      throw new Error(
+        "Live poker persistence is temporarily backed up; try again shortly"
+      );
     }
   }
 
@@ -753,6 +858,7 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       try {
         await this.deliverOutboxItem(delivery);
         this.outbox.shift();
+        await this.ctx.storage.delete(this.outboxStorageKey(delivery.id));
         delivered += 1;
       } catch {
         delivery.attempts += 1;
@@ -946,7 +1052,9 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
       }
     }
 
-    throw new Error("Live poker timing did not converge");
+    // Persist the bounded batch and let the next alarm continue catch-up. This
+    // avoids repeatedly failing a table after a long suspension.
+    return changed;
   }
 
   private repairTimingState(now: number) {
@@ -999,9 +1107,22 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
   }
 
   private reconcileNextHand(now: number) {
-    return this.state
-      ? reconcileNextHandTransition(this.state, now, this.timing())
-      : false;
+    if (!this.state) {
+      return false;
+    }
+    if (
+      this.state.phase === "waiting" &&
+      !this.state.gamePaused &&
+      this.outbox.length >= MAX_PENDING_OUTBOX_DELIVERIES
+    ) {
+      this.state.gamePaused = true;
+      clearLivePokerTiming(this.state);
+      this.state.actionLog.push(
+        "Table paused while completed hands wait to be persisted"
+      );
+      return true;
+    }
+    return reconcileNextHandTransition(this.state, now, this.timing());
   }
 
   private timing(): LivePokerTimingConfig {
@@ -1022,7 +1143,17 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
     if (!this.state) {
       return;
     }
-    await this.ctx.storage.put({ outbox: this.outbox, state: this.state });
+    this.state.actionLog = this.state.actionLog.slice(-MAX_ACTION_LOG_ENTRIES);
+    this.state.appliedRequestIds = (this.state.appliedRequestIds ?? []).slice(
+      -MAX_APPLIED_REQUEST_IDS
+    );
+    const records: Record<string, LivePokerState | OutboxDelivery> = {
+      state: this.state,
+    };
+    for (const delivery of this.outbox) {
+      records[this.outboxStorageKey(delivery.id)] = delivery;
+    }
+    await this.ctx.storage.put(records);
     await this.scheduleAlarm();
   }
 
@@ -1057,7 +1188,9 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
         return false;
       }
       const auth = connection.deserializeAttachment() as ConnectionState | null;
-      return auth?.userId === userId;
+      return Boolean(
+        auth && auth.exp * 1000 > Date.now() && auth.userId === userId
+      );
     });
   }
 
@@ -1077,7 +1210,8 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
 
     for (const connection of this.ctx.getWebSockets()) {
       const auth = connection.deserializeAttachment() as ConnectionState | null;
-      if (!auth) {
+      if (!auth || auth.exp * 1000 <= Date.now()) {
+        connection.close(1008, "Credentials expired");
         continue;
       }
       send(connection, {
@@ -1094,7 +1228,10 @@ export class LivePokerTableDurableObject extends DurableObject<Env> {
   private broadcastMessage(message: LivePokerServerMessage) {
     const rawMessage = JSON.stringify(message);
     for (const connection of this.ctx.getWebSockets()) {
-      if (connection.readyState === WebSocket.OPEN) {
+      const auth = connection.deserializeAttachment() as ConnectionState | null;
+      if (!auth || auth.exp * 1000 <= Date.now()) {
+        connection.close(1008, "Credentials expired");
+      } else if (connection.readyState === WebSocket.OPEN) {
         connection.send(rawMessage);
       }
     }

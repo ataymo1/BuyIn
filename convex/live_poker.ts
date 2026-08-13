@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { action, internalMutation, query } from "./_generated/server";
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  query,
+} from "./_generated/server";
 
 const winnerValidator = v.object({
   playerId: v.id("players"),
@@ -16,6 +21,31 @@ const buyInRequestTypeValidator = v.union(
   v.literal("INITIAL"),
   v.literal("ADD_ON")
 );
+
+type LivePokerBuyInRequestRow = Doc<"livePokerBuyInRequests"> & {
+  id: Id<"livePokerBuyInRequests">;
+  player: { id: Id<"players">; name: string };
+  respondedBy: { id: Id<"users"> | undefined; name: string } | null;
+};
+
+interface LivePokerWorkerTable {
+  bigBlind: number;
+  createdById: Id<"users">;
+  id: Id<"livePokerTables">;
+  maxBuyIn: number;
+  minBuyIn: number;
+  seatCount: number;
+  smallBlind: number;
+}
+
+type LivePokerClaimRequest = Doc<"livePokerBuyInRequests"> & {
+  id: Id<"livePokerBuyInRequests">;
+  table: LivePokerWorkerTable;
+};
+
+type LivePokerApprovalRequest = LivePokerClaimRequest & {
+  playerName: string;
+};
 
 export const recordCompletedHandInternal = internalMutation({
   args: {
@@ -55,6 +85,16 @@ export const recordCompletedHandInternal = internalMutation({
   },
 });
 
+function isValidChipAmount(value: number, allowZero = false) {
+  const units = Math.round(value * 100);
+  return (
+    Number.isFinite(value) &&
+    Number.isSafeInteger(units) &&
+    Math.abs(value * 100 - units) <= 1e-7 &&
+    (allowZero ? units >= 0 : units > 0)
+  );
+}
+
 function validateTableSettings(args: {
   bigBlind: number;
   maxBuyIn: number;
@@ -62,18 +102,19 @@ function validateTableSettings(args: {
   seatCount: number;
   smallBlind: number;
 }) {
-  if (
-    [
-      args.bigBlind,
-      args.maxBuyIn,
-      args.minBuyIn,
-      args.seatCount,
-      args.smallBlind,
-    ].some((value) => !Number.isFinite(value))
-  ) {
-    throw new Error("Live poker settings must be finite numbers");
+  const hasValidPositiveAmounts = [
+    args.smallBlind,
+    args.bigBlind,
+    args.maxBuyIn,
+  ].every((amount) => isValidChipAmount(amount));
+  const hasValidAmounts =
+    hasValidPositiveAmounts && isValidChipAmount(args.minBuyIn, true);
+  if (!hasValidAmounts) {
+    throw new Error(
+      "Live poker amounts must be safe, non-negative 0.01 increments"
+    );
   }
-  if (args.smallBlind <= 0 || args.bigBlind < args.smallBlind) {
+  if (args.bigBlind < args.smallBlind) {
     throw new Error("Live poker requires valid blinds");
   }
   if (
@@ -83,7 +124,7 @@ function validateTableSettings(args: {
   ) {
     throw new Error("Live poker tables must have 2 to 9 seats");
   }
-  if (args.minBuyIn < 0 || args.maxBuyIn < args.minBuyIn) {
+  if (args.maxBuyIn < args.minBuyIn) {
     throw new Error("Max buy-in must be at least the min buy-in");
   }
 }
@@ -353,7 +394,7 @@ export const createLivePokerBuyInRequestInternal = internalMutation({
   },
 });
 
-export const getPendingLivePokerBuyInRequests = query({
+export const getPendingLivePokerBuyInRequests = internalQuery({
   args: {
     tableId: v.id("livePokerTables"),
     userId: v.id("users"),
@@ -383,7 +424,7 @@ export const getPendingLivePokerBuyInRequests = query({
   },
 });
 
-export const getUserLivePokerBuyInRequests = query({
+export const getUserLivePokerBuyInRequests = internalQuery({
   args: {
     tableId: v.id("livePokerTables"),
     userId: v.id("users"),
@@ -411,7 +452,7 @@ export const getUserLivePokerBuyInRequests = query({
   },
 });
 
-export const getLivePokerBuyInRequestForClaim = query({
+export const getLivePokerBuyInRequestForClaim = internalQuery({
   args: {
     requestId: v.id("livePokerBuyInRequests"),
     userId: v.id("users"),
@@ -447,7 +488,7 @@ export const getLivePokerBuyInRequestForClaim = query({
   },
 });
 
-export const getLivePokerBuyInRequestForApproval = query({
+export const getLivePokerBuyInRequestForApproval = internalQuery({
   args: {
     requestId: v.id("livePokerBuyInRequests"),
     userId: v.id("users"),
@@ -763,6 +804,68 @@ function assertLivePokerServerSecret(secret: string) {
     throw new Error("Unauthorized live poker server operation");
   }
 }
+
+export const serverGetLivePokerBuyInRequestForClaim = action({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    secret: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (
+    ctx,
+    { requestId, secret, userId }
+  ): Promise<LivePokerClaimRequest | null> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runQuery(
+      internal.live_poker.getLivePokerBuyInRequestForClaim,
+      { requestId, userId }
+    );
+  },
+});
+
+export const serverGetLivePokerBuyInRequestForApproval = action({
+  args: {
+    requestId: v.id("livePokerBuyInRequests"),
+    secret: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (
+    ctx,
+    { requestId, secret, userId }
+  ): Promise<LivePokerApprovalRequest | null> => {
+    assertLivePokerServerSecret(secret);
+    return await ctx.runQuery(
+      internal.live_poker.getLivePokerBuyInRequestForApproval,
+      { requestId, userId }
+    );
+  },
+});
+
+export const serverGetLivePokerBuyInRequests = action({
+  args: {
+    secret: v.string(),
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+  },
+  handler: async (
+    ctx,
+    { secret, tableId, userId }
+  ): Promise<{
+    pending: LivePokerBuyInRequestRow[];
+    user: LivePokerBuyInRequestRow[];
+  }> => {
+    assertLivePokerServerSecret(secret);
+    const pending: LivePokerBuyInRequestRow[] = await ctx.runQuery(
+      internal.live_poker.getPendingLivePokerBuyInRequests,
+      { tableId, userId }
+    );
+    const user: LivePokerBuyInRequestRow[] = await ctx.runQuery(
+      internal.live_poker.getUserLivePokerBuyInRequests,
+      { tableId, userId }
+    );
+    return { pending, user };
+  },
+});
 
 export const serverCreateLivePokerTable = action({
   args: {

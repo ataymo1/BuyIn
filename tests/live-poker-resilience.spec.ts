@@ -46,7 +46,13 @@ test.describe("live poker resilience helpers", () => {
         seatCount: "6.5",
       }).success
     ).toBe(false);
-    for (const smallBlind of ["1e309", "0x10", "not-a-number"]) {
+    for (const smallBlind of [
+      "1e309",
+      "0x10",
+      "not-a-number",
+      "0.001",
+      String(Number.MAX_SAFE_INTEGER),
+    ]) {
       expect(
         livePokerTableFormSchema.safeParse({
           ...validTable,
@@ -54,5 +60,11 @@ test.describe("live poker resilience helpers", () => {
         }).success
       ).toBe(false);
     }
+    expect(
+      livePokerTableFormSchema.safeParse({
+        ...validTable,
+        maxBuyIn: "0",
+      }).success
+    ).toBe(false);
   });
 });

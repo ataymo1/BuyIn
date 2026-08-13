@@ -236,10 +236,22 @@ export function createDeck() {
   return RANKS.flatMap((rank) => SUITS.map((suit) => `${rank}${suit}`));
 }
 
+function secureRandomIndex(maxExclusive: number) {
+  const range = 4_294_967_296;
+  const limit = Math.floor(range / maxExclusive) * maxExclusive;
+  const value = new Uint32Array(1);
+
+  do {
+    crypto.getRandomValues(value);
+  } while (value[0] >= limit);
+
+  return value[0] % maxExclusive;
+}
+
 export function shuffleDeck(deck = createDeck()) {
   const copy = [...deck];
   for (let index = copy.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const swapIndex = secureRandomIndex(index + 1);
     [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
   }
   return copy;

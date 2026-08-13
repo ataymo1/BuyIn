@@ -35,9 +35,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const buyInRequest = await livePokerConvex.query(
-    api.live_poker.getLivePokerBuyInRequestForApproval,
-    { requestId, userId: user._id }
+  const buyInRequest = await livePokerConvex.action(
+    api.live_poker.serverGetLivePokerBuyInRequestForApproval,
+    { requestId, secret, userId: user._id }
   );
   if (!buyInRequest) {
     return NextResponse.json(

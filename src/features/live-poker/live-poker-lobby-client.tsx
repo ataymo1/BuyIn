@@ -121,7 +121,7 @@ export function LivePokerLobbyClient() {
                     </p>
                   </div>
                   <span className="rounded-full bg-emerald-100 px-2 py-1 font-medium text-emerald-800 text-xs dark:bg-emerald-900 dark:text-emerald-200">
-                    {table.liveStatus}
+                    OPEN
                   </span>
                 </div>
 

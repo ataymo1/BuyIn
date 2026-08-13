@@ -25,9 +25,13 @@ export async function POST(request: Request) {
   }
   const requestId = body.requestId as Id<"livePokerBuyInRequests">;
 
-  const buyInRequest = await livePokerConvex.query(
-    api.live_poker.getLivePokerBuyInRequestForClaim,
-    { requestId, userId: user._id }
+  const buyInRequest = await livePokerConvex.action(
+    api.live_poker.serverGetLivePokerBuyInRequestForClaim,
+    {
+      requestId,
+      secret: getLivePokerConvexSecret(),
+      userId: user._id,
+    }
   );
   if (!buyInRequest) {
     return NextResponse.json(
