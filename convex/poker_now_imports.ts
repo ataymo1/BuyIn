@@ -44,10 +44,68 @@ async function findDuplicate(
   return game ?? request;
 }
 
-async function persistSession(ctx: MutationCtx, args: ImportData) {
-  if (args.players.length < 2) {
-    throw new Error("An imported session needs at least two players");
+function validateImportedPlayer(imported: ImportedPlayer) {
+  const displayName = imported.displayName.trim();
+  if (!(displayName && displayName.length <= 80)) {
+    throw new Error("Player names must be between 1 and 80 characters");
   }
+  if (!imported.sourcePlayerId.trim()) {
+    throw new Error("Imported players need a source ID");
+  }
+  if (!(Number.isFinite(imported.buyIn) && Number.isFinite(imported.cashOut))) {
+    throw new Error("Player totals must be valid numbers");
+  }
+  return displayName;
+}
+
+async function persistSession(ctx: MutationCtx, args: ImportData) {
+  const totalsByPlayer = new Map<
+    Id<"players">,
+    { buyIn: number; cashOut: number }
+  >();
+
+  for (const imported of args.players) {
+    const displayName = validateImportedPlayer(imported);
+    let playerId = imported.playerId;
+    if (playerId && !(await ctx.db.get(playerId))) {
+      throw new Error("A selected player no longer exists");
+    }
+    playerId ??= await ctx.db.insert("players", {
+      name: displayName,
+    });
+
+    const priorAlias = await ctx.db
+      .query("pokerNowAliases")
+      .withIndex("by_groupId_sourcePlayerId", (q) =>
+        q
+          .eq("groupId", args.groupId)
+          .eq("sourcePlayerId", imported.sourcePlayerId)
+      )
+      .first();
+    if (priorAlias) {
+      await ctx.db.patch(priorAlias._id, {
+        playerId,
+        displayName,
+      });
+    } else {
+      await ctx.db.insert("pokerNowAliases", {
+        groupId: args.groupId,
+        sourcePlayerId: imported.sourcePlayerId,
+        displayName,
+        playerId,
+      });
+    }
+
+    const totals = totalsByPlayer.get(playerId) ?? { buyIn: 0, cashOut: 0 };
+    totals.buyIn += imported.buyIn;
+    totals.cashOut += imported.cashOut;
+    totalsByPlayer.set(playerId, totals);
+  }
+
+  if (totalsByPlayer.size < 2) {
+    throw new Error("An imported session needs at least two different players");
+  }
+
   const gameId = await ctx.db.insert("games", {
     date: args.date,
     location: "PokerNow",
@@ -62,53 +120,23 @@ async function persistSession(ctx: MutationCtx, args: ImportData) {
     createdById: args.createdById,
     importSource: "POKER_NOW",
     importSourceId: args.sourceId,
+    smallBlind: args.smallBlind,
+    bigBlind: args.bigBlind,
   });
 
-  for (const imported of args.players) {
-    if (
-      !(Number.isFinite(imported.buyIn) && Number.isFinite(imported.cashOut))
-    ) {
-      throw new Error("Player totals must be valid numbers");
-    }
-    let playerId = imported.playerId;
-    if (playerId && !(await ctx.db.get(playerId))) {
-      throw new Error("A selected player no longer exists");
-    }
-    playerId ??= await ctx.db.insert("players", {
-      name: imported.displayName.trim(),
-    });
-
-    const priorAlias = await ctx.db
-      .query("pokerNowAliases")
-      .withIndex("by_groupId_sourcePlayerId", (q) =>
-        q
-          .eq("groupId", args.groupId)
-          .eq("sourcePlayerId", imported.sourcePlayerId)
-      )
-      .first();
-    if (priorAlias) {
-      await ctx.db.patch(priorAlias._id, {
-        playerId,
-        displayName: imported.displayName.trim(),
-      });
-    } else {
-      await ctx.db.insert("pokerNowAliases", {
-        groupId: args.groupId,
-        sourcePlayerId: imported.sourcePlayerId,
-        displayName: imported.displayName.trim(),
-        playerId,
-      });
-    }
+  for (const [playerId, totals] of totalsByPlayer) {
+    const buyIn = Math.round(totals.buyIn * 100) / 100;
+    const cashOut = Math.round(totals.cashOut * 100) / 100;
     await ctx.db.insert("gamePlayers", {
       gameId,
       playerId,
-      buyIn: imported.buyIn,
-      cashOut: imported.cashOut,
-      profit: Math.round((imported.cashOut - imported.buyIn) * 100) / 100,
+      buyIn,
+      cashOut,
+      profit: Math.round((cashOut - buyIn) * 100) / 100,
     });
     for (const transaction of [
-      { type: "buyin" as const, amount: imported.buyIn },
-      { type: "cashout" as const, amount: imported.cashOut },
+      { type: "buyin" as const, amount: buyIn },
+      { type: "cashout" as const, amount: cashOut },
     ]) {
       await ctx.db.insert("transactions", {
         gameId,
@@ -142,14 +170,45 @@ export const getCandidates = query({
           : null;
       })
     );
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
+      .collect();
+    const gamePlayers = (
+      await Promise.all(
+        games.map((game) =>
+          ctx.db
+            .query("gamePlayers")
+            .withIndex("by_gameId", (q) => q.eq("gameId", game._id))
+            .collect()
+        )
+      )
+    ).flat();
+    const memberPlayerIds = new Set(
+      memberPlayers.flatMap((player) => (player ? [player.id] : []))
+    );
+    const historicalPlayerIds = [
+      ...new Set(gamePlayers.map((gamePlayer) => gamePlayer.playerId)),
+    ].filter((playerId) => !memberPlayerIds.has(playerId));
+    const historicalPlayers = await Promise.all(
+      historicalPlayerIds.map(async (playerId) => {
+        const player = await ctx.db.get(playerId);
+        return player && !player.userId
+          ? { id: player._id, name: player.name, isExtra: true as const }
+          : null;
+      })
+    );
     const aliases = await ctx.db
       .query("pokerNowAliases")
       .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
       .collect();
-    return {
-      players: memberPlayers.filter((player) => player !== null),
-      aliases,
-    };
+    const players = [
+      ...memberPlayers
+        .filter((player) => player !== null)
+        .map((player) => ({ ...player, isExtra: false as const })),
+      ...historicalPlayers.filter((player) => player !== null),
+    ].sort((a, b) => a.name.localeCompare(b.name));
+    return { players, aliases };
   },
 });
 

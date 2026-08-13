@@ -29,6 +29,7 @@
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-popover": "^1.1.23",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "@typescript/native-preview": "^7.0.0-dev.20260116.1",
@@ -37,6 +38,7 @@
     "@xpressit/winning-poker-hand-rank": "^0.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "concurrently": "^9.2.1",
     "convex": "^1.31.5",
     "date-fns": "^4.1.0",
@@ -65,6 +67,6 @@
     "tailwindcss": "^3.4.0",
     "typescript": "^5.5.0",
     "ultracite": "^7.0.11",
-    "wrangler": "^4.88.0"
+    "wrangler": "4.88.0"
   }
 }

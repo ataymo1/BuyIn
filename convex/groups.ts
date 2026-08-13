@@ -279,6 +279,22 @@ export const deleteGroup = mutation({
       await ctx.db.delete(joinRequest._id);
     }
 
+    const aliases = await ctx.db
+      .query("pokerNowAliases")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    const importRequests = await ctx.db
+      .query("pokerNowImportRequests")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    const claimRequests = await ctx.db
+      .query("playerClaimRequests")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    for (const record of [...aliases, ...importRequests, ...claimRequests]) {
+      await ctx.db.delete(record._id);
+    }
+
     await ctx.db.delete(args.groupId);
   },
 });

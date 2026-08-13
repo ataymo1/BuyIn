@@ -95,6 +95,25 @@ export default defineSchema({
     .index("by_groupId_status", ["groupId", "status"])
     .index("by_groupId_sourceId", ["groupId", "sourceId"]),
 
+  playerClaimRequests: defineTable({
+    groupId: v.id("groups"),
+    sourcePlayerId: v.id("players"),
+    claimantUserId: v.id("users"),
+    targetPlayerId: v.id("players"),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("APPROVED"),
+      v.literal("REJECTED")
+    ),
+    requestedAt: v.number(),
+    respondedAt: v.optional(v.number()),
+    respondedById: v.optional(v.id("users")),
+  })
+    .index("by_groupId", ["groupId"])
+    .index("by_groupId_status", ["groupId", "status"])
+    .index("by_groupId_sourcePlayerId", ["groupId", "sourcePlayerId"])
+    .index("by_groupId_claimantUserId", ["groupId", "claimantUserId"]),
+
   groups: defineTable({
     name: v.string(),
     description: v.optional(v.string()),

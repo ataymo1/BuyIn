@@ -16,6 +16,10 @@ import {
   RecentSessionsSection,
 } from "./group-detail-sections";
 import { GroupDetailSkeleton } from "./group-detail-skeleton";
+import {
+  ClaimPlayerHistorySection,
+  PendingPlayerClaimsSection,
+} from "./player-claim-sections";
 
 interface GroupDetailClientProps {
   groupId: string;
@@ -76,8 +80,19 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
 
       <GroupStandingsSection standings={standings ?? []} />
 
+      {userId ? (
+        <ClaimPlayerHistorySection
+          groupId={groupId as Id<"groups">}
+          userId={userId}
+        />
+      ) : null}
+
       {isOwner && userId ? (
         <>
+          <PendingPlayerClaimsSection
+            groupId={groupId as Id<"groups">}
+            userId={userId}
+          />
           <PendingImportRequestsSection
             groupId={groupId as Id<"groups">}
             userId={userId}

@@ -22,7 +22,6 @@ import {
   type ChartConfig,
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@/components/ui/chart";
 
 interface EarningsPoint {
@@ -45,6 +44,12 @@ interface ChartRow {
   netProfit: number;
   positiveNetProfit: number | null;
   negativeNetProfit: number | null;
+  isSynthetic?: boolean;
+}
+
+interface EarningsTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload?: ChartRow }>;
 }
 
 const chartConfig = {
@@ -62,6 +67,40 @@ const chartConfig = {
     label: "Session",
   },
 } satisfies ChartConfig;
+
+function formatCurrency(value: number) {
+  return `${value >= 0 ? "+" : ""}$${value.toFixed(2)}`;
+}
+
+function EarningsTooltip({ active, payload }: EarningsTooltipProps) {
+  const point = payload?.find((entry) => entry.payload)?.payload;
+
+  if (!(active && point) || point.isSynthetic) {
+    return null;
+  }
+
+  return (
+    <div className="grid min-w-[10rem] gap-1.5 rounded-lg border border-border/60 bg-background/95 px-3 py-2 text-xs shadow-2xl backdrop-blur">
+      <div className="font-medium text-foreground">
+        {format(new Date(point.date), "MMM d, yyyy")}
+      </div>
+      <div className="grid gap-1">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Net Profit</span>
+          <span className="font-medium text-foreground">
+            {formatCurrency(point.netProfit)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Session</span>
+          <span className="font-medium text-foreground">
+            {formatCurrency(point.sessionProfit)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function getNiceStep(value: number) {
   if (value <= 0) {
@@ -141,6 +180,7 @@ export function EarningsOverTimeChart({
           netProfit: 0,
           positiveNetProfit: 0,
           negativeNetProfit: 0,
+          isSynthetic: true,
         });
       }
     }
@@ -255,29 +295,7 @@ export function EarningsOverTimeChart({
               y={0}
             />
             <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  className="border-border/60 bg-background/95 shadow-2xl backdrop-blur"
-                  formatter={(value, name) => {
-                    const numericValue = Number(value ?? 0);
-                    return (
-                      <div className="flex w-full items-center justify-between gap-3">
-                        <span className="text-muted-foreground">{name}</span>
-                        <span className="font-medium text-foreground">
-                          {numericValue >= 0 ? "+" : ""}$
-                          {numericValue.toFixed(2)}
-                        </span>
-                      </div>
-                    );
-                  }}
-                  labelFormatter={(_, payload) => {
-                    const point = payload?.[0]?.payload as ChartRow | undefined;
-                    return point
-                      ? format(new Date(point.date), "MMM d, yyyy")
-                      : "";
-                  }}
-                />
-              }
+              content={<EarningsTooltip />}
               cursor={{
                 stroke: "hsl(var(--muted-foreground) / 0.25)",
                 strokeDasharray: "3 3",
@@ -314,18 +332,24 @@ export function EarningsOverTimeChart({
               type="linear"
             />
             <Line
-              activeDot={(dotProps) => (
-                <circle
-                  cx={dotProps.cx}
-                  cy={dotProps.cy}
-                  fill={
-                    latestNetProfit >= 0 ? positiveLineColor : negativeLineColor
-                  }
-                  r={5}
-                  stroke="hsl(var(--background))"
-                  strokeWidth={2.5}
-                />
-              )}
+              activeDot={(dotProps) =>
+                (dotProps.payload as ChartRow).isSynthetic ? (
+                  <g />
+                ) : (
+                  <circle
+                    cx={dotProps.cx}
+                    cy={dotProps.cy}
+                    fill={
+                      latestNetProfit >= 0
+                        ? positiveLineColor
+                        : negativeLineColor
+                    }
+                    r={5}
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2.5}
+                  />
+                )
+              }
               dataKey="positiveNetProfit"
               dot={false}
               isAnimationActive={false}
@@ -337,18 +361,24 @@ export function EarningsOverTimeChart({
               type="monotone"
             />
             <Line
-              activeDot={(dotProps) => (
-                <circle
-                  cx={dotProps.cx}
-                  cy={dotProps.cy}
-                  fill={
-                    latestNetProfit >= 0 ? positiveLineColor : negativeLineColor
-                  }
-                  r={5}
-                  stroke="hsl(var(--background))"
-                  strokeWidth={2.5}
-                />
-              )}
+              activeDot={(dotProps) =>
+                (dotProps.payload as ChartRow).isSynthetic ? (
+                  <g />
+                ) : (
+                  <circle
+                    cx={dotProps.cx}
+                    cy={dotProps.cy}
+                    fill={
+                      latestNetProfit >= 0
+                        ? positiveLineColor
+                        : negativeLineColor
+                    }
+                    r={5}
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2.5}
+                  />
+                )
+              }
               dataKey="negativeNetProfit"
               dot={false}
               isAnimationActive={false}
