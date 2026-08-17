@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { GameDetailDialogs } from "./game-detail-dialogs";
 import { GameDetailSkeleton } from "./game-detail-skeleton";
 import { PendingTransactionsCard } from "./pending-transactions-card";
 import { PlayersCard } from "./players-card";
+import { PokerNowUsernameAssignments } from "./poker-now-username-assignments";
 import { SessionActionsCard } from "./session-actions-card";
 import { SessionHeader } from "./session-header";
 import { TransactionsCard } from "./transactions-card";
@@ -98,6 +100,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
           transactions={finalizedTransactions}
         />
       </div>
+
+      {canManage && game.importSource === "POKER_NOW" && game.group ? (
+        <PokerNowUsernameAssignments
+          currentPlayerIds={gamePlayers.map(
+            (gamePlayer) => gamePlayer.playerId as Id<"players">
+          )}
+          gameId={game.id as Id<"games">}
+          groupId={game.group.id as Id<"groups">}
+        />
+      ) : null}
 
       {isSessionCreator ? (
         <PendingTransactionsCard
