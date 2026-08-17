@@ -111,6 +111,12 @@ export function NewGameClient() {
     date: string;
     location?: string;
     gameType?: "cash" | "tournament";
+    livePokerEnabled?: boolean;
+    smallBlind?: string;
+    bigBlind?: string;
+    minBuyIn?: string;
+    maxBuyIn?: string;
+    seatCount?: string;
   }) {
     if (!userId) {
       throw new Error("Unauthorized");
@@ -125,6 +131,18 @@ export function NewGameClient() {
       date: new Date(data.date).getTime(),
       location: data.location,
       gameType: data.gameType,
+      livePokerEnabled: data.livePokerEnabled,
+      smallBlind: data.livePokerEnabled
+        ? Number(data.smallBlind || 1)
+        : undefined,
+      bigBlind: data.livePokerEnabled ? Number(data.bigBlind || 2) : undefined,
+      minBuyIn: data.livePokerEnabled ? Number(data.minBuyIn || 20) : undefined,
+      maxBuyIn: data.livePokerEnabled
+        ? Number(data.maxBuyIn || 400)
+        : undefined,
+      seatCount: data.livePokerEnabled
+        ? Number(data.seatCount || 6)
+        : undefined,
       createdById: userId,
     });
 

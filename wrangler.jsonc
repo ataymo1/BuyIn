@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "buyin-live-poker",
+  "main": "workers/live-poker.ts",
+  "compatibility_date": "2026-05-05",
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LIVE_POKER_TABLE",
+        "class_name": "LivePokerTableDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["LivePokerTableDurableObject"]
+    }
+  ]
+}

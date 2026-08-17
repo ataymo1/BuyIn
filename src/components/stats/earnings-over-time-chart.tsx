@@ -57,6 +57,15 @@ const chartConfig = {
     label: "Net Profit",
     color: "hsl(var(--foreground))",
   },
+  positiveNetProfit: {
+    label: "Net Profit",
+  },
+  negativeNetProfit: {
+    label: "Net Profit",
+  },
+  sessionProfit: {
+    label: "Session",
+  },
 } satisfies ChartConfig;
 
 function formatCurrency(value: number) {
@@ -292,6 +301,7 @@ export function EarningsOverTimeChart({
                 strokeDasharray: "3 3",
               }}
               isAnimationActive={false}
+              payloadUniqBy={(entry) => entry.name}
             />
             <Area
               dataKey="positiveNetProfit"
@@ -308,6 +318,18 @@ export function EarningsOverTimeChart({
               name="Net Profit"
               stroke="none"
               type="monotone"
+            />
+            <Line
+              activeDot={false}
+              dataKey="sessionProfit"
+              dot={false}
+              isAnimationActive={false}
+              legendType="none"
+              name="Session"
+              stroke="transparent"
+              strokeOpacity={0}
+              strokeWidth={0}
+              type="linear"
             />
             <Line
               activeDot={(dotProps) =>

@@ -6,6 +6,7 @@ import {
   deleteGameCascade,
   getPlayerDisplaySummary,
   getUserDisplaySummary,
+  isUserGroupMember,
   requireGameManager,
 } from "./helpers";
 
@@ -177,9 +178,16 @@ export const createGame = mutation({
     location: v.optional(v.string()),
     notes: v.optional(v.string()),
     gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
+    livePokerEnabled: v.optional(v.boolean()),
+    smallBlind: v.optional(v.number()),
+    bigBlind: v.optional(v.number()),
+    minBuyIn: v.optional(v.number()),
+    maxBuyIn: v.optional(v.number()),
+    seatCount: v.optional(v.number()),
     groupId: v.id("groups"),
     createdById: v.id("users"),
   },
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Creation validates both legacy sessions and optional live-table settings.
   handler: async (ctx, args) => {
     // Verify user is a member of the group
     const membership = await ctx.db
@@ -193,11 +201,46 @@ export const createGame = mutation({
       throw new Error("Only group members can create sessions");
     }
 
+    if (args.livePokerEnabled && args.gameType === "tournament") {
+      throw new Error("Live poker is currently available for cash games only");
+    }
+
+    if (args.livePokerEnabled) {
+      if (!(args.smallBlind && args.bigBlind) || args.smallBlind <= 0) {
+        throw new Error("Live poker requires positive blinds");
+      }
+      if (args.bigBlind < args.smallBlind) {
+        throw new Error("Big blind must be at least the small blind");
+      }
+      if (
+        !args.seatCount ||
+        args.seatCount < 2 ||
+        args.seatCount > 9 ||
+        !Number.isInteger(args.seatCount)
+      ) {
+        throw new Error("Live poker tables must have 2 to 9 seats");
+      }
+      if (
+        args.minBuyIn !== undefined &&
+        args.maxBuyIn !== undefined &&
+        args.maxBuyIn < args.minBuyIn
+      ) {
+        throw new Error("Max buy-in must be at least the min buy-in");
+      }
+    }
+
     return await ctx.db.insert("games", {
       date: args.date,
       location: args.location,
       notes: args.notes,
       gameType: args.gameType,
+      livePokerEnabled: args.livePokerEnabled,
+      liveStatus: args.livePokerEnabled ? "WAITING" : undefined,
+      smallBlind: args.livePokerEnabled ? args.smallBlind : undefined,
+      bigBlind: args.livePokerEnabled ? args.bigBlind : undefined,
+      minBuyIn: args.livePokerEnabled ? args.minBuyIn : undefined,
+      maxBuyIn: args.livePokerEnabled ? args.maxBuyIn : undefined,
+      seatCount: args.livePokerEnabled ? args.seatCount : undefined,
       groupId: args.groupId,
       createdById: args.createdById,
       status: "ACTIVE",
@@ -243,6 +286,12 @@ export const updateGame = mutation({
     notes: v.optional(v.string()),
     date: v.optional(v.number()),
     gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
+    livePokerEnabled: v.optional(v.boolean()),
+    smallBlind: v.optional(v.number()),
+    bigBlind: v.optional(v.number()),
+    minBuyIn: v.optional(v.number()),
+    maxBuyIn: v.optional(v.number()),
+    seatCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const game = await ctx.db.get(args.gameId);
@@ -258,6 +307,38 @@ export const updateGame = mutation({
     );
 
     const { gameId, userId, ...updates } = args;
+    if (updates.livePokerEnabled && updates.gameType === "tournament") {
+      throw new Error("Live poker is currently available for cash games only");
+    }
+    if (updates.livePokerEnabled) {
+      const smallBlind = updates.smallBlind ?? game.smallBlind;
+      const bigBlind = updates.bigBlind ?? game.bigBlind;
+      const seatCount = updates.seatCount ?? game.seatCount;
+
+      if (
+        !(smallBlind && bigBlind) ||
+        smallBlind <= 0 ||
+        bigBlind < smallBlind
+      ) {
+        throw new Error("Live poker requires valid blinds");
+      }
+      if (
+        !seatCount ||
+        seatCount < 2 ||
+        seatCount > 9 ||
+        !Number.isInteger(seatCount)
+      ) {
+        throw new Error("Live poker tables must have 2 to 9 seats");
+      }
+      if (
+        updates.minBuyIn !== undefined &&
+        updates.maxBuyIn !== undefined &&
+        updates.maxBuyIn < updates.minBuyIn
+      ) {
+        throw new Error("Max buy-in must be at least the min buy-in");
+      }
+    }
+
     await ctx.db.patch(gameId, updates);
     return await ctx.db.get(gameId);
   },
@@ -305,6 +386,58 @@ export const joinGame = mutation({
       playerId: args.playerId,
       buyIn: 0,
     });
+  },
+});
+
+export const getLivePokerAccess = query({
+  args: { gameId: v.id("games"), userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.get(args.gameId);
+    if (!(game?.livePokerEnabled && game.status === "ACTIVE")) {
+      return null;
+    }
+
+    const isMember = await isUserGroupMember(ctx, game.groupId, args.userId);
+    if (!isMember) {
+      return null;
+    }
+
+    const group = await ctx.db.get(game.groupId);
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .first();
+
+    return {
+      game: {
+        id: game._id,
+        createdById: game.createdById,
+        liveStatus: game.liveStatus ?? "WAITING",
+        smallBlind: game.smallBlind ?? 1,
+        bigBlind: game.bigBlind ?? 2,
+        minBuyIn: game.minBuyIn ?? game.bigBlind ?? 2,
+        maxBuyIn: game.maxBuyIn ?? (game.bigBlind ?? 2) * 200,
+        seatCount: game.seatCount ?? 6,
+      },
+      group: group ? { id: group._id, name: group.name } : null,
+      player: player ? { id: player._id, name: player.name } : null,
+    };
+  },
+});
+
+export const updateLivePokerStatus = mutation({
+  args: {
+    gameId: v.id("games"),
+    liveStatus: v.union(
+      v.literal("WAITING"),
+      v.literal("PLAYING"),
+      v.literal("PAUSED"),
+      v.literal("CLOSED")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.gameId, { liveStatus: args.liveStatus });
+    return await ctx.db.get(args.gameId);
   },
 });
 

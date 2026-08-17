@@ -1,4 +1,12 @@
-import { BarChart3, Calendar, Home, LogOut, User, UserCog } from "lucide-react";
+import {
+  BarChart3,
+  Calendar,
+  Home,
+  LogOut,
+  RadioTower,
+  User,
+  UserCog,
+} from "lucide-react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -30,6 +38,12 @@ export default function Navbar() {
                 <Button size="sm" variant="ghost">
                   <Calendar className="mr-2 h-4 w-4" />
                   Sessions
+                </Button>
+              </Link>
+              <Link href="/live-poker">
+                <Button size="sm" variant="ghost">
+                  <RadioTower className="mr-2 h-4 w-4" />
+                  Live Poker
                 </Button>
               </Link>
               <Link href="/stats">
@@ -71,7 +85,7 @@ export default function Navbar() {
 
       {/* Mobile Bottom Navigation */}
       <nav className="fixed right-0 bottom-0 left-0 z-50 border-t bg-background pb-safe md:hidden">
-        <div className="grid h-16 grid-cols-5">
+        <div className="grid h-16 grid-cols-6">
           <Link
             className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
             href="/"
@@ -92,6 +106,13 @@ export default function Navbar() {
           >
             <Calendar className="h-5 w-5" />
             <span className="text-xs">Sessions</span>
+          </Link>
+          <Link
+            className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            href="/live-poker"
+          >
+            <RadioTower className="h-5 w-5" />
+            <span className="text-xs">Live</span>
           </Link>
           <Link
             className="flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"

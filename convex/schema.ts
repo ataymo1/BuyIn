@@ -170,12 +170,24 @@ export default defineSchema({
       v.literal("CANCELLED")
     ),
     gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
+    livePokerEnabled: v.optional(v.boolean()),
+    liveStatus: v.optional(
+      v.union(
+        v.literal("WAITING"),
+        v.literal("PLAYING"),
+        v.literal("PAUSED"),
+        v.literal("CLOSED")
+      )
+    ),
+    smallBlind: v.optional(v.number()),
+    bigBlind: v.optional(v.number()),
+    minBuyIn: v.optional(v.number()),
+    maxBuyIn: v.optional(v.number()),
+    seatCount: v.optional(v.number()),
     groupId: v.id("groups"),
     createdById: v.id("users"),
     importSource: v.optional(v.literal("POKER_NOW")),
     importSourceId: v.optional(v.string()),
-    smallBlind: v.optional(v.number()),
-    bigBlind: v.optional(v.number()),
   })
     .index("by_groupId", ["groupId"])
     .index("by_groupId_status", ["groupId", "status"])
@@ -213,4 +225,94 @@ export default defineSchema({
     .index("by_playerId", ["playerId"])
     .index("by_createdById", ["createdById"])
     .index("by_gameId_status", ["gameId", "status"]),
+
+  livePokerTables: defineTable({
+    title: v.string(),
+    status: v.union(
+      v.literal("OPEN"),
+      v.literal("CLOSED"),
+      v.literal("CANCELLED")
+    ),
+    liveStatus: v.union(
+      v.literal("WAITING"),
+      v.literal("PLAYING"),
+      v.literal("PAUSED"),
+      v.literal("CLOSED")
+    ),
+    smallBlind: v.number(),
+    bigBlind: v.number(),
+    minBuyIn: v.number(),
+    maxBuyIn: v.number(),
+    seatCount: v.number(),
+    createdById: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_createdById", ["createdById"]),
+
+  livePokerTablePlayers: defineTable({
+    tableId: v.id("livePokerTables"),
+    playerId: v.id("players"),
+    userId: v.id("users"),
+    buyIn: v.number(),
+    cashOut: v.optional(v.number()),
+    profit: v.optional(v.number()),
+    lastSettledAt: v.optional(v.number()),
+    lastSettlementId: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_tableId", ["tableId"])
+    .index("by_playerId", ["playerId"])
+    .index("by_tableId_playerId", ["tableId", "playerId"]),
+
+  livePokerBuyInRequests: defineTable({
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+    playerId: v.id("players"),
+    seatIndex: v.optional(v.number()),
+    amount: v.number(),
+    type: v.union(v.literal("INITIAL"), v.literal("ADD_ON")),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("APPROVED"),
+      v.literal("REJECTED"),
+      v.literal("CLAIMED")
+    ),
+    requestedAt: v.number(),
+    respondedAt: v.optional(v.number()),
+    respondedById: v.optional(v.id("users")),
+    claimedAt: v.optional(v.number()),
+    claimedById: v.optional(v.id("users")),
+  })
+    .index("by_tableId", ["tableId"])
+    .index("by_tableId_status", ["tableId", "status"])
+    .index("by_tableId_userId", ["tableId", "userId"])
+    .index("by_userId_status", ["userId", "status"]),
+
+  livePokerHands: defineTable({
+    gameId: v.optional(v.id("games")),
+    tableId: v.optional(v.id("livePokerTables")),
+    handNumber: v.number(),
+    dealerSeat: v.number(),
+    smallBlind: v.number(),
+    bigBlind: v.number(),
+    communityCards: v.array(v.string()),
+    winners: v.array(
+      v.object({
+        playerId: v.id("players"),
+        userId: v.id("users"),
+        seatIndex: v.number(),
+        amount: v.number(),
+        description: v.optional(v.string()),
+      })
+    ),
+    pot: v.number(),
+    actionLog: v.array(v.string()),
+    completedAt: v.number(),
+  })
+    .index("by_gameId", ["gameId"])
+    .index("by_gameId_handNumber", ["gameId", "handNumber"])
+    .index("by_tableId", ["tableId"])
+    .index("by_tableId_handNumber", ["tableId", "handNumber"]),
 });

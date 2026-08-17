@@ -31,8 +31,10 @@ export function JoinSessionButton({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        showNotification(error.error || "Failed to join session", {
+        const error = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        showNotification(error?.error || "Failed to join session", {
           type: "error",
         });
         return;
