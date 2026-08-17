@@ -242,6 +242,23 @@ export const getPendingClaims = query({
   },
 });
 
+async function reassignSessionMappings(
+  ctx: MutationCtx,
+  gameId: Id<"games">,
+  sourcePlayerId: Id<"players">,
+  targetPlayerId: Id<"players">
+) {
+  const sessionMappings = await ctx.db
+    .query("pokerNowSessionPlayers")
+    .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+    .collect();
+  for (const mapping of sessionMappings) {
+    if (mapping.playerId === sourcePlayerId) {
+      await ctx.db.patch(mapping._id, { playerId: targetPlayerId });
+    }
+  }
+}
+
 async function mergePlayerHistory(
   ctx: MutationCtx,
   groupId: Id<"groups">,
@@ -280,6 +297,13 @@ async function mergePlayerHistory(
         await ctx.db.delete(row._id);
       }
     }
+
+    await reassignSessionMappings(
+      ctx,
+      game._id,
+      sourcePlayerId,
+      targetPlayerId
+    );
   }
 
   const transactions = await ctx.db
