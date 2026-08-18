@@ -1,7 +1,104 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { deleteGameCascade, getUserDisplaySummary } from "./helpers";
+
+interface ResolvedLeaderboardStat {
+  player: Doc<"players">;
+  playerId: Id<"players">;
+  totalProfit: number;
+  gameIds: Set<Id<"games">>;
+}
+
+interface CombinedLeaderboardStat {
+  player: {
+    id: Id<"players">;
+    name: string;
+    userId: Id<"users"> | null;
+  };
+  totalProfit: number;
+  gameIds: Set<Id<"games">>;
+}
+
+function normalizeLeaderboardName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function getLinkedUsersByName(stats: ResolvedLeaderboardStat[]) {
+  const linkedUsersByName = new Map<string, Set<Id<"users">>>();
+  for (const { player } of stats) {
+    if (!player.userId) {
+      continue;
+    }
+    const name = normalizeLeaderboardName(player.name);
+    const userIds = linkedUsersByName.get(name) ?? new Set<Id<"users">>();
+    userIds.add(player.userId);
+    linkedUsersByName.set(name, userIds);
+  }
+  return linkedUsersByName;
+}
+
+function getLeaderboardIdentityKey(
+  player: Doc<"players">,
+  linkedUsersByName: Map<string, Set<Id<"users">>>
+) {
+  const normalizedName = normalizeLeaderboardName(player.name);
+  const matchingUsers = linkedUsersByName.get(normalizedName);
+  const matchedUserId =
+    matchingUsers?.size === 1 ? [...matchingUsers][0] : undefined;
+  const identityKey = player.userId ?? matchedUserId;
+  return identityKey
+    ? `user:${identityKey}`
+    : `guest:${normalizedName || player._id}`;
+}
+
+function combineLeaderboardStats(stats: ResolvedLeaderboardStat[]) {
+  const linkedUsersByName = getLinkedUsersByName(stats);
+  const combined = new Map<string, CombinedLeaderboardStat>();
+
+  for (const stat of stats) {
+    const key = getLeaderboardIdentityKey(stat.player, linkedUsersByName);
+    const existing = combined.get(key);
+    const player = {
+      id: stat.player._id,
+      name: stat.player.name,
+      userId: stat.player.userId ?? null,
+    };
+
+    if (!existing) {
+      combined.set(key, {
+        player,
+        totalProfit: stat.totalProfit,
+        gameIds: new Set(stat.gameIds),
+      });
+      continue;
+    }
+
+    existing.totalProfit += stat.totalProfit;
+    for (const gameId of stat.gameIds) {
+      existing.gameIds.add(gameId);
+    }
+    if (!existing.player.userId && player.userId) {
+      existing.player = player;
+    }
+  }
+
+  return [...combined.values()]
+    .map((standing) => ({
+      player: standing.player,
+      totalProfit: standing.totalProfit,
+      gamesPlayed: standing.gameIds.size,
+    }))
+    .sort((a, b) => {
+      if (b.totalProfit !== a.totalProfit) {
+        return b.totalProfit - a.totalProfit;
+      }
+      if (b.gamesPlayed !== a.gamesPlayed) {
+        return b.gamesPlayed - a.gamesPlayed;
+      }
+      return a.player.name.localeCompare(b.player.name);
+    });
+}
 
 // Get all groups for a user
 export const getUserGroups = query({
@@ -163,7 +260,7 @@ export const getGroupStandings = query({
       {
         playerId: Id<"players">;
         totalProfit: number;
-        gamesPlayed: number;
+        gameIds: Set<Id<"games">>;
       }
     > = {};
 
@@ -180,7 +277,7 @@ export const getGroupStandings = query({
       playerStats[player._id as string] = {
         playerId: player._id,
         totalProfit: 0,
-        gamesPlayed: 0,
+        gameIds: new Set(),
       };
     }
 
@@ -190,44 +287,23 @@ export const getGroupStandings = query({
         playerStats[key] = {
           playerId: gp.playerId,
           totalProfit: 0,
-          gamesPlayed: 0,
+          gameIds: new Set(),
         };
       }
       playerStats[key].totalProfit += gp.profit ?? 0;
-      playerStats[key].gamesPlayed += 1;
+      playerStats[key].gameIds.add(gp.gameId);
     }
 
-    // Get player details
-    const standings = await Promise.all(
-      Object.values(playerStats).map(async (stat) => {
-        const player = await ctx.db.get(stat.playerId);
-        return {
-          player: player
-            ? {
-                id: player._id,
-                name: player.name,
-                userId: player.userId ?? null,
-              }
-            : null,
-          totalProfit: stat.totalProfit,
-          gamesPlayed: stat.gamesPlayed,
-        };
-      })
-    );
+    const resolvedStats = (
+      await Promise.all(
+        Object.values(playerStats).map(async (stat) => {
+          const player = await ctx.db.get(stat.playerId);
+          return player ? { player, ...stat } : null;
+        })
+      )
+    ).filter((stat) => stat !== null);
 
-    return standings
-      .filter((s) => s.player)
-      .sort((a, b) => {
-        if (b.totalProfit !== a.totalProfit) {
-          return b.totalProfit - a.totalProfit;
-        }
-
-        if (b.gamesPlayed !== a.gamesPlayed) {
-          return b.gamesPlayed - a.gamesPlayed;
-        }
-
-        return (a.player?.name ?? "").localeCompare(b.player?.name ?? "");
-      });
+    return combineLeaderboardStats(resolvedStats);
   },
 });
 
