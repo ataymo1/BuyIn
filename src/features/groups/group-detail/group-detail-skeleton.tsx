@@ -25,6 +25,26 @@ export function GroupDetailSkeleton() {
       </div>
 
       <Card>
+        <CardHeader className="gap-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-4 w-56" />
+            </div>
+            <Skeleton className="h-9 w-32" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-4 w-44" />
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-4 w-48" />

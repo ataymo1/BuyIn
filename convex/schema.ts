@@ -77,6 +77,7 @@ export default defineSchema({
 
   pokerNowImportRequests: defineTable({
     groupId: v.id("groups"),
+    seasonId: v.optional(v.id("seasons")),
     requestedById: v.id("users"),
     sourceId: v.string(),
     date: v.number(),
@@ -133,6 +134,17 @@ export default defineSchema({
     .index("by_ownerId", ["ownerId"])
     .searchIndex("search_by_name", { searchField: "name" }),
 
+  seasons: defineTable({
+    groupId: v.id("groups"),
+    number: v.number(),
+    isCurrent: v.boolean(),
+    createdAt: v.number(),
+    createdById: v.id("users"),
+  })
+    .index("by_groupId", ["groupId"])
+    .index("by_groupId_number", ["groupId", "number"])
+    .index("by_groupId_isCurrent", ["groupId", "isCurrent"]),
+
   joinRequests: defineTable({
     groupId: v.id("groups"),
     userId: v.id("users"),
@@ -171,6 +183,7 @@ export default defineSchema({
     ),
     gameType: v.optional(v.union(v.literal("cash"), v.literal("tournament"))),
     groupId: v.id("groups"),
+    seasonId: v.optional(v.id("seasons")),
     createdById: v.id("users"),
     importSource: v.optional(v.literal("POKER_NOW")),
     importSourceId: v.optional(v.string()),
@@ -179,6 +192,8 @@ export default defineSchema({
   })
     .index("by_groupId", ["groupId"])
     .index("by_groupId_status", ["groupId", "status"])
+    .index("by_groupId_seasonId", ["groupId", "seasonId"])
+    .index("by_groupId_seasonId_status", ["groupId", "seasonId", "status"])
     .index("by_createdById", ["createdById"])
     .index("by_groupId_importSourceId", ["groupId", "importSourceId"]),
 
