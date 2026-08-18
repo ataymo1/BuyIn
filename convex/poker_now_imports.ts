@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { requireGameManager } from "./helpers";
+import { ensureCurrentSeason, getOrCreateFirstSeason } from "./seasons";
 
 const importedPlayer = v.object({
   sourcePlayerId: v.string(),
@@ -23,6 +24,7 @@ const assignedImportedPlayer = v.object({
 type ImportedPlayer = Doc<"pokerNowImportRequests">["players"][number];
 interface ImportData {
   groupId: Id<"groups">;
+  seasonId: Id<"seasons">;
   createdById: Id<"users">;
   sourceId: string;
   date: number;
@@ -154,6 +156,7 @@ async function persistSession(ctx: MutationCtx, args: ImportData) {
     status: "COMPLETED",
     gameType: "cash",
     groupId: args.groupId,
+    seasonId: args.seasonId,
     createdById: args.createdById,
     importSource: "POKER_NOW",
     importSourceId: args.sourceId,
@@ -937,12 +940,17 @@ export const createSession = mutation({
     if (!group) {
       throw new Error("Group not found");
     }
+    const season = await ensureCurrentSeason(ctx, group);
     if (group.ownerId === args.createdById) {
-      const gameId = await persistSession(ctx, args);
+      const gameId = await persistSession(ctx, {
+        ...args,
+        seasonId: season._id,
+      });
       return { status: "APPROVED" as const, gameId };
     }
     const requestId = await ctx.db.insert("pokerNowImportRequests", {
       groupId: args.groupId,
+      seasonId: season._id,
       requestedById: args.createdById,
       sourceId: args.sourceId,
       date: args.date,
@@ -993,8 +1001,16 @@ export const respondToRequest = mutation({
         throw new Error("This PokerNow log has already been imported");
       }
     }
+    const seasonId =
+      request.seasonId ?? (await getOrCreateFirstSeason(ctx, group))._id;
+    const season = await ctx.db.get(seasonId);
+    if (!season || season.groupId !== request.groupId) {
+      throw new Error("The import request's season is no longer available");
+    }
+
     const gameId = await persistSession(ctx, {
       groupId: request.groupId,
+      seasonId,
       createdById: request.requestedById,
       sourceId: request.sourceId,
       date: request.date,

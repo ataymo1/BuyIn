@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
+  CalendarRange,
   Check,
   FileUp,
   MapPin,
@@ -13,10 +14,22 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { DeleteGroupDialog } from "@/components/group/delete-group-dialog";
 import { EditGroupDialog } from "@/components/group/edit-group-dialog";
 import { PendingRequestsList } from "@/components/group/pending-requests-list";
 import { VipBadge } from "@/components/icons/vip-badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -223,6 +236,177 @@ export function GroupHeader({
         ) : null}
       </div>
     </div>
+  );
+}
+
+interface GroupSeason {
+  _id: Id<"seasons">;
+  number: number;
+  label: string;
+  isCurrent: boolean;
+  startDate: number | null;
+  endDate: number | null;
+  sessionCount: number;
+}
+
+function getSeasonDateRange(season: GroupSeason) {
+  if (season.startDate === null || season.endDate === null) {
+    return "No sessions yet";
+  }
+  const start = format(new Date(season.startDate), "MMM d, yyyy");
+  const end = format(new Date(season.endDate), "MMM d, yyyy");
+  return start === end ? start : `${start} – ${end}`;
+}
+
+export function SeasonNavigationSection({
+  groupId,
+  isOwner,
+  onSeasonChange,
+  onSeasonStarted,
+  seasons,
+  selectedSeasonId,
+  userId,
+}: {
+  groupId: Id<"groups">;
+  isOwner: boolean;
+  onSeasonChange: (seasonId: Id<"seasons"> | "all") => void;
+  onSeasonStarted: () => void;
+  seasons: GroupSeason[];
+  selectedSeasonId: Id<"seasons"> | null;
+  userId?: Id<"users">;
+}) {
+  const startNewSeason = useMutation(api.seasons.startNewSeason);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const currentSeason = seasons.find((season) => season.isCurrent);
+  const selectedSeason = seasons.find(
+    (season) => season._id === selectedSeasonId
+  );
+
+  const handleStartSeason = async () => {
+    if (!(userId && currentSeason)) {
+      return;
+    }
+
+    setError(null);
+    setIsStarting(true);
+    try {
+      await startNewSeason({
+        groupId,
+        userId,
+        expectedCurrentSeasonId: currentSeason._id,
+      });
+      setDialogOpen(false);
+      onSeasonStarted();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Could not start the new season"
+      );
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <CalendarRange className="h-5 w-5" />
+              <CardTitle>Seasons</CardTitle>
+            </div>
+            <CardDescription className="mt-1">
+              View sessions and completed-session standings by season.
+            </CardDescription>
+          </div>
+          {isOwner && userId && currentSeason ? (
+            <AlertDialog onOpenChange={setDialogOpen} open={dialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Start Season {currentSeason.number + 1}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Start Season {currentSeason.number + 1}?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Existing sessions and stats will stay in{" "}
+                    {currentSeason.label}. Active sessions will not move. New
+                    sessions and imports will be added to the new season, and
+                    all-time player stats will continue to include every season.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                {error ? (
+                  <p className="text-destructive text-sm">{error}</p>
+                ) : null}
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isStarting}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={isStarting}
+                    onClick={async (event) => {
+                      event.preventDefault();
+                      await handleStartSeason();
+                    }}
+                  >
+                    {isStarting ? "Starting..." : "Start New Season"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+        </div>
+        <div
+          aria-label="Group seasons"
+          className="flex gap-2 overflow-x-auto pb-1"
+          role="tablist"
+        >
+          {seasons.map((season) => (
+            <Button
+              aria-selected={selectedSeasonId === season._id}
+              key={season._id}
+              onClick={() => onSeasonChange(season._id)}
+              role="tab"
+              size="sm"
+              variant={selectedSeasonId === season._id ? "default" : "outline"}
+            >
+              {season.label}
+              {season.isCurrent ? " · Current" : ""}
+            </Button>
+          ))}
+          <Button
+            aria-selected={selectedSeasonId === null}
+            onClick={() => onSeasonChange("all")}
+            role="tab"
+            size="sm"
+            variant={selectedSeasonId === null ? "default" : "outline"}
+          >
+            All Time
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {selectedSeason ? (
+          <p className="text-muted-foreground text-sm">
+            {getSeasonDateRange(selectedSeason)} · {selectedSeason.sessionCount}{" "}
+            {selectedSeason.sessionCount === 1 ? "session" : "sessions"}
+          </p>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            Completed-session standings and sessions across all {seasons.length}{" "}
+            {seasons.length === 1 ? "season" : "seasons"}.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

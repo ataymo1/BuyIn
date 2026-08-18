@@ -8,6 +8,7 @@ import {
   getUserDisplaySummary,
   requireGameManager,
 } from "./helpers";
+import { ensureCurrentSeason } from "./seasons";
 
 // Query to check if user can manage a game (is group owner or session banker)
 export const canManageGame = query({
@@ -27,6 +28,7 @@ export const getGames = query({
   args: {
     groupIds: v.array(v.id("groups")),
     groupId: v.optional(v.id("groups")),
+    seasonId: v.optional(v.id("seasons")),
     status: v.optional(
       v.union(
         v.literal("ACTIVE"),
@@ -36,7 +38,7 @@ export const getGames = query({
     ),
   },
   handler: async (ctx, args) => {
-    const games: Doc<"games">[] = await (async () => {
+    let games: Doc<"games">[] = await (async () => {
       if (args.groupId && args.status) {
         const { groupId, status } = args;
         return await ctx.db
@@ -65,6 +67,21 @@ export const getGames = query({
       );
       return allGames.flat();
     })();
+
+    if (args.seasonId) {
+      if (!args.groupId) {
+        throw new Error("A group is required when filtering by season");
+      }
+      const season = await ctx.db.get(args.seasonId);
+      if (!season || season.groupId !== args.groupId) {
+        throw new Error("Season does not belong to this group");
+      }
+      games = games.filter(
+        (game) =>
+          game.seasonId === args.seasonId ||
+          (!game.seasonId && season.number === 1)
+      );
+    }
 
     // Sort by date descending
     games.sort((a, b) => b.date - a.date);
@@ -193,12 +210,19 @@ export const createGame = mutation({
       throw new Error("Only group members can create sessions");
     }
 
+    const group = await ctx.db.get(args.groupId);
+    if (!group) {
+      throw new Error("Group not found");
+    }
+    const season = await ensureCurrentSeason(ctx, group);
+
     return await ctx.db.insert("games", {
       date: args.date,
       location: args.location,
       notes: args.notes,
       gameType: args.gameType,
       groupId: args.groupId,
+      seasonId: season._id,
       createdById: args.createdById,
       status: "ACTIVE",
     });

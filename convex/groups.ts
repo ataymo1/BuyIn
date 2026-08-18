@@ -108,17 +108,39 @@ export const isGroupOwner = query({
 
 // Get group standings (leaderboard)
 export const getGroupStandings = query({
-  args: { groupId: v.id("groups") },
+  args: {
+    groupId: v.id("groups"),
+    seasonId: v.optional(v.id("seasons")),
+  },
   handler: async (ctx, args) => {
     const members = await ctx.db
       .query("groupMembers")
       .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .collect();
 
-    const games = await ctx.db
+    const selectedSeason = args.seasonId
+      ? await ctx.db.get(args.seasonId)
+      : null;
+    if (selectedSeason && selectedSeason.groupId !== args.groupId) {
+      throw new Error("Season does not belong to this group");
+    }
+    if (args.seasonId && !selectedSeason) {
+      throw new Error("Season not found");
+    }
+
+    const completedGames = await ctx.db
       .query("games")
-      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .withIndex("by_groupId_status", (q) =>
+        q.eq("groupId", args.groupId).eq("status", "COMPLETED")
+      )
       .collect();
+    const games = args.seasonId
+      ? completedGames.filter(
+          (game) =>
+            game.seasonId === args.seasonId ||
+            (!game.seasonId && selectedSeason?.number === 1)
+        )
+      : completedGames;
 
     const gameIds = games.map((g) => g._id);
 
@@ -223,12 +245,22 @@ export const createGroup = mutation({
       ownerId: args.ownerId,
     });
 
+    const createdAt = Date.now();
+
     // Add owner as member
     await ctx.db.insert("groupMembers", {
       groupId,
       userId: args.ownerId,
       role: "OWNER",
-      joinedAt: Date.now(),
+      joinedAt: createdAt,
+    });
+
+    await ctx.db.insert("seasons", {
+      groupId,
+      number: 1,
+      isCurrent: true,
+      createdAt,
+      createdById: args.ownerId,
     });
 
     return groupId;
@@ -293,6 +325,14 @@ export const deleteGroup = mutation({
       .collect();
     for (const record of [...aliases, ...importRequests, ...claimRequests]) {
       await ctx.db.delete(record._id);
+    }
+
+    const seasons = await ctx.db
+      .query("seasons")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    for (const season of seasons) {
+      await ctx.db.delete(season._id);
     }
 
     await ctx.db.delete(args.groupId);
