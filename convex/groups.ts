@@ -24,40 +24,14 @@ function normalizeLeaderboardName(name: string) {
   return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-function getLinkedUsersByName(stats: ResolvedLeaderboardStat[]) {
-  const linkedUsersByName = new Map<string, Set<Id<"users">>>();
-  for (const { player } of stats) {
-    if (!player.userId) {
-      continue;
-    }
-    const name = normalizeLeaderboardName(player.name);
-    const userIds = linkedUsersByName.get(name) ?? new Set<Id<"users">>();
-    userIds.add(player.userId);
-    linkedUsersByName.set(name, userIds);
-  }
-  return linkedUsersByName;
-}
-
-function getLeaderboardIdentityKey(
-  player: Doc<"players">,
-  linkedUsersByName: Map<string, Set<Id<"users">>>
-) {
-  const normalizedName = normalizeLeaderboardName(player.name);
-  const matchingUsers = linkedUsersByName.get(normalizedName);
-  const matchedUserId =
-    matchingUsers?.size === 1 ? [...matchingUsers][0] : undefined;
-  const identityKey = player.userId ?? matchedUserId;
-  return identityKey
-    ? `user:${identityKey}`
-    : `guest:${normalizedName || player._id}`;
-}
-
 function combineLeaderboardStats(stats: ResolvedLeaderboardStat[]) {
-  const linkedUsersByName = getLinkedUsersByName(stats);
   const combined = new Map<string, CombinedLeaderboardStat>();
 
   for (const stat of stats) {
-    const key = getLeaderboardIdentityKey(stat.player, linkedUsersByName);
+    const normalizedName = normalizeLeaderboardName(stat.player.name);
+    const key = normalizedName
+      ? `name:${normalizedName}`
+      : `player:${stat.player._id}`;
     const existing = combined.get(key);
     const player = {
       id: stat.player._id,
