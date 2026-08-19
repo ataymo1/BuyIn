@@ -1,7 +1,78 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { deleteGameCascade, getUserDisplaySummary } from "./helpers";
+
+interface ResolvedLeaderboardStat {
+  player: Doc<"players">;
+  playerId: Id<"players">;
+  totalProfit: number;
+  gameIds: Set<Id<"games">>;
+}
+
+interface CombinedLeaderboardStat {
+  player: {
+    id: Id<"players">;
+    name: string;
+    userId: Id<"users"> | null;
+  };
+  totalProfit: number;
+  gameIds: Set<Id<"games">>;
+}
+
+function normalizeLeaderboardName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function combineLeaderboardStats(stats: ResolvedLeaderboardStat[]) {
+  const combined = new Map<string, CombinedLeaderboardStat>();
+
+  for (const stat of stats) {
+    const normalizedName = normalizeLeaderboardName(stat.player.name);
+    const key = normalizedName
+      ? `name:${normalizedName}`
+      : `player:${stat.player._id}`;
+    const existing = combined.get(key);
+    const player = {
+      id: stat.player._id,
+      name: stat.player.name,
+      userId: stat.player.userId ?? null,
+    };
+
+    if (!existing) {
+      combined.set(key, {
+        player,
+        totalProfit: stat.totalProfit,
+        gameIds: new Set(stat.gameIds),
+      });
+      continue;
+    }
+
+    existing.totalProfit += stat.totalProfit;
+    for (const gameId of stat.gameIds) {
+      existing.gameIds.add(gameId);
+    }
+    if (!existing.player.userId && player.userId) {
+      existing.player = player;
+    }
+  }
+
+  return [...combined.values()]
+    .map((standing) => ({
+      player: standing.player,
+      totalProfit: standing.totalProfit,
+      gamesPlayed: standing.gameIds.size,
+    }))
+    .sort((a, b) => {
+      if (b.totalProfit !== a.totalProfit) {
+        return b.totalProfit - a.totalProfit;
+      }
+      if (b.gamesPlayed !== a.gamesPlayed) {
+        return b.gamesPlayed - a.gamesPlayed;
+      }
+      return a.player.name.localeCompare(b.player.name);
+    });
+}
 
 // Get all groups for a user
 export const getUserGroups = query({
@@ -108,17 +179,39 @@ export const isGroupOwner = query({
 
 // Get group standings (leaderboard)
 export const getGroupStandings = query({
-  args: { groupId: v.id("groups") },
+  args: {
+    groupId: v.id("groups"),
+    seasonId: v.optional(v.id("seasons")),
+  },
   handler: async (ctx, args) => {
     const members = await ctx.db
       .query("groupMembers")
       .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
       .collect();
 
-    const games = await ctx.db
+    const selectedSeason = args.seasonId
+      ? await ctx.db.get(args.seasonId)
+      : null;
+    if (selectedSeason && selectedSeason.groupId !== args.groupId) {
+      throw new Error("Season does not belong to this group");
+    }
+    if (args.seasonId && !selectedSeason) {
+      throw new Error("Season not found");
+    }
+
+    const completedGames = await ctx.db
       .query("games")
-      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .withIndex("by_groupId_status", (q) =>
+        q.eq("groupId", args.groupId).eq("status", "COMPLETED")
+      )
       .collect();
+    const games = args.seasonId
+      ? completedGames.filter(
+          (game) =>
+            game.seasonId === args.seasonId ||
+            (!game.seasonId && selectedSeason?.number === 1)
+        )
+      : completedGames;
 
     const gameIds = games.map((g) => g._id);
 
@@ -141,7 +234,7 @@ export const getGroupStandings = query({
       {
         playerId: Id<"players">;
         totalProfit: number;
-        gamesPlayed: number;
+        gameIds: Set<Id<"games">>;
       }
     > = {};
 
@@ -158,7 +251,7 @@ export const getGroupStandings = query({
       playerStats[player._id as string] = {
         playerId: player._id,
         totalProfit: 0,
-        gamesPlayed: 0,
+        gameIds: new Set(),
       };
     }
 
@@ -168,44 +261,23 @@ export const getGroupStandings = query({
         playerStats[key] = {
           playerId: gp.playerId,
           totalProfit: 0,
-          gamesPlayed: 0,
+          gameIds: new Set(),
         };
       }
       playerStats[key].totalProfit += gp.profit ?? 0;
-      playerStats[key].gamesPlayed += 1;
+      playerStats[key].gameIds.add(gp.gameId);
     }
 
-    // Get player details
-    const standings = await Promise.all(
-      Object.values(playerStats).map(async (stat) => {
-        const player = await ctx.db.get(stat.playerId);
-        return {
-          player: player
-            ? {
-                id: player._id,
-                name: player.name,
-                userId: player.userId ?? null,
-              }
-            : null,
-          totalProfit: stat.totalProfit,
-          gamesPlayed: stat.gamesPlayed,
-        };
-      })
-    );
+    const resolvedStats = (
+      await Promise.all(
+        Object.values(playerStats).map(async (stat) => {
+          const player = await ctx.db.get(stat.playerId);
+          return player ? { player, ...stat } : null;
+        })
+      )
+    ).filter((stat) => stat !== null);
 
-    return standings
-      .filter((s) => s.player)
-      .sort((a, b) => {
-        if (b.totalProfit !== a.totalProfit) {
-          return b.totalProfit - a.totalProfit;
-        }
-
-        if (b.gamesPlayed !== a.gamesPlayed) {
-          return b.gamesPlayed - a.gamesPlayed;
-        }
-
-        return (a.player?.name ?? "").localeCompare(b.player?.name ?? "");
-      });
+    return combineLeaderboardStats(resolvedStats);
   },
 });
 
@@ -223,12 +295,22 @@ export const createGroup = mutation({
       ownerId: args.ownerId,
     });
 
+    const createdAt = Date.now();
+
     // Add owner as member
     await ctx.db.insert("groupMembers", {
       groupId,
       userId: args.ownerId,
       role: "OWNER",
-      joinedAt: Date.now(),
+      joinedAt: createdAt,
+    });
+
+    await ctx.db.insert("seasons", {
+      groupId,
+      number: 1,
+      isCurrent: true,
+      createdAt,
+      createdById: args.ownerId,
     });
 
     return groupId;
@@ -293,6 +375,14 @@ export const deleteGroup = mutation({
       .collect();
     for (const record of [...aliases, ...importRequests, ...claimRequests]) {
       await ctx.db.delete(record._id);
+    }
+
+    const seasons = await ctx.db
+      .query("seasons")
+      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+      .collect();
+    for (const season of seasons) {
+      await ctx.db.delete(season._id);
     }
 
     await ctx.db.delete(args.groupId);

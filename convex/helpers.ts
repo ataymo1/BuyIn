@@ -169,6 +169,15 @@ export async function mergePlayerHistory(
 }
 
 export async function deleteGameCascade(ctx: MutationCtx, gameId: Id<"games">) {
+  const pokerNowPlayers = await ctx.db
+    .query("pokerNowSessionPlayers")
+    .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+    .collect();
+
+  for (const pokerNowPlayer of pokerNowPlayers) {
+    await ctx.db.delete(pokerNowPlayer._id);
+  }
+
   const gamePlayers = await ctx.db
     .query("gamePlayers")
     .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
