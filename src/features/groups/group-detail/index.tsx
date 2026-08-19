@@ -16,6 +16,7 @@ import {
   RecentSessionsSection,
 } from "./group-detail-sections";
 import { GroupDetailSkeleton } from "./group-detail-skeleton";
+import { MergePlayersSection } from "./merge-players-section";
 import {
   ClaimPlayerHistorySection,
   PendingPlayerClaimsSection,
@@ -90,6 +91,10 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
       {isOwner && userId ? (
         <>
           <PendingPlayerClaimsSection
+            groupId={groupId as Id<"groups">}
+            userId={userId}
+          />
+          <MergePlayersSection
             groupId={groupId as Id<"groups">}
             userId={userId}
           />
