@@ -41,7 +41,39 @@ export async function POST(request: Request) {
     userId: user._id,
   });
 
-  if (access && !access.player) {
+  if (!access) {
+    return NextResponse.json(
+      { error: "Live poker table is not available" },
+      { status: 403 }
+    );
+  }
+
+  const convexSecret = process.env.LIVE_POKER_CONVEX_SECRET;
+  if (!convexSecret) {
+    return NextResponse.json(
+      { error: "Live poker server authorization is not configured" },
+      { status: 500 }
+    );
+  }
+  try {
+    await convex.action(api.live_poker.serverReserveLivePokerAccess, {
+      secret: convexSecret,
+      tableId: body.tableId as Id<"livePokerTables">,
+      userId: user._id,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to reserve live poker access",
+      },
+      { status: 429 }
+    );
+  }
+
+  if (!access.player) {
     const playerId = await convex.mutation(
       api.players.getOrCreatePlayerForUser,
       {
@@ -60,7 +92,7 @@ export async function POST(request: Request) {
     };
   }
 
-  if (!access?.player) {
+  if (!access.player) {
     return NextResponse.json(
       { error: "You must be signed in with a player profile to play" },
       { status: 403 }

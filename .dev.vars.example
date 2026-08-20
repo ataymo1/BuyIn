@@ -1,6 +1,7 @@
 LIVE_POKER_ALLOWED_ORIGINS=http://localhost:3000
 LIVE_POKER_JWT_SECRET=replace-with-the-value-used-by-nextjs
-LIVE_POKER_WEBHOOK_SECRET=replace-with-the-value-used-by-nextjs
+LIVE_POKER_CONTROL_SECRET=replace-with-the-control-value-used-by-nextjs
+LIVE_POKER_WEBHOOK_SECRET=replace-with-the-callback-value-used-by-nextjs
 LIVE_POKER_WEBHOOK_URL=http://localhost:3000/api/live-poker/record-hand
 LIVE_POKER_SETTLEMENT_URL=http://localhost:3000/api/live-poker/settle-player
 LIVE_POKER_TURN_TIMEOUT_SECONDS=20

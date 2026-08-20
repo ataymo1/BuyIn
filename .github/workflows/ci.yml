@@ -28,6 +28,7 @@ jobs:
           AUTH_TRUST_HOST: "true"
           GOOGLE_CLIENT_ID: ci-google-client
           GOOGLE_CLIENT_SECRET: ci-google-secret
+          LIVE_POKER_CONTROL_SECRET: ci-control-secret
           LIVE_POKER_CONVEX_SECRET: ci-convex-secret
           LIVE_POKER_JWT_SECRET: ci-jwt-secret
           LIVE_POKER_WEBHOOK_SECRET: ci-webhook-secret

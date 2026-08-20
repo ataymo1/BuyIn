@@ -214,6 +214,15 @@ export default defineSchema({
     .index("by_createdById", ["createdById"])
     .index("by_gameId_status", ["gameId", "status"]),
 
+  livePokerAccessGrants: defineTable({
+    expiresAt: v.number(),
+    tableId: v.id("livePokerTables"),
+    updatedAt: v.number(),
+    userId: v.id("users"),
+  })
+    .index("by_userId_expiresAt", ["userId", "expiresAt"])
+    .index("by_userId_tableId", ["userId", "tableId"]),
+
   livePokerTables: defineTable({
     title: v.string(),
     status: v.union(
@@ -237,7 +246,9 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_status", ["status"])
-    .index("by_createdById", ["createdById"]),
+    .index("by_createdById", ["createdById"])
+    .index("by_createdById_status", ["createdById", "status"])
+    .index("by_createdById_createdAt", ["createdById", "createdAt"]),
 
   livePokerTablePlayers: defineTable({
     tableId: v.id("livePokerTables"),
@@ -253,6 +264,17 @@ export default defineSchema({
     .index("by_tableId", ["tableId"])
     .index("by_playerId", ["playerId"])
     .index("by_tableId_playerId", ["tableId", "playerId"]),
+
+  livePokerSettlementEvents: defineTable({
+    appliedAt: v.number(),
+    playerId: v.id("players"),
+    settledAt: v.optional(v.number()),
+    settlementId: v.string(),
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+  })
+    .index("by_settlementId", ["settlementId"])
+    .index("by_tableId", ["tableId"]),
 
   livePokerBuyInRequests: defineTable({
     tableId: v.id("livePokerTables"),

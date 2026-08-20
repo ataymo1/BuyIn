@@ -4,6 +4,16 @@ import {
   verifyLivePokerToken,
 } from "../src/lib/live-poker/auth";
 import {
+  getLivePokerOutboxRetryDelay,
+  isLivePokerMessageWithinLimit,
+  isLivePokerTableId,
+  isRetryableLivePokerWebhookStatus,
+  LIVE_POKER_MAX_CONSECUTIVE_TIMEOUTS,
+  LIVE_POKER_MAX_HANDS_PER_TABLE,
+  LIVE_POKER_MAX_MESSAGE_BYTES,
+  LIVE_POKER_MAX_OUTBOX_RETRY_DELAY_MS,
+} from "../src/lib/live-poker/cloudflare-safety";
+import {
   createInitialState,
   seatPlayer,
   shuffleDeck,
@@ -83,6 +93,43 @@ test("ready state and manual starts are absent from the public protocol", () => 
     }).success
   ).toBe(true);
   expect(toPublicState(state, legacySeat.userId).gamePaused).toBe(true);
+});
+
+test("Cloudflare request inputs have hard size and identifier bounds", () => {
+  expect(isLivePokerTableId("j57abc_DEF-123")).toBe(true);
+  expect(isLivePokerTableId("../table")).toBe(false);
+  expect(isLivePokerTableId("x".repeat(129))).toBe(false);
+  expect(
+    isLivePokerMessageWithinLimit("x".repeat(LIVE_POKER_MAX_MESSAGE_BYTES))
+  ).toBe(true);
+  expect(
+    isLivePokerMessageWithinLimit(
+      "x".repeat(LIVE_POKER_MAX_MESSAGE_BYTES + 1)
+    )
+  ).toBe(false);
+  expect(
+    isLivePokerMessageWithinLimit(
+      new Uint8Array(LIVE_POKER_MAX_MESSAGE_BYTES + 1).buffer
+    )
+  ).toBe(false);
+});
+
+test("unattended and long-running tables have hard work limits", () => {
+  expect(LIVE_POKER_MAX_CONSECUTIVE_TIMEOUTS).toBe(6);
+  expect(LIVE_POKER_MAX_HANDS_PER_TABLE).toBe(250);
+});
+
+test("webhook retries are bounded, slow, and limited to transient failures", () => {
+  expect(getLivePokerOutboxRetryDelay(1, 1)).toBe(60_000);
+  expect(getLivePokerOutboxRetryDelay(2, 1)).toBe(120_000);
+  expect(getLivePokerOutboxRetryDelay(100, 1)).toBe(
+    LIVE_POKER_MAX_OUTBOX_RETRY_DELAY_MS
+  );
+  expect(isRetryableLivePokerWebhookStatus(400)).toBe(false);
+  expect(isRetryableLivePokerWebhookStatus(401)).toBe(false);
+  expect(isRetryableLivePokerWebhookStatus(408)).toBe(true);
+  expect(isRetryableLivePokerWebhookStatus(429)).toBe(true);
+  expect(isRetryableLivePokerWebhookStatus(503)).toBe(true);
 });
 
 test("live poker JWTs require the dedicated configured secret", async () => {

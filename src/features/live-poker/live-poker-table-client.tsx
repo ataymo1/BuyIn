@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConvexUser } from "@/lib/convex-hooks";
 import {
-  getLivePokerReconnectDelay,
+  getJitteredLivePokerReconnectDelay,
   LIVE_POKER_MAX_RECONNECT_ATTEMPTS,
 } from "@/lib/live-poker/reconnect";
 import {
@@ -49,9 +49,8 @@ import type {
 } from "@/lib/live-poker/types";
 import {
   useCreateLivePokerBuyInRequest,
-  usePendingLivePokerBuyInRequests,
+  useLivePokerBuyInRequests,
   useRespondToLivePokerBuyInRequest,
-  useUserLivePokerBuyInRequests,
 } from "@/lib/live-poker-hooks";
 import type { Id } from "../../../convex/_generated/dataModel";
 
@@ -1085,14 +1084,8 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   const state = stateSnapshot?.tableId === tableId ? stateSnapshot.state : null;
   const createBuyInRequest = useCreateLivePokerBuyInRequest();
   const respondToBuyInRequest = useRespondToLivePokerBuyInRequest();
-  const { requests: pendingBuyInRequests } = usePendingLivePokerBuyInRequests(
-    tableConvexId,
-    userId
-  );
-  const { requests: userBuyInRequests } = useUserLivePokerBuyInRequests(
-    tableConvexId,
-    userId
-  );
+  const { pending: pendingBuyInRequests, user: userBuyInRequests } =
+    useLivePokerBuyInRequests(tableConvexId, userId);
 
   const send = useCallback((message: LivePokerClientMessage) => {
     const socket = socketRef.current;
@@ -1123,6 +1116,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
   useEffect(() => {
     let active = true;
     let reconnectAttempt = 0;
+    let reconnectResetTimer: ReturnType<typeof setTimeout> | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let tokenController: AbortController | null = null;
     let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1145,7 +1139,7 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         return;
       }
 
-      const delay = getLivePokerReconnectDelay(reconnectAttempt);
+      const delay = getJitteredLivePokerReconnectDelay(reconnectAttempt);
       reconnectAttempt += 1;
       setConnectionAttempt(reconnectAttempt);
       setConnectionStatus("reconnecting");
@@ -1241,11 +1235,14 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
             socket.close();
             return;
           }
-          reconnectAttempt = 0;
           setConnectionAttempt(0);
           setConnectionStatus("connected");
           setError(null);
-          socket.send(JSON.stringify({ type: "joinTable" }));
+          reconnectResetTimer = setTimeout(() => {
+            if (isCurrentSocket()) {
+              reconnectAttempt = 0;
+            }
+          }, 30_000);
         });
 
         socket.addEventListener("message", (event) => {
@@ -1275,6 +1272,10 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
         socket.addEventListener("close", () => {
           if (!isCurrentSocket()) {
             return;
+          }
+          if (reconnectResetTimer) {
+            clearTimeout(reconnectResetTimer);
+            reconnectResetTimer = null;
           }
           socketRef.current = null;
           scheduleReconnect("Connection to the live table was lost.");
@@ -1312,6 +1313,9 @@ export function LivePokerTableClient({ tableId }: LivePokerTableClientProps) {
       active = false;
       socketLifecycleRef.current += 1;
       tokenController?.abort();
+      if (reconnectResetTimer) {
+        clearTimeout(reconnectResetTimer);
+      }
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
       }

@@ -58,10 +58,10 @@ async function postToWorker(
   operation: "claim" | "close",
   body: unknown
 ) {
-  const secret = process.env.LIVE_POKER_WEBHOOK_SECRET;
+  const secret = process.env.LIVE_POKER_CONTROL_SECRET;
   if (!secret) {
     return {
-      error: "Live poker worker secret is not configured",
+      error: "Live poker worker control secret is not configured",
       status: 500,
     };
   }
@@ -75,6 +75,7 @@ async function postToWorker(
         "x-live-poker-secret": secret,
       },
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
     return {

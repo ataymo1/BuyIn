@@ -10,9 +10,7 @@ if (!convexUrl) {
 export const livePokerConvex = new ConvexHttpClient(convexUrl);
 
 export function getLivePokerConvexSecret() {
-  const secret =
-    process.env.LIVE_POKER_CONVEX_SECRET ??
-    process.env.LIVE_POKER_WEBHOOK_SECRET;
+  const secret = process.env.LIVE_POKER_CONVEX_SECRET;
   if (!secret) {
     throw new Error("LIVE_POKER_CONVEX_SECRET is not configured");
   }

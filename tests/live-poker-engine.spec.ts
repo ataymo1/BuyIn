@@ -147,13 +147,15 @@ test.describe("live poker automatic hand eligibility", () => {
     expect(state.handNumber).toBe(1);
   });
 
-  test("excludes sit-out and busted seats until they return or add chips", () => {
+  test("excludes disconnected, sit-out, and busted seats", () => {
     const state = makeState({ seatCount: 4, seats: [null, null, null, null] });
     addSeat(state, 0, 100);
     const sittingOut = addSeat(state, 1, 100);
     const busted = addSeat(state, 2, 100);
+    const disconnected = addSeat(state, 3, 100);
     sittingOut.sitOut = true;
     busted.stack = 0;
+    disconnected.connected = false;
 
     expect(getEligibleSeats(state).map((seat) => seat.seatIndex)).toEqual([0]);
     expect(canStartHand(state)).toBe(false);
@@ -162,6 +164,9 @@ test.describe("live poker automatic hand eligibility", () => {
     expect(canStartHand(state)).toBe(true);
     sittingOut.sitOut = true;
     busted.stack = 25;
+    expect(canStartHand(state)).toBe(true);
+    busted.stack = 0;
+    disconnected.connected = true;
     expect(canStartHand(state)).toBe(true);
   });
 

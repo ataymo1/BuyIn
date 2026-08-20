@@ -125,6 +125,7 @@ export interface LivePokerState {
   bigBlindSeatIndex: number | null;
   communityCardRevealStartIndex?: number | null;
   communityCards: string[];
+  consecutiveTimeoutActions?: number;
   currentBet: number;
   dealerSeatIndex: number | null;
   deck: string[];
@@ -145,6 +146,7 @@ export interface LivePokerState {
   showdownSettled?: boolean;
   smallBlind: number;
   smallBlindSeatIndex: number | null;
+  storageDeleteAt?: number;
   timeBankActive?: boolean;
   transition?: LivePokerTransition | null;
   transitionDeadlineAt?: number | null;

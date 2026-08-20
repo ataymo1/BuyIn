@@ -3,9 +3,30 @@
   "name": "buyin-live-poker",
   "main": "workers/live-poker.ts",
   "compatibility_date": "2026-05-05",
-  "observability": {
-    "enabled": true
+  "limits": {
+    "cpu_ms": 10
   },
+  "observability": {
+    "enabled": false
+  },
+  "ratelimits": [
+    {
+      "name": "LIVE_POKER_IP_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    },
+    {
+      "name": "LIVE_POKER_USER_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 12,
+        "period": 60
+      }
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

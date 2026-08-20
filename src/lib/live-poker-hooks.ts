@@ -100,28 +100,49 @@ export function useCreateLivePokerBuyInRequest() {
   };
 }
 
-function useLivePokerBuyInRequests(
+export function useLivePokerBuyInRequests(
   tableId: Id<"livePokerTables"> | undefined,
-  userId: Id<"users"> | undefined,
-  kind: "pending" | "user"
+  userId: Id<"users"> | undefined
 ) {
-  const [requests, setRequests] = useState<unknown[]>([]);
+  const [requests, setRequests] = useState<{
+    pending: unknown[];
+    user: unknown[];
+  }>({ pending: [], user: [] });
   const [isLoading, setIsLoading] = useState(Boolean(tableId && userId));
 
   useEffect(() => {
     if (!(tableId && userId)) {
-      setRequests([]);
+      setRequests({ pending: [], user: [] });
       setIsLoading(false);
       return;
     }
 
-    setRequests([]);
+    setRequests({ pending: [], user: [] });
     setIsLoading(true);
     let active = true;
     let controller: AbortController | null = null;
+    let loading = false;
+    let retryDelay = 5000;
+    let timer: number | null = null;
+
+    function schedule(delay: number) {
+      if (active) {
+        if (timer !== null) {
+          window.clearTimeout(timer);
+        }
+        timer = window.setTimeout(load, delay);
+      }
+    }
 
     async function load() {
-      controller?.abort();
+      if (!active || loading) {
+        return;
+      }
+      if (document.hidden) {
+        schedule(30_000);
+        return;
+      }
+      loading = true;
       controller = new AbortController();
       try {
         const body = await requestLivePokerApi<{
@@ -129,11 +150,18 @@ function useLivePokerBuyInRequests(
           user: unknown[];
         }>(
           `/api/live-poker/buy-in-requests?tableId=${encodeURIComponent(tableId as string)}`,
-          { method: "GET", signal: controller.signal }
+          {
+            method: "GET",
+            signal: AbortSignal.any([
+              controller.signal,
+              AbortSignal.timeout(10_000),
+            ]),
+          }
         );
         if (active) {
-          setRequests(body[kind]);
+          setRequests({ pending: body.pending, user: body.user });
           setIsLoading(false);
+          retryDelay = 5000;
         }
       } catch (error) {
         if (
@@ -141,34 +169,37 @@ function useLivePokerBuyInRequests(
           !(error instanceof DOMException && error.name === "AbortError")
         ) {
           setIsLoading(false);
+          retryDelay = Math.min(60_000, retryDelay * 2);
         }
+      } finally {
+        loading = false;
+        schedule(retryDelay);
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (!document.hidden) {
+        if (timer !== null) {
+          window.clearTimeout(timer);
+          timer = null;
+        }
+        load();
       }
     }
 
     load();
-    const timer = window.setInterval(load, 2000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       active = false;
       controller?.abort();
-      window.clearInterval(timer);
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [kind, tableId, userId]);
+  }, [tableId, userId]);
 
-  return { isLoading, requests };
-}
-
-export function usePendingLivePokerBuyInRequests(
-  tableId: Id<"livePokerTables"> | undefined,
-  userId: Id<"users"> | undefined
-) {
-  return useLivePokerBuyInRequests(tableId, userId, "pending");
-}
-
-export function useUserLivePokerBuyInRequests(
-  tableId: Id<"livePokerTables"> | undefined,
-  userId: Id<"users"> | undefined
-) {
-  return useLivePokerBuyInRequests(tableId, userId, "user");
+  return { isLoading, pending: requests.pending, user: requests.user };
 }
 
 export function useRespondToLivePokerBuyInRequest() {

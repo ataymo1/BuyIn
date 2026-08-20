@@ -21,6 +21,12 @@ const buyInRequestTypeValidator = v.union(
   v.literal("INITIAL"),
   v.literal("ADD_ON")
 );
+const LIVE_POKER_ACCESS_GRANT_MS = 15 * 60 * 1000;
+const LIVE_POKER_ACCESS_GRANT_RENEWAL_MS = 6 * 60 * 1000;
+const MAX_ACTIVE_LIVE_POKER_TABLES_PER_USER = 3;
+const MAX_LIVE_POKER_TABLES_CREATED_PER_DAY = 10;
+const MAX_OPEN_LIVE_POKER_TABLES_GLOBAL = 10;
+const MAX_OPEN_LIVE_POKER_TABLES_PER_USER = 3;
 
 type LivePokerBuyInRequestRow = Doc<"livePokerBuyInRequests"> & {
   id: Id<"livePokerBuyInRequests">;
@@ -193,6 +199,42 @@ export const createLivePokerTableInternal = internalMutation({
     validateTableSettings(args);
 
     const now = Date.now();
+    const globallyOpenTables = await ctx.db
+      .query("livePokerTables")
+      .withIndex("by_status", (q) => q.eq("status", "OPEN"))
+      .take(MAX_OPEN_LIVE_POKER_TABLES_GLOBAL);
+    if (globallyOpenTables.length >= MAX_OPEN_LIVE_POKER_TABLES_GLOBAL) {
+      throw new Error(
+        `Live poker is limited to ${MAX_OPEN_LIVE_POKER_TABLES_GLOBAL} open tables across this deployment`
+      );
+    }
+    const openTables = await ctx.db
+      .query("livePokerTables")
+      .withIndex("by_createdById_status", (q) =>
+        q.eq("createdById", args.createdById).eq("status", "OPEN")
+      )
+      .take(MAX_OPEN_LIVE_POKER_TABLES_PER_USER);
+    if (openTables.length >= MAX_OPEN_LIVE_POKER_TABLES_PER_USER) {
+      throw new Error(
+        `Close an existing table before creating more than ${MAX_OPEN_LIVE_POKER_TABLES_PER_USER} open tables`
+      );
+    }
+    const recentlyCreatedTables = await ctx.db
+      .query("livePokerTables")
+      .withIndex("by_createdById_createdAt", (q) =>
+        q
+          .eq("createdById", args.createdById)
+          .gte("createdAt", now - 24 * 60 * 60 * 1000)
+      )
+      .take(MAX_LIVE_POKER_TABLES_CREATED_PER_DAY);
+    if (
+      recentlyCreatedTables.length >= MAX_LIVE_POKER_TABLES_CREATED_PER_DAY
+    ) {
+      throw new Error(
+        `Live poker table creation is limited to ${MAX_LIVE_POKER_TABLES_CREATED_PER_DAY} per day`
+      );
+    }
+
     return await ctx.db.insert("livePokerTables", {
       title: args.title.trim() || "Untitled Table",
       status: "OPEN",
@@ -205,6 +247,74 @@ export const createLivePokerTableInternal = internalMutation({
       createdById: args.createdById,
       createdAt: now,
       updatedAt: now,
+    });
+  },
+});
+
+export const reserveLivePokerAccessInternal = internalMutation({
+  args: {
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const table = await ctx.db.get(args.tableId);
+    if (!table || table.status !== "OPEN") {
+      throw new Error("Live poker table is not open");
+    }
+
+    const existing = await ctx.db
+      .query("livePokerAccessGrants")
+      .withIndex("by_userId_tableId", (q) =>
+        q.eq("userId", args.userId).eq("tableId", args.tableId)
+      )
+      .first();
+    if (existing && existing.expiresAt > now) {
+      if (existing.expiresAt - now <= LIVE_POKER_ACCESS_GRANT_RENEWAL_MS) {
+        await ctx.db.patch(existing._id, {
+          expiresAt: now + LIVE_POKER_ACCESS_GRANT_MS,
+          updatedAt: now,
+        });
+      }
+      return;
+    }
+
+    const activeGrants = await ctx.db
+      .query("livePokerAccessGrants")
+      .withIndex("by_userId_expiresAt", (q) =>
+        q.eq("userId", args.userId).gt("expiresAt", now)
+      )
+      .take(MAX_ACTIVE_LIVE_POKER_TABLES_PER_USER);
+    if (activeGrants.length >= MAX_ACTIVE_LIVE_POKER_TABLES_PER_USER) {
+      throw new Error(
+        `Live poker access is limited to ${MAX_ACTIVE_LIVE_POKER_TABLES_PER_USER} active tables per user`
+      );
+    }
+
+    const expiredGrants = await ctx.db
+      .query("livePokerAccessGrants")
+      .withIndex("by_userId_expiresAt", (q) =>
+        q.eq("userId", args.userId).lte("expiresAt", now)
+      )
+      .take(10);
+    for (const grant of expiredGrants) {
+      if (grant._id !== existing?._id) {
+        await ctx.db.delete(grant._id);
+      }
+    }
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        expiresAt: now + LIVE_POKER_ACCESS_GRANT_MS,
+        updatedAt: now,
+      });
+      return;
+    }
+    await ctx.db.insert("livePokerAccessGrants", {
+      expiresAt: now + LIVE_POKER_ACCESS_GRANT_MS,
+      tableId: args.tableId,
+      updatedAt: now,
+      userId: args.userId,
     });
   },
 });
@@ -694,6 +804,7 @@ export const settlePlayerStackInternal = internalMutation({
     settledAt: v.optional(v.number()),
     settlementId: v.optional(v.string()),
   },
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Game and live-table settlement paths share one atomic mutation, including event-based idempotency for out-of-order retries.
   handler: async (ctx, args) => {
     if (
       !(Number.isFinite(args.buyIn) && Number.isFinite(args.cashOut)) ||
@@ -704,6 +815,10 @@ export const settlePlayerStackInternal = internalMutation({
     }
 
     if (args.tableId) {
+      if (!args.settlementId) {
+        throw new Error("A settlementId is required for live poker tables");
+      }
+      const settlementId = args.settlementId;
       const tableId = args.tableId;
       const table = await ctx.db.get(tableId);
       if (!table) {
@@ -717,21 +832,37 @@ export const settlePlayerStackInternal = internalMutation({
         )
         .first();
 
-      if (
-        (args.settlementId !== undefined &&
-          existing?.lastSettlementId === args.settlementId) ||
-        (existing?.lastSettledAt !== undefined &&
-          args.settledAt !== undefined &&
-          existing.lastSettledAt > args.settledAt)
-      ) {
+      const appliedSettlement = await ctx.db
+        .query("livePokerSettlementEvents")
+        .withIndex("by_settlementId", (q) =>
+          q.eq("settlementId", settlementId)
+        )
+        .first();
+      if (appliedSettlement) {
+        return existing;
+      }
+
+      if (existing?.lastSettlementId === settlementId) {
+        await ctx.db.insert("livePokerSettlementEvents", {
+          appliedAt: Date.now(),
+          playerId: args.playerId,
+          settledAt: args.settledAt,
+          settlementId,
+          tableId,
+          userId: args.userId,
+        });
         return existing;
       }
 
       const settlementMetadata = {
-        lastSettledAt: args.settledAt,
-        lastSettlementId: args.settlementId,
+        lastSettledAt:
+          args.settledAt === undefined
+            ? existing?.lastSettledAt
+            : Math.max(existing?.lastSettledAt ?? 0, args.settledAt),
+        lastSettlementId: settlementId,
         updatedAt: Date.now(),
       };
+      let tablePlayerId: Id<"livePokerTablePlayers">;
 
       if (existing) {
         const buyIn = existing.buyIn + args.buyIn;
@@ -742,18 +873,28 @@ export const settlePlayerStackInternal = internalMutation({
           cashOut,
           profit: cashOut - buyIn,
         });
-        return await ctx.db.get(existing._id);
+        tablePlayerId = existing._id;
+      } else {
+        tablePlayerId = await ctx.db.insert("livePokerTablePlayers", {
+          tableId,
+          playerId: args.playerId,
+          userId: args.userId,
+          ...settlementMetadata,
+          buyIn: args.buyIn,
+          cashOut: args.cashOut,
+          profit: args.cashOut - args.buyIn,
+        });
       }
 
-      return await ctx.db.insert("livePokerTablePlayers", {
-        tableId,
+      await ctx.db.insert("livePokerSettlementEvents", {
+        appliedAt: Date.now(),
         playerId: args.playerId,
+        settledAt: args.settledAt,
+        settlementId,
+        tableId,
         userId: args.userId,
-        ...settlementMetadata,
-        buyIn: args.buyIn,
-        cashOut: args.cashOut,
-        profit: args.cashOut - args.buyIn,
       });
+      return await ctx.db.get(tablePlayerId);
     }
 
     if (!args.gameId) {
@@ -797,9 +938,7 @@ export const settlePlayerStackInternal = internalMutation({
 });
 
 function assertLivePokerServerSecret(secret: string) {
-  const expected =
-    process.env.LIVE_POKER_CONVEX_SECRET ??
-    process.env.LIVE_POKER_WEBHOOK_SECRET;
+  const expected = process.env.LIVE_POKER_CONVEX_SECRET;
   if (!expected || secret !== expected) {
     throw new Error("Unauthorized live poker server operation");
   }
@@ -864,6 +1003,21 @@ export const serverGetLivePokerBuyInRequests = action({
       { tableId, userId }
     );
     return { pending, user };
+  },
+});
+
+export const serverReserveLivePokerAccess = action({
+  args: {
+    secret: v.string(),
+    tableId: v.id("livePokerTables"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, { secret, ...args }): Promise<void> => {
+    assertLivePokerServerSecret(secret);
+    await ctx.runMutation(
+      internal.live_poker.reserveLivePokerAccessInternal,
+      args
+    );
   },
 });
 

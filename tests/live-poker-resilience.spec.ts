@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  getJitteredLivePokerReconnectDelay,
   getLivePokerReconnectDelay,
   LIVE_POKER_MAX_RECONNECT_DELAY_MS,
 } from "../src/lib/live-poker/reconnect";
@@ -22,6 +23,8 @@ test.describe("live poker resilience helpers", () => {
     expect(getLivePokerReconnectDelay(20)).toBe(
       LIVE_POKER_MAX_RECONNECT_DELAY_MS
     );
+    expect(getJitteredLivePokerReconnectDelay(3, 0)).toBe(6000);
+    expect(getJitteredLivePokerReconnectDelay(3, 1)).toBe(8000);
   });
 
   test("parses valid table settings into finite numbers", () => {

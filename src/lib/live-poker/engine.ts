@@ -14,7 +14,7 @@ interface RankResult {
 }
 
 export function isEligibleForNextHand(seat: LivePokerSeat) {
-  return !seat.sitOut && seat.stack > 0;
+  return seat.connected && !seat.sitOut && seat.stack > 0;
 }
 
 export function getEligibleSeats(state: LivePokerState) {
@@ -203,6 +203,7 @@ export function createInitialState(config: {
     bigBlindSeatIndex: null,
     communityCardRevealStartIndex: null,
     communityCards: [],
+    consecutiveTimeoutActions: 0,
     currentBet: 0,
     dealerSeatIndex: null,
     deck: [],
@@ -344,7 +345,9 @@ function requireEligibleSeatsForHand(state: LivePokerState) {
   }
   const eligible = getEligibleSeats(state);
   if (eligible.length < 2) {
-    throw new Error("At least two active players with chips are required");
+    throw new Error(
+      "At least two connected, active players with chips are required"
+    );
   }
   return eligible;
 }
