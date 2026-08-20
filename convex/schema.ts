@@ -167,6 +167,7 @@ export default defineSchema({
     userId: v.id("users"),
     role: v.union(v.literal("OWNER"), v.literal("MEMBER")),
     joinedAt: v.number(),
+    canClaimPlayerHistory: v.optional(v.boolean()),
   })
     .index("by_groupId", ["groupId"])
     .index("by_userId", ["userId"])

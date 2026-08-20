@@ -65,14 +65,44 @@ async function requireMembership(
     .first();
 }
 
+async function getPlayerClaimEligibility(
+  ctx: QueryCtx | MutationCtx,
+  groupId: Id<"groups">,
+  userId: Id<"users">
+) {
+  const membership = await requireMembership(ctx, groupId, userId);
+  if (!membership?.canClaimPlayerHistory) {
+    return { membership, eligible: false };
+  }
+
+  const claims = await ctx.db
+    .query("playerClaimRequests")
+    .withIndex("by_groupId_claimantUserId", (q) =>
+      q.eq("groupId", groupId).eq("claimantUserId", userId)
+    )
+    .collect();
+  const hasActiveOrApprovedClaim = claims.some(
+    (claim) => claim.status === "PENDING" || claim.status === "APPROVED"
+  );
+
+  return { membership, eligible: !hasActiveOrApprovedClaim };
+}
+
 export const getClaimablePlayers = query({
   args: { groupId: v.id("groups"), userId: v.id("users") },
   handler: async (ctx, args) => {
-    if (!(await requireMembership(ctx, args.groupId, args.userId))) {
+    const { membership, eligible } = await getPlayerClaimEligibility(
+      ctx,
+      args.groupId,
+      args.userId
+    );
+    if (!(eligible && membership)) {
       return [];
     }
 
-    const games = await getGroupGames(ctx, args.groupId);
+    const games = (await getGroupGames(ctx, args.groupId)).filter(
+      (game) => game.date < membership.joinedAt
+    );
     const rows = (
       await Promise.all(
         games.map((game) =>
@@ -146,15 +176,28 @@ export const submitClaim = mutation({
     sourcePlayerId: v.id("players"),
   },
   handler: async (ctx, args) => {
-    if (!(await requireMembership(ctx, args.groupId, args.userId))) {
+    const { membership, eligible } = await getPlayerClaimEligibility(
+      ctx,
+      args.groupId,
+      args.userId
+    );
+    if (!membership) {
       throw new Error("Only group members can claim player history");
     }
+    if (!eligible) {
+      throw new Error(
+        "Past session claims are only available when first joining a group"
+      );
+    }
+
     const source = await ctx.db.get(args.sourcePlayerId);
     if (!source || source.userId) {
       throw new Error("This player history is no longer available");
     }
 
-    const games = await getGroupGames(ctx, args.groupId);
+    const games = (await getGroupGames(ctx, args.groupId)).filter(
+      (game) => game.date < membership.joinedAt
+    );
     const gameIds = new Set(games.map((game) => game._id));
     const summary = await getGroupHistorySummary(
       ctx,
@@ -224,11 +267,23 @@ export const getPendingClaims = query({
 
     return await Promise.all(
       claims.map(async (claim) => {
+        const membership = await requireMembership(
+          ctx,
+          args.groupId,
+          claim.claimantUserId
+        );
+        const claimGameIds = membership
+          ? new Set(
+              games
+                .filter((game) => game.date < membership.joinedAt)
+                .map((game) => game._id)
+            )
+          : gameIds;
         const [source, claimant, target, summary] = await Promise.all([
           ctx.db.get(claim.sourcePlayerId),
           ctx.db.get(claim.claimantUserId),
           ctx.db.get(claim.targetPlayerId),
-          getGroupHistorySummary(ctx, claim.sourcePlayerId, gameIds),
+          getGroupHistorySummary(ctx, claim.sourcePlayerId, claimGameIds),
         ]);
         return {
           ...claim,
@@ -263,9 +318,12 @@ async function mergePlayerHistory(
   ctx: MutationCtx,
   groupId: Id<"groups">,
   sourcePlayerId: Id<"players">,
-  targetPlayerId: Id<"players">
+  targetPlayerId: Id<"players">,
+  joinedAt: number
 ) {
-  const games = await getGroupGames(ctx, groupId);
+  const games = (await getGroupGames(ctx, groupId)).filter(
+    (game) => game.date < joinedAt
+  );
   const gameIds = new Set(games.map((game) => game._id));
 
   for (const game of games) {
@@ -390,12 +448,14 @@ export const respondToClaim = mutation({
       ctx,
       request.groupId,
       request.sourcePlayerId,
-      request.targetPlayerId
+      request.targetPlayerId,
+      membership.joinedAt
     );
     await ctx.db.patch(request._id, {
       status: "APPROVED",
       respondedAt: Date.now(),
       respondedById: args.userId,
     });
+    await ctx.db.patch(membership._id, { canClaimPlayerHistory: false });
   },
 });

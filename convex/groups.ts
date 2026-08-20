@@ -627,6 +627,14 @@ export const approveRequest = mutation({
       throw new Error("Not authorized to approve requests for this group");
     }
 
+    const priorApprovedRequests = await ctx.db
+      .query("joinRequests")
+      .withIndex("by_groupId_userId", (q) =>
+        q.eq("groupId", request.groupId).eq("userId", request.userId)
+      )
+      .filter((q) => q.eq(q.field("status"), "APPROVED"))
+      .collect();
+
     // Update request status
     await ctx.db.patch(args.requestId, {
       status: "APPROVED",
@@ -646,6 +654,7 @@ export const approveRequest = mutation({
         userId: request.userId,
         role: "MEMBER",
         joinedAt: Date.now(),
+        canClaimPlayerHistory: priorApprovedRequests.length === 0,
       });
     }
 
