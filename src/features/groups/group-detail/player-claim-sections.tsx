@@ -83,8 +83,9 @@ function ClaimHistoryDialog({
           <DialogTitle>Claim {candidate.name}&apos;s history?</DialogTitle>
           <DialogDescription>
             This requests to connect {candidate.gamesPlayed} past session
-            {candidate.gamesPlayed === 1 ? "" : "s"} to your account. The group
-            leader must approve it before your stats change.
+            {candidate.gamesPlayed === 1 ? "" : "s"} to your account. This is a
+            separate request that the group leader must approve before your
+            stats change.
           </DialogDescription>
         </DialogHeader>
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
@@ -125,8 +126,8 @@ export function ClaimPlayerHistorySection({
           <CardTitle>Claim Past Sessions</CardTitle>
         </div>
         <CardDescription>
-          Recognize a name from before you joined? Request to connect that
-          history to your account.
+          New to this group? Request to connect sessions from before you
+          joined. The group leader will review it separately.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
