@@ -36,12 +36,14 @@ interface EditGroupDialogProps {
   groupId: Id<"groups">;
   currentName: string;
   currentDescription?: string;
+  userId: Id<"users">;
 }
 
 export function EditGroupDialog({
   groupId,
   currentName,
   currentDescription,
+  userId,
 }: EditGroupDialogProps) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,7 @@ export function EditGroupDialog({
     try {
       await updateGroup({
         groupId,
+        userId,
         name: data.name.trim(),
         description: data.description?.trim() || undefined,
       });

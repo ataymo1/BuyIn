@@ -40,7 +40,7 @@ export function PendingTransactionsCard({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-amber-600" />
+            <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             <div>
               <CardTitle>Pending Transaction Requests</CardTitle>
               <CardDescription>
@@ -83,7 +83,7 @@ export function PendingTransactionsCard({
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
-                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:hover:bg-red-950"
+                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 dark:hover:text-red-300"
                     disabled={
                       isRejectingId === transaction._id ||
                       isApprovingId === transaction._id
@@ -104,7 +104,7 @@ export function PendingTransactionsCard({
                     )}
                   </Button>
                   <Button
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-green-600 text-white hover:bg-green-700 hover:text-white"
                     disabled={
                       isApprovingId === transaction._id ||
                       isRejectingId === transaction._id

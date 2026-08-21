@@ -7,6 +7,7 @@ import {
   Check,
   FileUp,
   MapPin,
+  Play,
   Plus,
   Settings,
   Trophy,
@@ -108,7 +109,9 @@ function StandingCard({ standing }: { standing: StandingWithRank }) {
       </div>
       <span
         className={`ml-3 shrink-0 font-bold text-lg ${
-          standing.totalProfit >= 0 ? "text-green-600" : "text-red-600"
+          standing.totalProfit >= 0
+            ? "text-green-600 dark:text-green-400"
+            : "text-red-600 dark:text-red-400"
         }`}
       >
         {standing.totalProfit >= 0 ? "+" : ""}${standing.totalProfit.toFixed(2)}
@@ -203,12 +206,12 @@ function SessionListCard({
 export function GroupHeader({
   description,
   groupId,
-  isOwner,
+  isMember,
   name,
 }: {
   description?: string | null;
   groupId: string;
-  isOwner: boolean;
+  isMember: boolean;
   name: string;
 }) {
   return (
@@ -219,22 +222,22 @@ export function GroupHeader({
           <p className="text-muted-foreground">{description}</p>
         ) : null}
       </div>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Link href={`/games/import?groupId=${groupId}`}>
-          <Button className="w-full sm:w-auto" variant="outline">
-            <FileUp className="mr-2 h-4 w-4" />
-            Import New Session
-          </Button>
-        </Link>
-        {isOwner ? (
+      {isMember ? (
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Link href={`/games/new?groupId=${groupId}`}>
             <Button className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              New Session
+              <Play className="mr-2 h-4 w-4" />
+              Start Session
             </Button>
           </Link>
-        ) : null}
-      </div>
+          <Link href={`/games/import?groupId=${groupId}`}>
+            <Button className="w-full sm:w-auto" variant="outline">
+              <FileUp className="mr-2 h-4 w-4" />
+              Import Session
+            </Button>
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -526,8 +529,8 @@ export function GroupStandingsSection({
                   <span
                     className={`font-bold ${
                       standing.totalProfit >= 0
-                        ? "text-green-600"
-                        : "text-red-600"
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
                     }`}
                   >
                     {standing.totalProfit >= 0 ? "+" : ""}$
@@ -667,11 +670,13 @@ export function GroupSettingsSection({
   currentName,
   groupId,
   groupName,
+  userId,
 }: {
   currentDescription?: string | null;
   currentName: string;
   groupId: Id<"groups">;
   groupName: string;
+  userId: Id<"users">;
 }) {
   return (
     <>
@@ -685,6 +690,7 @@ export function GroupSettingsSection({
             currentDescription={currentDescription ?? undefined}
             currentName={currentName}
             groupId={groupId}
+            userId={userId}
           />
         </CardHeader>
       </Card>
@@ -692,7 +698,11 @@ export function GroupSettingsSection({
       <Card className="border-destructive/50">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-destructive">Danger Zone</CardTitle>
-          <DeleteGroupDialog groupId={groupId} groupName={groupName} />
+          <DeleteGroupDialog
+            groupId={groupId}
+            groupName={groupName}
+            userId={userId}
+          />
         </CardHeader>
       </Card>
     </>

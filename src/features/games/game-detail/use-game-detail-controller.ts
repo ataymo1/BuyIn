@@ -212,6 +212,7 @@ export function useGameDetailController(gameId: string) {
       await joinGame({
         gameId: gameId as Id<"games">,
         playerId: player._id,
+        userId,
       });
 
       if (buyInValue > 0) {

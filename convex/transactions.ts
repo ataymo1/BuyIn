@@ -237,6 +237,23 @@ export const createTransaction = mutation({
     if (!game) {
       throw new Error("Game not found");
     }
+    if (game.status !== "ACTIVE") {
+      throw new Error("Transactions can only be added to active sessions");
+    }
+
+    const player = await ctx.db.get(args.playerId);
+    if (!player || player.userId !== args.createdById) {
+      throw new Error("You can only create transactions for your own player");
+    }
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId_userId", (q) =>
+        q.eq("groupId", game.groupId).eq("userId", args.createdById)
+      )
+      .first();
+    if (!membership) {
+      throw new Error("Only group members can add transactions");
+    }
 
     // Auto-join if not already in game
     let gamePlayer = await ctx.db
@@ -270,37 +287,21 @@ export const createTransaction = mutation({
       status,
     });
 
-    // Only update game player totals for approved transactions
     if (gamePlayer && status === "APPROVED") {
       if (args.type === "buyin") {
+        const buyIn = gamePlayer.buyIn + args.amount;
         await ctx.db.patch(gamePlayer._id, {
-          buyIn: gamePlayer.buyIn + args.amount,
+          buyIn,
+          profit:
+            gamePlayer.cashOut === undefined
+              ? undefined
+              : gamePlayer.cashOut - buyIn,
         });
-      } else if (args.type === "cashout") {
-        // Sum all approved cashout transactions for this player in this game
-        const allCashOutTxs = await ctx.db
-          .query("transactions")
-          .withIndex("by_gameId", (q) => q.eq("gameId", args.gameId))
-          .filter((q) =>
-            q.and(
-              q.eq(q.field("playerId"), args.playerId),
-              q.eq(q.field("type"), "cashout"),
-              q.or(
-                q.eq(q.field("status"), "APPROVED"),
-                q.eq(q.field("status"), undefined)
-              )
-            )
-          )
-          .collect();
-        // Include the new transaction amount (it's already inserted)
-        const totalCashOut = allCashOutTxs.reduce(
-          (sum, tx) => sum + tx.amount,
-          0
-        );
-        const profit = totalCashOut - gamePlayer.buyIn;
+      } else {
+        const cashOut = (gamePlayer.cashOut ?? 0) + args.amount;
         await ctx.db.patch(gamePlayer._id, {
-          cashOut: totalCashOut,
-          profit,
+          cashOut,
+          profit: cashOut - gamePlayer.buyIn,
         });
       }
     }

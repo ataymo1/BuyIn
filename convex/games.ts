@@ -38,6 +38,10 @@ export const getGames = query({
     ),
   },
   handler: async (ctx, args) => {
+    if (args.groupId && !args.groupIds.includes(args.groupId)) {
+      throw new Error("Group is not in the user's memberships");
+    }
+
     let games: Doc<"games">[] = await (async () => {
       if (args.groupId && args.status) {
         const { groupId, status } = args;
@@ -287,7 +291,7 @@ export const updateGame = mutation({
   },
 });
 
-// Delete game (owner only)
+// Delete game (owner or banker)
 export const deleteGame = mutation({
   args: { gameId: v.id("games"), userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -296,10 +300,12 @@ export const deleteGame = mutation({
       throw new Error("Game not found");
     }
 
-    const group = await ctx.db.get(game.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Only group owners can delete games");
-    }
+    await requireGameManager(
+      ctx,
+      game,
+      args.userId,
+      "Only the group owner or session banker can delete games"
+    );
 
     await deleteGameCascade(ctx, args.gameId);
   },
@@ -310,8 +316,31 @@ export const joinGame = mutation({
   args: {
     gameId: v.id("games"),
     playerId: v.id("players"),
+    userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const game = await ctx.db.get(args.gameId);
+    if (!game) {
+      throw new Error("Game not found");
+    }
+    if (game.status !== "ACTIVE") {
+      throw new Error("Only active sessions can be joined");
+    }
+
+    const player = await ctx.db.get(args.playerId);
+    if (!player || player.userId !== args.userId) {
+      throw new Error("You can only join a session as your own player");
+    }
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId_userId", (q) =>
+        q.eq("groupId", game.groupId).eq("userId", args.userId)
+      )
+      .first();
+    if (!membership) {
+      throw new Error("Only group members can join sessions");
+    }
+
     // Check if already joined
     const existing = await ctx.db
       .query("gamePlayers")
@@ -349,13 +378,37 @@ export const getGamePlayer = query({
 export const updateGamePlayer = mutation({
   args: {
     gamePlayerId: v.id("gamePlayers"),
+    userId: v.id("users"),
     buyIn: v.optional(v.number()),
     cashOut: v.optional(v.number()),
-    profit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { gamePlayerId, ...updates } = args;
-    await ctx.db.patch(gamePlayerId, updates);
-    return await ctx.db.get(gamePlayerId);
+    const gamePlayer = await ctx.db.get(args.gamePlayerId);
+    if (!gamePlayer) {
+      throw new Error("Game player not found");
+    }
+    const game = await ctx.db.get(gamePlayer.gameId);
+    if (!game) {
+      throw new Error("Game not found");
+    }
+    await requireGameManager(
+      ctx,
+      game,
+      args.userId,
+      "Only the group owner or session banker can edit player totals"
+    );
+
+    const buyIn = args.buyIn ?? gamePlayer.buyIn;
+    const cashOut = args.cashOut ?? gamePlayer.cashOut;
+    if (buyIn < 0 || (cashOut !== undefined && cashOut < 0)) {
+      throw new Error("Amounts must be non-negative");
+    }
+
+    await ctx.db.patch(args.gamePlayerId, {
+      buyIn,
+      cashOut,
+      profit: cashOut === undefined ? undefined : cashOut - buyIn,
+    });
+    return await ctx.db.get(args.gamePlayerId);
   },
 });

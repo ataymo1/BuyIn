@@ -184,10 +184,12 @@ export const getGroupStandings = query({
     seasonId: v.optional(v.id("seasons")),
   },
   handler: async (ctx, args) => {
-    const members = await ctx.db
-      .query("groupMembers")
-      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
-      .collect();
+    const members = args.seasonId
+      ? []
+      : await ctx.db
+          .query("groupMembers")
+          .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+          .collect();
 
     const selectedSeason = args.seasonId
       ? await ctx.db.get(args.seasonId)
@@ -227,8 +229,8 @@ export const getGroupStandings = query({
 
     const flatGamePlayers = allGamePlayers.flat();
 
-    // Seed standings with every member who has a player profile so people with no sessions
-    // still show up at $0.00 on the leaderboard.
+    // All-time standings include every current member. Seasonal standings are
+    // intentionally limited to players in that season's completed sessions.
     const playerStats: Record<
       string,
       {
@@ -264,7 +266,8 @@ export const getGroupStandings = query({
           gameIds: new Set(),
         };
       }
-      playerStats[key].totalProfit += gp.profit ?? 0;
+      playerStats[key].totalProfit +=
+        gp.profit ?? (gp.cashOut ?? 0) - gp.buyIn;
       playerStats[key].gameIds.add(gp.gameId);
     }
 
@@ -289,8 +292,16 @@ export const createGroup = mutation({
     ownerId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const name = args.name.trim();
+    if (!name) {
+      throw new Error("Group name is required");
+    }
+    if (name.length > 100) {
+      throw new Error("Group name must be less than 100 characters");
+    }
+
     const groupId = await ctx.db.insert("groups", {
-      name: args.name.trim(),
+      name,
       description: args.description?.trim(),
       ownerId: args.ownerId,
     });
@@ -321,20 +332,46 @@ export const createGroup = mutation({
 export const updateGroup = mutation({
   args: {
     groupId: v.id("groups"),
+    userId: v.id("users"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { groupId, ...updates } = args;
-    await ctx.db.patch(groupId, updates);
-    return await ctx.db.get(groupId);
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.ownerId !== args.userId) {
+      throw new Error("Only the group owner can update this group");
+    }
+
+    const name = args.name?.trim();
+    if (args.name !== undefined && !name) {
+      throw new Error("Group name is required");
+    }
+    if (name && name.length > 100) {
+      throw new Error("Group name must be less than 100 characters");
+    }
+
+    const updates: { name?: string; description?: string } = {};
+    if (name) {
+      updates.name = name;
+    }
+    if (args.description !== undefined) {
+      updates.description = args.description.trim() || undefined;
+    }
+
+    await ctx.db.patch(args.groupId, updates);
+    return await ctx.db.get(args.groupId);
   },
 });
 
 // Delete group
 export const deleteGroup = mutation({
-  args: { groupId: v.id("groups") },
+  args: { groupId: v.id("groups"), userId: v.id("users") },
   handler: async (ctx, args) => {
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.ownerId !== args.userId) {
+      throw new Error("Only the group owner can delete this group");
+    }
+
     // Delete all group members
     const members = await ctx.db
       .query("groupMembers")
@@ -393,10 +430,22 @@ export const deleteGroup = mutation({
 export const addMember = mutation({
   args: {
     groupId: v.id("groups"),
+    actorId: v.id("users"),
     userId: v.id("users"),
     role: v.optional(v.union(v.literal("OWNER"), v.literal("MEMBER"))),
   },
   handler: async (ctx, args) => {
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.ownerId !== args.actorId) {
+      throw new Error("Only the group owner can add members");
+    }
+    if (args.role === "OWNER") {
+      throw new Error("A group can only have one owner");
+    }
+    if (!(await ctx.db.get(args.userId))) {
+      throw new Error("User not found");
+    }
+
     // Check if already a member
     const existing = await ctx.db
       .query("groupMembers")
@@ -412,16 +461,29 @@ export const addMember = mutation({
     return await ctx.db.insert("groupMembers", {
       groupId: args.groupId,
       userId: args.userId,
-      role: args.role ?? "MEMBER",
+      role: "MEMBER",
       joinedAt: Date.now(),
+      canClaimPlayerHistory: false,
     });
   },
 });
 
 // Remove member from group
 export const removeMember = mutation({
-  args: { groupId: v.id("groups"), userId: v.id("users") },
+  args: {
+    groupId: v.id("groups"),
+    actorId: v.id("users"),
+    userId: v.id("users"),
+  },
   handler: async (ctx, args) => {
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.ownerId !== args.actorId) {
+      throw new Error("Only the group owner can remove members");
+    }
+    if (group.ownerId === args.userId) {
+      throw new Error("The group owner cannot be removed");
+    }
+
     const member = await ctx.db
       .query("groupMembers")
       .withIndex("by_groupId_userId", (q) =>
@@ -626,6 +688,9 @@ export const approveRequest = mutation({
     if (!group || group.ownerId !== args.userId) {
       throw new Error("Not authorized to approve requests for this group");
     }
+    if (request.status !== "PENDING") {
+      throw new Error("Request is not pending");
+    }
 
     const priorApprovedRequests = await ctx.db
       .query("joinRequests")
@@ -675,6 +740,9 @@ export const rejectRequest = mutation({
     const group = await ctx.db.get(request.groupId);
     if (!group || group.ownerId !== args.userId) {
       throw new Error("Not authorized to reject requests for this group");
+    }
+    if (request.status !== "PENDING") {
+      throw new Error("Request is not pending");
     }
 
     // Update request status

@@ -40,10 +40,10 @@ const recentGameSkeletons = [
 
 function getProfitColorClass(profit: number): string {
   if (profit > 0) {
-    return "text-green-600";
+    return "text-green-600 dark:text-green-400";
   }
   if (profit < 0) {
-    return "text-red-600";
+    return "text-red-600 dark:text-red-400";
   }
   return "text-muted-foreground";
 }

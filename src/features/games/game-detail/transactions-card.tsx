@@ -103,8 +103,8 @@ export function TransactionsCard({
                     <span
                       className={`font-bold ${
                         transaction.type === "buyin"
-                          ? "text-red-600"
-                          : "text-green-600"
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-green-600 dark:text-green-400"
                       }`}
                     >
                       {transaction.type === "buyin" ? "-" : "+"}$

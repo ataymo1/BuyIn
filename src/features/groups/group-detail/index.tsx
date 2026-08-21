@@ -48,6 +48,28 @@ function getSelectedSeasonId(
   return requested?._id ?? current?._id ?? seasons[0]?._id;
 }
 
+function shouldShowGroupDetailSkeleton({
+  groupLoading,
+  membershipLoading,
+  seasonDataLoading,
+  seasonsLoading,
+  userLoading,
+}: {
+  groupLoading: boolean;
+  membershipLoading: boolean;
+  seasonDataLoading: boolean;
+  seasonsLoading: boolean;
+  userLoading: boolean;
+}) {
+  return (
+    userLoading ||
+    membershipLoading ||
+    groupLoading ||
+    seasonsLoading ||
+    seasonDataLoading
+  );
+}
+
 function GroupManagementSections({
   children,
   currentDescription,
@@ -79,12 +101,13 @@ function GroupManagementSections({
 
       {children}
 
-      {isOwner ? (
+      {isOwner && userId ? (
         <GroupSettingsSection
           currentDescription={currentDescription}
           currentName={currentName}
           groupId={groupId}
           groupName={currentName}
+          userId={userId}
         />
       ) : null}
     </>
@@ -149,6 +172,7 @@ function useSeasonSetup(
   };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This page coordinates independent query, season, and membership states.
 export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -161,6 +185,10 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
 
   const isOwner = useQuery(
     api.groups.isGroupOwner,
+    userId ? { groupId: typedGroupId, userId } : "skip"
+  );
+  const isMember = useQuery(
+    api.groups.isGroupMember,
     userId ? { groupId: typedGroupId, userId } : "skip"
   );
   const seasons = useQuery(api.seasons.getGroupSeasons, {
@@ -196,11 +224,14 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
   const seasonDataLoading =
     selectedSeasonId !== undefined &&
     (standings === undefined || games === undefined);
-  const isLoading =
-    userLoading ||
-    group === undefined ||
-    (Boolean(group) && !seasonsReady && !seasonSetup.error) ||
-    seasonDataLoading;
+  const isLoading = shouldShowGroupDetailSkeleton({
+    groupLoading: group === undefined,
+    membershipLoading:
+      Boolean(userId) && (isMember === undefined || isOwner === undefined),
+    seasonDataLoading,
+    seasonsLoading: Boolean(group) && !seasonsReady && !seasonSetup.error,
+    userLoading: Boolean(userLoading),
+  });
 
   if (isLoading) {
     return <GroupDetailSkeleton />;
@@ -254,7 +285,7 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
       <GroupHeader
         description={group.description}
         groupId={groupId}
-        isOwner={Boolean(isOwner)}
+        isMember={Boolean(isMember)}
         name={group.name}
       />
 

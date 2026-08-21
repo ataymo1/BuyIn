@@ -108,6 +108,7 @@ export function SessionsClient() {
       await joinGame({
         gameId: pendingJoinGameId as Id<"games">,
         playerId: player._id,
+        userId,
       });
 
       if (buyInValue > 0) {
@@ -148,7 +149,7 @@ export function SessionsClient() {
         <SessionListSection
           games={sessionsToJoin}
           icon={LogIn}
-          iconClassName="text-green-600"
+          iconClassName="text-green-600 dark:text-green-400"
           isJoiningId={isJoining}
           mode="join"
           onJoinSession={handleJoinSession}
@@ -161,7 +162,7 @@ export function SessionsClient() {
         <SessionListSection
           games={userSessions}
           icon={History}
-          iconClassName="text-blue-600"
+          iconClassName="text-blue-600 dark:text-blue-400"
           mode="view"
           title="Your Sessions"
           userId={userId}

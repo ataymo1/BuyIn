@@ -20,7 +20,7 @@ export function ThemeToggle() {
   }, [isJoshuaDemo, theme, resolvedTheme, setTheme]);
 
   const handleThemeToggle = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
+    const newTheme = resolvedTheme === "dark" ? "light" : "dark";
     // Block dark mode for Joshua Demo
     if (isJoshuaDemo && newTheme === "dark") {
       return; // Prevent switching to dark mode
@@ -31,11 +31,11 @@ export function ThemeToggle() {
   return (
     <Button
       aria-label="Toggle theme"
-      disabled={isJoshuaDemo && theme !== "dark"}
+      disabled={isJoshuaDemo && resolvedTheme !== "dark"}
       onClick={handleThemeToggle}
       size="icon"
       title={
-        isJoshuaDemo && theme !== "dark"
+        isJoshuaDemo && resolvedTheme !== "dark"
           ? "Dark mode is not available for Joshua Demo"
           : "Toggle theme"
       }
