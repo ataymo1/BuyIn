@@ -22,11 +22,13 @@ import type { Id } from "../../../convex/_generated/dataModel";
 interface DeleteGroupDialogProps {
   groupId: Id<"groups">;
   groupName: string;
+  userId: Id<"users">;
 }
 
 export function DeleteGroupDialog({
   groupId,
   groupName,
+  userId,
 }: DeleteGroupDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -55,7 +57,7 @@ export function DeleteGroupDialog({
     setIsDeleting(true);
 
     try {
-      await deleteGroup({ groupId });
+      await deleteGroup({ groupId, userId });
       setOpen(false);
       router.push("/groups");
     } catch (err) {

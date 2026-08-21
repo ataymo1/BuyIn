@@ -670,11 +670,13 @@ export function GroupSettingsSection({
   currentName,
   groupId,
   groupName,
+  userId,
 }: {
   currentDescription?: string | null;
   currentName: string;
   groupId: Id<"groups">;
   groupName: string;
+  userId: Id<"users">;
 }) {
   return (
     <>
@@ -688,6 +690,7 @@ export function GroupSettingsSection({
             currentDescription={currentDescription ?? undefined}
             currentName={currentName}
             groupId={groupId}
+            userId={userId}
           />
         </CardHeader>
       </Card>
@@ -695,7 +698,11 @@ export function GroupSettingsSection({
       <Card className="border-destructive/50">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-destructive">Danger Zone</CardTitle>
-          <DeleteGroupDialog groupId={groupId} groupName={groupName} />
+          <DeleteGroupDialog
+            groupId={groupId}
+            groupName={groupName}
+            userId={userId}
+          />
         </CardHeader>
       </Card>
     </>
