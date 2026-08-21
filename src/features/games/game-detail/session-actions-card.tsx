@@ -99,7 +99,7 @@ export function SessionActionsCard({
               onClick={() => setActiveAction("buyin")}
               variant="outline"
             >
-              <Banknote className="h-8 w-8 text-green-600" />
+              <Banknote className="h-8 w-8 text-green-600 dark:text-green-400" />
               <span>Buy-in</span>
             </Button>
             <Button
@@ -107,7 +107,7 @@ export function SessionActionsCard({
               onClick={() => setActiveAction("cashout")}
               variant="outline"
             >
-              <HandCoins className="h-8 w-8 text-blue-600" />
+              <HandCoins className="h-8 w-8 text-blue-600 dark:text-blue-400" />
               <span>Cash Out</span>
             </Button>
           </div>

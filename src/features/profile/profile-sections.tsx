@@ -210,8 +210,8 @@ export function ProfileActionButtons({
 
 export function ProfileSaveBanner() {
   return (
-    <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
-      <p className="font-medium text-green-800 text-sm">
+    <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center dark:border-green-800 dark:bg-green-950/40">
+      <p className="font-medium text-green-800 text-sm dark:text-green-200">
         Profile updated successfully!
       </p>
     </div>

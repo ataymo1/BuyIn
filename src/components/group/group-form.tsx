@@ -140,7 +140,7 @@ export function GroupForm({
 
           <div className="flex flex-col gap-3 pt-2">
             <Button
-              className="h-12 w-full bg-gradient-to-r from-emerald-500 to-teal-600 font-semibold text-base shadow-emerald-500/25 shadow-lg transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-emerald-500/30 hover:shadow-xl"
+              className="h-12 w-full bg-gradient-to-r from-emerald-500 to-teal-600 font-semibold text-base text-white shadow-emerald-500/25 shadow-lg transition-all hover:from-emerald-600 hover:to-teal-700 hover:text-white hover:shadow-emerald-500/30 hover:shadow-xl"
               disabled={isLoading}
               size="lg"
               type="submit"

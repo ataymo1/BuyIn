@@ -78,7 +78,7 @@ function ActionsMenu({
       <div className="my-1 h-px bg-border" />
 
       <button
-        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-red-600 text-sm hover:bg-red-50 dark:hover:bg-red-900/20"
+        className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-red-600 text-sm hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
         onClick={onDeleteClick}
         type="button"
       >
@@ -195,11 +195,13 @@ export function SessionHeader({
               <>
                 {" | "}
                 <span className="inline-flex items-center gap-1">
-                  <PiggyBank className="h-3 w-3 text-amber-600" />
+                  <PiggyBank className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                   <span>
                     Banker: {createdByName}
                     {isSessionCreator ? (
-                      <span className="ml-1 text-amber-600">(You)</span>
+                      <span className="ml-1 text-amber-600 dark:text-amber-400">
+                        (You)
+                      </span>
                     ) : null}
                   </span>
                 </span>

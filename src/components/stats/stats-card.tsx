@@ -22,10 +22,10 @@ function getValueColorClass(
     return "";
   }
   if (numericValue > 0) {
-    return "text-green-600";
+    return "text-green-600 dark:text-green-400";
   }
   if (numericValue < 0) {
-    return "text-red-600";
+    return "text-red-600 dark:text-red-400";
   }
   return "";
 }
@@ -55,7 +55,9 @@ export function StatsCard({
         {trend && (
           <p
             className={`mt-1 text-xs ${
-              trend.isPositive ? "text-green-600" : "text-red-600"
+              trend.isPositive
+                ? "text-green-600 dark:text-green-400"
+                : "text-red-600 dark:text-red-400"
             }`}
           >
             {trend.value}

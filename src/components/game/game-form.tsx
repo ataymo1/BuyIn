@@ -155,7 +155,7 @@ export function GameForm({
 
           <div className="flex flex-col gap-3 pt-2">
             <Button
-              className="h-12 w-full bg-gradient-to-r from-violet-500 to-purple-600 font-semibold text-base shadow-lg shadow-violet-500/25 transition-all hover:from-violet-600 hover:to-purple-700 hover:shadow-violet-500/30 hover:shadow-xl"
+              className="h-12 w-full bg-gradient-to-r from-violet-500 to-purple-600 font-semibold text-base text-white shadow-lg shadow-violet-500/25 transition-all hover:from-violet-600 hover:to-purple-700 hover:text-white hover:shadow-violet-500/30 hover:shadow-xl"
               disabled={isLoading}
               size="lg"
               type="submit"

@@ -72,11 +72,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const getTypeStyles = (type: NotificationType) => {
     switch (type) {
       case "success":
-        return "text-green-600";
+        return "text-green-600 dark:text-green-400";
       case "error":
-        return "text-red-600";
+        return "text-red-600 dark:text-red-400";
       case "warning":
-        return "text-amber-600";
+        return "text-amber-600 dark:text-amber-400";
       default:
         return "";
     }

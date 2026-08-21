@@ -109,7 +109,9 @@ function StandingCard({ standing }: { standing: StandingWithRank }) {
       </div>
       <span
         className={`ml-3 shrink-0 font-bold text-lg ${
-          standing.totalProfit >= 0 ? "text-green-600" : "text-red-600"
+          standing.totalProfit >= 0
+            ? "text-green-600 dark:text-green-400"
+            : "text-red-600 dark:text-red-400"
         }`}
       >
         {standing.totalProfit >= 0 ? "+" : ""}${standing.totalProfit.toFixed(2)}
@@ -527,8 +529,8 @@ export function GroupStandingsSection({
                   <span
                     className={`font-bold ${
                       standing.totalProfit >= 0
-                        ? "text-green-600"
-                        : "text-red-600"
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
                     }`}
                   >
                     {standing.totalProfit >= 0 ? "+" : ""}$

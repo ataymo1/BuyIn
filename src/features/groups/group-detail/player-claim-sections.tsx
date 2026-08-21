@@ -33,7 +33,13 @@ interface ClaimCandidate {
 
 function Profit({ value }: { value: number }) {
   return (
-    <span className={value >= 0 ? "text-green-600" : "text-red-600"}>
+    <span
+      className={
+        value >= 0
+          ? "text-green-600 dark:text-green-400"
+          : "text-red-600 dark:text-red-400"
+      }
+    >
       {value >= 0 ? "+" : ""}${value.toFixed(2)}
     </span>
   );

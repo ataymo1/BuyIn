@@ -136,7 +136,7 @@ export function PlayersCard({
               {gamePlayers.length}{" "}
               {gamePlayers.length === 1 ? "player" : "players"} in this session
               {createdByName ? (
-                <span className="ml-2 inline-flex items-center gap-1 text-amber-600">
+                <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <PiggyBank className="h-3 w-3" />
                   {createdByName}
                 </span>
@@ -200,7 +200,11 @@ export function PlayersCard({
 
                   return (
                     <span
-                      className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}
+                      className={`font-medium ${
+                        profit >= 0
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
                     >
                       {profit >= 0 ? "+" : ""}${profit.toFixed(2)}
                     </span>
@@ -277,7 +281,11 @@ export function PlayersCard({
                     <div>
                       <p className="text-muted-foreground">Profit</p>
                       <p
-                        className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}
+                        className={`font-medium ${
+                          profit >= 0
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
                       >
                         {profit >= 0 ? "+" : ""}${profit.toFixed(2)}
                       </p>

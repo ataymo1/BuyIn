@@ -151,7 +151,9 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
                   {stats.gamesPlayed} games played •{" "}
                   <span
                     className={
-                      stats.netProfit >= 0 ? "text-green-600" : "text-red-600"
+                      stats.netProfit >= 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
                     }
                   >
                     {stats.netProfit >= 0 ? "+" : ""}$
@@ -165,13 +167,15 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
                 <div className="flex flex-wrap gap-3">
                   {stats.venmo && (
                     <div className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm shadow-sm ring-1 ring-border">
-                      <span className="font-semibold text-blue-600">Venmo</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        Venmo
+                      </span>
                       <span className="font-medium">{stats.venmo}</span>
                     </div>
                   )}
                   {stats.zelle && (
                     <div className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm shadow-sm ring-1 ring-border">
-                      <span className="font-semibold text-purple-600">
+                      <span className="font-semibold text-purple-600 dark:text-purple-400">
                         Zelle
                       </span>
                       <span className="font-medium">{stats.zelle}</span>
@@ -265,8 +269,8 @@ export function PlayerStatsClient({ userId }: PlayerStatsClientProps) {
                           <span
                             className={`ml-2 ${
                               game.profit >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
+                                ? "text-green-600 dark:text-green-400"
+                                : "text-red-600 dark:text-red-400"
                             }`}
                           >
                             {game.profit >= 0 ? "+" : ""}$
