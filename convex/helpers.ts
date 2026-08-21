@@ -43,12 +43,21 @@ export async function canUserManageGame(
   game: Doc<"games">,
   userId: Id<"users">
 ) {
-  if (game.createdById === userId) {
+  const group = await ctx.db.get(game.groupId);
+  if (group?.ownerId === userId) {
     return true;
   }
+  if (game.createdById !== userId) {
+    return false;
+  }
 
-  const group = await ctx.db.get(game.groupId);
-  return group?.ownerId === userId;
+  const membership = await ctx.db
+    .query("groupMembers")
+    .withIndex("by_groupId_userId", (q) =>
+      q.eq("groupId", game.groupId).eq("userId", userId)
+    )
+    .first();
+  return membership !== null;
 }
 
 export async function requireGameManager(
@@ -57,16 +66,12 @@ export async function requireGameManager(
   userId: Id<"users">,
   message: string
 ) {
-  if (game.createdById === userId) {
-    return;
-  }
-
   const group = await ctx.db.get(game.groupId);
   if (!group) {
     throw new Error("Group not found");
   }
 
-  if (group.ownerId !== userId) {
+  if (!(await canUserManageGame(ctx, game, userId))) {
     throw new Error(message);
   }
 }

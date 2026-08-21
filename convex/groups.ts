@@ -266,7 +266,8 @@ export const getGroupStandings = query({
           gameIds: new Set(),
         };
       }
-      playerStats[key].totalProfit += gp.profit ?? 0;
+      playerStats[key].totalProfit +=
+        gp.profit ?? (gp.cashOut ?? 0) - gp.buyIn;
       playerStats[key].gameIds.add(gp.gameId);
     }
 
@@ -462,7 +463,7 @@ export const addMember = mutation({
       userId: args.userId,
       role: "MEMBER",
       joinedAt: Date.now(),
-      canClaimPlayerHistory: true,
+      canClaimPlayerHistory: false,
     });
   },
 });

@@ -122,7 +122,8 @@ export const getOverallLeaderboard = query({
           totalBuyIn: 0,
         };
       }
-      playerStats[key].totalProfit += gp.profit ?? 0;
+      playerStats[key].totalProfit +=
+        gp.profit ?? (gp.cashOut ?? 0) - gp.buyIn;
       playerStats[key].gamesPlayed += 1;
       playerStats[key].totalBuyIn += gp.buyIn;
     }

@@ -288,7 +288,22 @@ export const createTransaction = mutation({
     });
 
     if (gamePlayer && status === "APPROVED") {
-      await recalculatePlayerTotals(ctx, args.gameId, args.playerId);
+      if (args.type === "buyin") {
+        const buyIn = gamePlayer.buyIn + args.amount;
+        await ctx.db.patch(gamePlayer._id, {
+          buyIn,
+          profit:
+            gamePlayer.cashOut === undefined
+              ? undefined
+              : gamePlayer.cashOut - buyIn,
+        });
+      } else {
+        const cashOut = (gamePlayer.cashOut ?? 0) + args.amount;
+        await ctx.db.patch(gamePlayer._id, {
+          cashOut,
+          profit: cashOut - gamePlayer.buyIn,
+        });
+      }
     }
 
     return { txId, status };
