@@ -69,7 +69,7 @@ LIVE_POKER_SETTLEMENT_URL=https://<vercel-domain>/api/live-poker/settle-player
 LIVE_POKER_TURN_TIMEOUT_SECONDS=20
 ```
 
-Multiple allowed origins are comma-separated. Do not include a trailing slash. Deploy:
+Multiple allowed origins are comma-separated. Do not include a trailing slash. The guarded deployment retains dashboard-managed runtime variables; do not remove its `--keep-vars` protection. Deploy:
 
 ```bash
 pnpm deploy:worker
