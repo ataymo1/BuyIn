@@ -108,6 +108,7 @@ export function SessionsClient() {
       await joinGame({
         gameId: pendingJoinGameId as Id<"games">,
         playerId: player._id,
+        userId,
       });
 
       if (buyInValue > 0) {

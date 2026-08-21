@@ -237,6 +237,23 @@ export const createTransaction = mutation({
     if (!game) {
       throw new Error("Game not found");
     }
+    if (game.status !== "ACTIVE") {
+      throw new Error("Transactions can only be added to active sessions");
+    }
+
+    const player = await ctx.db.get(args.playerId);
+    if (!player || player.userId !== args.createdById) {
+      throw new Error("You can only create transactions for your own player");
+    }
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId_userId", (q) =>
+        q.eq("groupId", game.groupId).eq("userId", args.createdById)
+      )
+      .first();
+    if (!membership) {
+      throw new Error("Only group members can add transactions");
+    }
 
     // Auto-join if not already in game
     let gamePlayer = await ctx.db
