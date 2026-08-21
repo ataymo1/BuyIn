@@ -7,6 +7,7 @@ import {
   Check,
   FileUp,
   MapPin,
+  Play,
   Plus,
   Settings,
   Trophy,
@@ -203,12 +204,12 @@ function SessionListCard({
 export function GroupHeader({
   description,
   groupId,
-  isOwner,
+  isMember,
   name,
 }: {
   description?: string | null;
   groupId: string;
-  isOwner: boolean;
+  isMember: boolean;
   name: string;
 }) {
   return (
@@ -219,22 +220,22 @@ export function GroupHeader({
           <p className="text-muted-foreground">{description}</p>
         ) : null}
       </div>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Link href={`/games/import?groupId=${groupId}`}>
-          <Button className="w-full sm:w-auto" variant="outline">
-            <FileUp className="mr-2 h-4 w-4" />
-            Import New Session
-          </Button>
-        </Link>
-        {isOwner ? (
+      {isMember ? (
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Link href={`/games/new?groupId=${groupId}`}>
             <Button className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              New Session
+              <Play className="mr-2 h-4 w-4" />
+              Start Session
             </Button>
           </Link>
-        ) : null}
-      </div>
+          <Link href={`/games/import?groupId=${groupId}`}>
+            <Button className="w-full sm:w-auto" variant="outline">
+              <FileUp className="mr-2 h-4 w-4" />
+              Import Session
+            </Button>
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

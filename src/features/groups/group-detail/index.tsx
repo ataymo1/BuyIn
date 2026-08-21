@@ -163,6 +163,10 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
     api.groups.isGroupOwner,
     userId ? { groupId: typedGroupId, userId } : "skip"
   );
+  const isMember = useQuery(
+    api.groups.isGroupMember,
+    userId ? { groupId: typedGroupId, userId } : "skip"
+  );
   const seasons = useQuery(api.seasons.getGroupSeasons, {
     groupId: typedGroupId,
   });
@@ -196,8 +200,11 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
   const seasonDataLoading =
     selectedSeasonId !== undefined &&
     (standings === undefined || games === undefined);
+  const membershipLoading =
+    Boolean(userId) && (isMember === undefined || isOwner === undefined);
   const isLoading =
     userLoading ||
+    membershipLoading ||
     group === undefined ||
     (Boolean(group) && !seasonsReady && !seasonSetup.error) ||
     seasonDataLoading;
@@ -254,7 +261,7 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
       <GroupHeader
         description={group.description}
         groupId={groupId}
-        isOwner={Boolean(isOwner)}
+        isMember={Boolean(isMember)}
         name={group.name}
       />
 
