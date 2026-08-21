@@ -57,22 +57,24 @@ export const getPlayerWithStats = query({
       .withIndex("by_playerId", (q) => q.eq("playerId", args.playerId))
       .collect();
 
-    // Filter by group if specified
-    let filteredGamePlayers = gamePlayers;
-    if (args.groupIds && args.groupIds.length > 0) {
-      const gamesInGroups = await Promise.all(
-        args.groupIds.map((gId) =>
-          ctx.db
-            .query("games")
-            .withIndex("by_groupId", (q) => q.eq("groupId", gId))
-            .collect()
-        )
+    const games = await Promise.all(
+      gamePlayers.map((gamePlayer) => ctx.db.get(gamePlayer.gameId))
+    );
+    const gameById = new Map(
+      games
+        .filter((game) => game !== null)
+        .map((game) => [game._id, game])
+    );
+    const allowedGroupIds = args.groupIds?.length
+      ? new Set(args.groupIds)
+      : null;
+    const filteredGamePlayers = gamePlayers.filter((gamePlayer) => {
+      const game = gameById.get(gamePlayer.gameId);
+      return (
+        game?.status === "COMPLETED" &&
+        (!allowedGroupIds || allowedGroupIds.has(game.groupId))
       );
-      const gameIdsInGroups = new Set(gamesInGroups.flat().map((g) => g._id));
-      filteredGamePlayers = gamePlayers.filter((gp) =>
-        gameIdsInGroups.has(gp.gameId)
-      );
-    }
+    });
 
     const gamesPlayed = filteredGamePlayers.length;
     const totalBuyIn = filteredGamePlayers.reduce(

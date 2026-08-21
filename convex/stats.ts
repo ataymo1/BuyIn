@@ -30,7 +30,12 @@ export const getUserStats = query({
           .collect()
       )
     );
-    const gameIds = new Set(gamesInGroups.flat().map((g) => g._id));
+    const gameIds = new Set(
+      gamesInGroups
+        .flat()
+        .filter((game) => game.status === "COMPLETED")
+        .map((game) => game._id)
+    );
 
     // Get all game players for this player
     const gamePlayers = await ctx.db
@@ -80,7 +85,9 @@ export const getOverallLeaderboard = query({
           .collect()
       )
     );
-    const games = gamesInGroups.flat();
+    const games = gamesInGroups
+      .flat()
+      .filter((game) => game.status === "COMPLETED");
     const gameIds = games.map((g) => g._id);
 
     // Get all game players
