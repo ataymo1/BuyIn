@@ -184,10 +184,12 @@ export const getGroupStandings = query({
     seasonId: v.optional(v.id("seasons")),
   },
   handler: async (ctx, args) => {
-    const members = await ctx.db
-      .query("groupMembers")
-      .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
-      .collect();
+    const members = args.seasonId
+      ? []
+      : await ctx.db
+          .query("groupMembers")
+          .withIndex("by_groupId", (q) => q.eq("groupId", args.groupId))
+          .collect();
 
     const selectedSeason = args.seasonId
       ? await ctx.db.get(args.seasonId)
@@ -227,8 +229,8 @@ export const getGroupStandings = query({
 
     const flatGamePlayers = allGamePlayers.flat();
 
-    // Seed standings with every member who has a player profile so people with no sessions
-    // still show up at $0.00 on the leaderboard.
+    // All-time standings include every current member. Seasonal standings are
+    // intentionally limited to players in that season's completed sessions.
     const playerStats: Record<
       string,
       {
