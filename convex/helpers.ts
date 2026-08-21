@@ -72,6 +72,21 @@ export async function requireGameManager(
 }
 
 export async function deleteGameCascade(ctx: MutationCtx, gameId: Id<"games">) {
+  const game = await ctx.db.get(gameId);
+  if (!game) {
+    return;
+  }
+
+  const importRequests = await ctx.db
+    .query("pokerNowImportRequests")
+    .withIndex("by_groupId", (q) => q.eq("groupId", game.groupId))
+    .collect();
+  for (const request of importRequests) {
+    if (request.gameId === gameId) {
+      await ctx.db.patch(request._id, { gameId: undefined });
+    }
+  }
+
   const pokerNowPlayers = await ctx.db
     .query("pokerNowSessionPlayers")
     .withIndex("by_gameId", (q) => q.eq("gameId", gameId))

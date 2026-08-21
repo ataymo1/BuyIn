@@ -287,7 +287,7 @@ export const updateGame = mutation({
   },
 });
 
-// Delete game (owner only)
+// Delete game (owner or banker)
 export const deleteGame = mutation({
   args: { gameId: v.id("games"), userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -296,10 +296,12 @@ export const deleteGame = mutation({
       throw new Error("Game not found");
     }
 
-    const group = await ctx.db.get(game.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Only group owners can delete games");
-    }
+    await requireGameManager(
+      ctx,
+      game,
+      args.userId,
+      "Only the group owner or session banker can delete games"
+    );
 
     await deleteGameCascade(ctx, args.gameId);
   },

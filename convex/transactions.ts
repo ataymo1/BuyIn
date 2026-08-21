@@ -270,39 +270,8 @@ export const createTransaction = mutation({
       status,
     });
 
-    // Only update game player totals for approved transactions
     if (gamePlayer && status === "APPROVED") {
-      if (args.type === "buyin") {
-        await ctx.db.patch(gamePlayer._id, {
-          buyIn: gamePlayer.buyIn + args.amount,
-        });
-      } else if (args.type === "cashout") {
-        // Sum all approved cashout transactions for this player in this game
-        const allCashOutTxs = await ctx.db
-          .query("transactions")
-          .withIndex("by_gameId", (q) => q.eq("gameId", args.gameId))
-          .filter((q) =>
-            q.and(
-              q.eq(q.field("playerId"), args.playerId),
-              q.eq(q.field("type"), "cashout"),
-              q.or(
-                q.eq(q.field("status"), "APPROVED"),
-                q.eq(q.field("status"), undefined)
-              )
-            )
-          )
-          .collect();
-        // Include the new transaction amount (it's already inserted)
-        const totalCashOut = allCashOutTxs.reduce(
-          (sum, tx) => sum + tx.amount,
-          0
-        );
-        const profit = totalCashOut - gamePlayer.buyIn;
-        await ctx.db.patch(gamePlayer._id, {
-          cashOut: totalCashOut,
-          profit,
-        });
-      }
+      await recalculatePlayerTotals(ctx, args.gameId, args.playerId);
     }
 
     return { txId, status };
