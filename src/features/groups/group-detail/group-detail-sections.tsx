@@ -576,7 +576,7 @@ export function PendingImportRequestsSection({
       <CardHeader>
         <CardTitle>Pending Session Imports</CardTitle>
         <CardDescription>
-          Review PokerNow sessions submitted by group members.
+          Review PokerNow ledger imports submitted by group members.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -590,8 +590,10 @@ export function PendingImportRequestsSection({
                 {request.requesterName} · {request.players.length} players
               </p>
               <p className="text-muted-foreground text-sm">
-                {format(new Date(request.date), "MMM dd, yyyy")} ·{" "}
-                {request.handCount} hands
+                {format(new Date(request.date), "MMM dd, yyyy")}
+                {request.handCount > 0
+                  ? ` · ${request.handCount} hands`
+                  : " · Ledger totals"}
               </p>
             </div>
             <div className="flex gap-2">
