@@ -29,7 +29,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useConvexUser } from "@/lib/convex-hooks";
-import { type PokerNowSession, parsePokerNowLog } from "@/lib/poker-now/parser";
+import { parseLegacyPokerNowLog } from "@/lib/poker-now/legacy-log-parser";
+import {
+  type PokerNowSession,
+  parsePokerNowLedger,
+} from "@/lib/poker-now/parser";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
@@ -124,13 +128,23 @@ export function PokerNowUsernameAssignments({
     setOpen(true);
   }
 
-  async function readRecoveryLog(file?: File) {
+  async function readRecoveryLedger(file?: File) {
     if (!(file && candidates)) {
       return;
     }
 
     try {
-      const session = parsePokerNowLog(await file.text(), file.name);
+      const text = await file.text();
+      let session: PokerNowSession;
+      try {
+        session = parsePokerNowLedger(text, file.name);
+      } catch (ledgerError) {
+        try {
+          session = parseLegacyPokerNowLog(text, file.name);
+        } catch {
+          throw ledgerError;
+        }
+      }
       const nextAssignments: Record<string, string> = {};
       for (const player of session.players) {
         const alias = candidates.aliases.find(
@@ -248,14 +262,18 @@ export function PokerNowUsernameAssignments({
               <p className="text-muted-foreground text-sm">
                 This session predates editable assignments. Upload its original
                 PokerNow CSV to restore the usernames, then assign them to group
-                members.
+                members. Older imports can use the original game log.
               </p>
               <div className="max-w-sm space-y-2">
-                <Label htmlFor="restore-poker-now-log">Original CSV log</Label>
+                <Label htmlFor="restore-poker-now-ledger">
+                  Original PokerNow CSV
+                </Label>
                 <Input
                   accept=".csv,text/csv"
-                  id="restore-poker-now-log"
-                  onChange={(event) => readRecoveryLog(event.target.files?.[0])}
+                  id="restore-poker-now-ledger"
+                  onChange={(event) =>
+                    readRecoveryLedger(event.target.files?.[0])
+                  }
                   type="file"
                 />
               </div>

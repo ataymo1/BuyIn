@@ -12,6 +12,7 @@
     "format": "biome format --write",
     "type-check": "tsgo --project tsconfig.json --noEmit --diagnostics",
     "test": "playwright test",
+    "test:unit": "node --experimental-strip-types --test src/lib/poker-now/parser.test.mjs",
     "test:ui": "playwright test --ui"
   },
   "dependencies": {

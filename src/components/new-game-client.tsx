@@ -165,7 +165,7 @@ export function NewGameClient() {
           <div>
             <p className="font-medium">Already played on PokerNow?</p>
             <p className="text-muted-foreground text-sm">
-              Import a downloaded log as a completed session.
+              Import a downloaded ledger as a completed session.
             </p>
           </div>
           <Link

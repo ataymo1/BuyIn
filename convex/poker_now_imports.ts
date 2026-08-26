@@ -34,10 +34,18 @@ interface ImportData {
   players: ImportedPlayer[];
 }
 
+const MAX_IMPORT_PLAYERS = 100;
+const MAX_SOURCE_ID_LENGTH = 200;
+const DOWNLOAD_COPY_SUFFIX = / \(\d+\)$/;
+
+const normalizeSourceId = (sourceId: string) =>
+  sourceId.trim().replace(DOWNLOAD_COPY_SUFFIX, "");
+
 async function findDuplicate(
   ctx: MutationCtx,
   groupId: Id<"groups">,
-  sourceId: string
+  sourceId: string,
+  excludedRequestId?: Id<"pokerNowImportRequests">
 ) {
   const game = await ctx.db
     .query("games")
@@ -45,23 +53,30 @@ async function findDuplicate(
       q.eq("groupId", groupId).eq("importSourceId", sourceId)
     )
     .first();
-  const request = await ctx.db
+  if (game) {
+    return game;
+  }
+
+  const requests = await ctx.db
     .query("pokerNowImportRequests")
     .withIndex("by_groupId_sourceId", (q) =>
       q.eq("groupId", groupId).eq("sourceId", sourceId)
     )
     .filter((q) => q.eq(q.field("status"), "PENDING"))
-    .first();
-  return game ?? request;
+    .collect();
+  return requests.find((request) => request._id !== excludedRequestId);
 }
 
 function validateImportedPlayer(imported: ImportedPlayer) {
   const displayName = imported.displayName.trim();
+  const sourcePlayerId = imported.sourcePlayerId.trim();
   if (!(displayName && displayName.length <= 80)) {
     throw new Error("Player names must be between 1 and 80 characters");
   }
-  if (!imported.sourcePlayerId.trim()) {
-    throw new Error("Imported players need a source ID");
+  if (!(sourcePlayerId && sourcePlayerId.length <= MAX_SOURCE_ID_LENGTH)) {
+    throw new Error(
+      "Imported player source IDs must be between 1 and 200 characters"
+    );
   }
   if (
     !(
@@ -76,13 +91,95 @@ function validateImportedPlayer(imported: ImportedPlayer) {
   return displayName;
 }
 
-async function persistSession(ctx: MutationCtx, args: ImportData) {
-  const sourcePlayerIds = args.players.map((player) =>
-    player.sourcePlayerId.trim()
-  );
+function validateImportData(args: Omit<ImportData, "seasonId">) {
+  if (!(args.sourceId && args.sourceId.length <= MAX_SOURCE_ID_LENGTH)) {
+    throw new Error("The PokerNow ledger needs a valid source ID");
+  }
+  if (!(Number.isFinite(args.date) && args.date > 0)) {
+    throw new Error("The PokerNow ledger needs a valid session date");
+  }
+  if (
+    !(
+      Number.isSafeInteger(args.handCount) &&
+      args.handCount >= 0 &&
+      args.handCount <= 1_000_000
+    )
+  ) {
+    throw new Error("The PokerNow hand count must be a non-negative integer");
+  }
+  const hasSmallBlind = args.smallBlind !== undefined;
+  const hasBigBlind = args.bigBlind !== undefined;
+  if (hasSmallBlind !== hasBigBlind) {
+    throw new Error("PokerNow blinds must include both small and big blinds");
+  }
+  if (
+    (args.smallBlind !== undefined &&
+      !(Number.isFinite(args.smallBlind) && args.smallBlind > 0)) ||
+    (args.bigBlind !== undefined &&
+      !(Number.isFinite(args.bigBlind) && args.bigBlind > 0))
+  ) {
+    throw new Error("PokerNow blinds must be positive numbers");
+  }
+  if (
+    !(args.players.length >= 2 && args.players.length <= MAX_IMPORT_PLAYERS)
+  ) {
+    throw new Error(
+      `PokerNow imports must include 2-${MAX_IMPORT_PLAYERS} players`
+    );
+  }
+
+  const sourcePlayerIds = args.players.map((player) => {
+    validateImportedPlayer(player);
+    return player.sourcePlayerId.trim();
+  });
   if (new Set(sourcePlayerIds).size !== sourcePlayerIds.length) {
     throw new Error("PokerNow usernames must have unique source IDs");
   }
+}
+
+async function requireEligibleImportPlayers(
+  ctx: MutationCtx,
+  groupId: Id<"groups">,
+  players: ImportedPlayer[]
+) {
+  const playerIds = new Set(
+    players.flatMap((player) => (player.playerId ? [player.playerId] : []))
+  );
+  for (const playerId of playerIds) {
+    const player = await ctx.db.get(playerId);
+    if (!player) {
+      throw new Error("A selected player no longer exists");
+    }
+    const playerUserId = player.userId;
+    if (playerUserId) {
+      const membership = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_groupId_userId", (q) =>
+          q.eq("groupId", groupId).eq("userId", playerUserId)
+        )
+        .first();
+      if (!membership) {
+        throw new Error("A selected player is no longer a group member");
+      }
+      continue;
+    }
+
+    const historicalRows = await ctx.db
+      .query("gamePlayers")
+      .withIndex("by_playerId", (q) => q.eq("playerId", playerId))
+      .collect();
+    const historicalGames = await Promise.all(
+      historicalRows.map((row) => ctx.db.get(row.gameId))
+    );
+    if (!historicalGames.some((game) => game?.groupId === groupId)) {
+      throw new Error("An unclaimed player does not belong to this group");
+    }
+  }
+}
+
+async function persistSession(ctx: MutationCtx, args: ImportData) {
+  validateImportData(args);
+  await requireEligibleImportPlayers(ctx, args.groupId, args.players);
 
   const totalsByPlayer = new Map<
     Id<"players">,
@@ -100,9 +197,6 @@ async function persistSession(ctx: MutationCtx, args: ImportData) {
     const displayName = validateImportedPlayer(imported);
     const sourcePlayerId = imported.sourcePlayerId.trim();
     let playerId = imported.playerId;
-    if (playerId && !(await ctx.db.get(playerId))) {
-      throw new Error("A selected player no longer exists");
-    }
     playerId ??= await ctx.db.insert("players", {
       name: displayName,
     });
@@ -148,8 +242,10 @@ async function persistSession(ctx: MutationCtx, args: ImportData) {
   const gameId = await ctx.db.insert("games", {
     date: args.date,
     location: "PokerNow",
-    notes: `Imported from PokerNow · ${args.handCount} hands${
-      args.smallBlind && args.bigBlind
+    notes: `Imported from PokerNow${
+      args.handCount > 0 ? ` · ${args.handCount} hands` : ""
+    }${
+      args.smallBlind !== undefined && args.bigBlind !== undefined
         ? ` · ${args.smallBlind}/${args.bigBlind} blinds`
         : ""
     }`,
@@ -571,7 +667,7 @@ export const updateSessionMappings = mutation({
       .collect();
     if (sessionPlayers.length === 0) {
       throw new Error(
-        "Username details are unavailable for this older import. Re-import the PokerNow log to create an editable session."
+        "Username details are unavailable for this older import. Re-import the PokerNow ledger to create an editable session."
       );
     }
 
@@ -669,9 +765,11 @@ export const restoreSessionMappings = mutation({
     }
     if (
       game.importSource !== "POKER_NOW" ||
-      game.importSourceId !== args.sourceId
+      !game.importSourceId ||
+      normalizeSourceId(game.importSourceId) !==
+        normalizeSourceId(args.sourceId)
     ) {
-      throw new Error("Upload the original PokerNow log for this session");
+      throw new Error("Upload the original PokerNow ledger for this session");
     }
     await requireGameManager(
       ctx,
@@ -922,6 +1020,10 @@ export const createSession = mutation({
     players: v.array(importedPlayer),
   },
   handler: async (ctx, args) => {
+    const sourceId = args.sourceId.trim();
+    const importData = { ...args, sourceId };
+    validateImportData(importData);
+
     const membership = await ctx.db
       .query("groupMembers")
       .withIndex("by_groupId_userId", (q) =>
@@ -931,9 +1033,9 @@ export const createSession = mutation({
     if (!membership) {
       throw new Error("Only group members can import sessions");
     }
-    if (await findDuplicate(ctx, args.groupId, args.sourceId)) {
+    if (await findDuplicate(ctx, args.groupId, sourceId)) {
       throw new Error(
-        "This PokerNow log has already been imported or is awaiting approval"
+        "This PokerNow ledger has already been imported or is awaiting approval"
       );
     }
     const group = await ctx.db.get(args.groupId);
@@ -943,16 +1045,17 @@ export const createSession = mutation({
     const season = await ensureCurrentSeason(ctx, group);
     if (group.ownerId === args.createdById) {
       const gameId = await persistSession(ctx, {
-        ...args,
+        ...importData,
         seasonId: season._id,
       });
       return { status: "APPROVED" as const, gameId };
     }
+    await requireEligibleImportPlayers(ctx, args.groupId, args.players);
     const requestId = await ctx.db.insert("pokerNowImportRequests", {
       groupId: args.groupId,
       seasonId: season._id,
       requestedById: args.createdById,
-      sourceId: args.sourceId,
+      sourceId,
       date: args.date,
       smallBlind: args.smallBlind,
       bigBlind: args.bigBlind,
@@ -988,18 +1091,32 @@ export const respondToRequest = mutation({
       });
       return null;
     }
-    if (await findDuplicate(ctx, request.groupId, request.sourceId)) {
-      const existingGame = await ctx.db
-        .query("games")
-        .withIndex("by_groupId_importSourceId", (q) =>
-          q
-            .eq("groupId", request.groupId)
-            .eq("importSourceId", request.sourceId)
-        )
-        .first();
-      if (existingGame) {
-        throw new Error("This PokerNow log has already been imported");
-      }
+    const sourceId = request.sourceId.trim();
+    const importData = {
+      groupId: request.groupId,
+      createdById: request.requestedById,
+      sourceId,
+      date: request.date,
+      smallBlind: request.smallBlind,
+      bigBlind: request.bigBlind,
+      handCount: request.handCount,
+      players: request.players,
+    };
+    validateImportData(importData);
+
+    const requesterMembership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_groupId_userId", (q) =>
+        q.eq("groupId", request.groupId).eq("userId", request.requestedById)
+      )
+      .first();
+    if (!requesterMembership) {
+      throw new Error("The requester is no longer a member of this group");
+    }
+    if (await findDuplicate(ctx, request.groupId, sourceId, request._id)) {
+      throw new Error(
+        "This PokerNow ledger has already been imported or is awaiting approval"
+      );
     }
     const seasonId =
       request.seasonId ?? (await getOrCreateFirstSeason(ctx, group))._id;
@@ -1009,15 +1126,8 @@ export const respondToRequest = mutation({
     }
 
     const gameId = await persistSession(ctx, {
-      groupId: request.groupId,
+      ...importData,
       seasonId,
-      createdById: request.requestedById,
-      sourceId: request.sourceId,
-      date: request.date,
-      smallBlind: request.smallBlind,
-      bigBlind: request.bigBlind,
-      handCount: request.handCount,
-      players: request.players,
     });
     await ctx.db.patch(request._id, {
       status: "APPROVED",

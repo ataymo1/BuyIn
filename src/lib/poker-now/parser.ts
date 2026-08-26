@@ -1,5 +1,3 @@
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: PokerNow CSV parsing is a linear state machine.
-// biome-ignore-all lint/performance/useTopLevelRegex: Dynamic expressions include the PokerNow player identity pattern.
 export interface PokerNowPlayer {
   sourceId: string;
   name: string;
@@ -17,11 +15,31 @@ export interface PokerNowSession {
   players: PokerNowPlayer[];
 }
 
-interface CsvRow {
-  entry: string;
-  at: string;
+const REQUIRED_LEDGER_HEADERS = [
+  "player_nickname",
+  "player_id",
+  "session_start_at",
+  "session_end_at",
+  "buy_in",
+  "buy_out",
+  "stack",
+  "net",
+] as const;
+const BOM = /^\uFEFF/;
+const LEDGER_FILE_NAME = /(?:^|[/\\])ledger_(.+?)(?: \(\d+\))?\.csv$/i;
+
+type LedgerHeader = (typeof REQUIRED_LEDGER_HEADERS)[number] | "nit_escrow";
+
+interface LedgerEntry {
+  sourceId: string;
+  name: string;
+  buyIn: number;
+  cashOut: number;
+  sessionStart: number;
+  sessionEnd?: number;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: CSV quoting requires a small state machine.
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -54,6 +72,10 @@ function parseCsv(text: string): string[][] {
       value += character;
     }
   }
+
+  if (quoted) {
+    throw new Error("The PokerNow ledger contains an unterminated CSV value.");
+  }
   if (value || row.length) {
     row.push(value);
     rows.push(row);
@@ -61,127 +83,176 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+function parseNumber(value: string, column: string, rowNumber: number) {
+  if (!value.trim()) {
+    throw new Error(`PokerNow ledger row ${rowNumber} is missing ${column}.`);
+  }
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    throw new Error(
+      `PokerNow ledger row ${rowNumber} has an invalid ${column}.`
+    );
+  }
+  return amount;
 }
 
-export function parsePokerNowLog(
-  text: string,
-  fileName = "poker-now.csv"
-): PokerNowSession {
-  const csv = parseCsv(text.replace(/^\uFEFF/, ""));
-  const headers = csv.shift()?.map((header) => header.trim().toLowerCase());
-  const entryIndex = headers?.indexOf("entry") ?? -1;
-  const atIndex = headers?.indexOf("at") ?? -1;
-  if (entryIndex < 0 || atIndex < 0) {
+function parseOptionalNumber(value: string, column: string, rowNumber: number) {
+  return value.trim() ? parseNumber(value, column, rowNumber) : undefined;
+}
+
+function parseTimestamp(value: string, column: string, rowNumber: number) {
+  const timestamp = Date.parse(value);
+  if (!(value.trim() && Number.isFinite(timestamp))) {
     throw new Error(
-      "This does not look like a PokerNow CSV log (entry and at columns are required)."
+      `PokerNow ledger row ${rowNumber} has an invalid ${column}.`
+    );
+  }
+  return timestamp;
+}
+
+function getColumn(
+  row: string[],
+  indexes: Map<string, number>,
+  header: LedgerHeader
+) {
+  return row[indexes.get(header) ?? -1] ?? "";
+}
+
+function parseLedgerEntry(
+  row: string[],
+  indexes: Map<string, number>,
+  rowNumber: number
+): LedgerEntry {
+  const value = (header: LedgerHeader) => getColumn(row, indexes, header);
+  const name = value("player_nickname").trim();
+  const sourceId = value("player_id").trim();
+  if (!name || name.length > 80) {
+    throw new Error(
+      `PokerNow ledger row ${rowNumber} has an invalid player nickname.`
+    );
+  }
+  if (!sourceId) {
+    throw new Error(`PokerNow ledger row ${rowNumber} is missing a player ID.`);
+  }
+
+  const sessionStart = parseTimestamp(
+    value("session_start_at"),
+    "session start",
+    rowNumber
+  );
+  const sessionEndValue = value("session_end_at");
+  const sessionEnd = sessionEndValue.trim()
+    ? parseTimestamp(sessionEndValue, "session end", rowNumber)
+    : undefined;
+  if (sessionEnd !== undefined && sessionEnd < sessionStart) {
+    throw new Error(`PokerNow ledger row ${rowNumber} ends before it starts.`);
+  }
+
+  const buyIn = parseNumber(value("buy_in"), "buy-in", rowNumber);
+  const buyOut = parseOptionalNumber(value("buy_out"), "buy-out", rowNumber);
+  const stack = parseNumber(value("stack"), "stack", rowNumber);
+  const nitEscrowValue = value("nit_escrow");
+  const nitEscrow = nitEscrowValue.trim()
+    ? parseNumber(nitEscrowValue, "nit escrow", rowNumber)
+    : 0;
+  const net = parseNumber(value("net"), "net", rowNumber);
+  if (
+    buyIn < 0 ||
+    (buyOut !== undefined && buyOut < 0) ||
+    stack < 0 ||
+    nitEscrow < 0
+  ) {
+    throw new Error(
+      `PokerNow ledger row ${rowNumber} contains a negative chip amount.`
     );
   }
 
-  const rows: CsvRow[] = csv
-    .map((columns) => ({
-      entry: columns[entryIndex] ?? "",
-      at: columns[atIndex] ?? "",
-    }))
-    .filter((row) => row.entry && Number.isFinite(Date.parse(row.at)))
-    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const cashOut = roundMoney((buyOut ?? stack) + nitEscrow);
+  if (Math.abs(roundMoney(cashOut - buyIn) - net) > 0.01) {
+    throw new Error(
+      `PokerNow ledger row ${rowNumber} has totals that do not balance.`
+    );
+  }
+
+  return { sourceId, name, buyIn, cashOut, sessionStart, sessionEnd };
+}
+
+function getLedgerRows(text: string) {
+  const [headerRow, ...rows] = parseCsv(text.replace(BOM, ""));
+  const indexes = new Map(
+    headerRow?.map(
+      (header, index) => [header.trim().toLowerCase(), index] as const
+    ) ?? []
+  );
+  const missingHeaders = REQUIRED_LEDGER_HEADERS.filter(
+    (header) => !indexes.has(header)
+  );
+  if (missingHeaders.length > 0) {
+    throw new Error(
+      `This does not look like a PokerNow ledger CSV (missing ${missingHeaders.join(
+        ", "
+      )}).`
+    );
+  }
   if (rows.length === 0) {
-    throw new Error("The PokerNow log is empty.");
+    throw new Error("The PokerNow ledger is empty.");
   }
+  return { indexes, rows };
+}
 
-  const players = new Map<string, PokerNowPlayer>();
-  const remember = (name: string, sourceId: string) => {
-    const existing = players.get(sourceId);
-    if (existing) {
-      return existing;
-    }
-    const player = { sourceId, name: name.trim(), buyIn: 0, cashOut: 0 };
-    players.set(sourceId, player);
-    return player;
-  };
-  const identity = String.raw`"([^"@]+?)\s*@\s*([^"\s]+)"`;
-  const approval = new RegExp(
-    String.raw`approved the player ${identity} participation with a stack of (\d+(?:\.\d+)?)`,
-    "i"
+function sourceIdFromFileName(fileName: string) {
+  const ledgerId = fileName.match(LEDGER_FILE_NAME)?.[1];
+  return ledgerId?.trim() || fileName.trim();
+}
+
+export function parsePokerNowLedger(
+  text: string,
+  fileName = "poker-now-ledger.csv"
+): PokerNowSession {
+  const { indexes, rows } = getLedgerRows(text);
+  const entries = rows.map((row, index) =>
+    parseLedgerEntry(row, indexes, index + 2)
   );
-  const stackEvent =
-    /(?:quits the game with a stack of|stand up with the stack of) (\d+(?:\.\d+)?)/i;
-  const stackAddition = new RegExp(
-    String.raw`queued the stack change for the player ${identity} adding (\d+(?:\.\d+)?) chips`,
-    "i"
+  const players = new Map<
+    string,
+    PokerNowPlayer & { latestSessionStart: number }
+  >();
+
+  for (const entry of entries) {
+    const player = players.get(entry.sourceId);
+    if (!player) {
+      players.set(entry.sourceId, {
+        sourceId: entry.sourceId,
+        name: entry.name,
+        buyIn: roundMoney(entry.buyIn),
+        cashOut: entry.cashOut,
+        latestSessionStart: entry.sessionStart,
+      });
+      continue;
+    }
+
+    player.buyIn = roundMoney(player.buyIn + entry.buyIn);
+    player.cashOut = roundMoney(player.cashOut + entry.cashOut);
+    if (entry.sessionStart > player.latestSessionStart) {
+      player.name = entry.name;
+      player.latestSessionStart = entry.sessionStart;
+    }
+  }
+
+  const startedAt = Math.min(...entries.map((entry) => entry.sessionStart));
+  const endedAt = Math.max(
+    ...entries.map((entry) => entry.sessionEnd ?? entry.sessionStart)
   );
-  const quotedIdentity = new RegExp(identity, "g");
-  let smallBlind: number | undefined;
-  let bigBlind: number | undefined;
-  const hands = new Set<string>();
 
-  for (const row of rows) {
-    const approved = row.entry.match(approval);
-    if (approved) {
-      remember(approved[1], approved[2]).buyIn += Number(approved[3]);
-    }
-    const addition = row.entry.match(stackAddition);
-    if (addition) {
-      remember(addition[1], addition[2]).buyIn += Number(addition[3]);
-    }
-
-    quotedIdentity.lastIndex = 0;
-    for (const match of row.entry.matchAll(quotedIdentity)) {
-      remember(match[1], match[2]);
-    }
-
-    const stack = row.entry.match(stackEvent);
-    if (stack) {
-      const who = row.entry.match(new RegExp(identity));
-      if (who) {
-        remember(who[1], who[2]).cashOut = Number(stack[1]);
-      }
-    }
-
-    if (row.entry.startsWith("Player stacks:")) {
-      const playerStack = new RegExp(
-        String.raw`${identity} \((\d+(?:\.\d+)?)\)`,
-        "g"
-      );
-      for (const match of row.entry.matchAll(playerStack)) {
-        remember(match[1], match[2]).cashOut = Number(match[3]);
-      }
-    }
-
-    const hand = row.entry.match(/-- starting hand #(\d+)/i);
-    if (hand) {
-      hands.add(hand[1]);
-    }
-    const blind = row.entry.match(/posts a (small|big) blind of ([\d.]+)/i);
-    if (blind?.[1].toLowerCase() === "small") {
-      smallBlind ??= Number(blind[2]);
-    }
-    if (blind?.[1].toLowerCase() === "big") {
-      bigBlind ??= Number(blind[2]);
-    }
-  }
-
-  const participants = [...players.values()]
-    .filter((player) => player.buyIn > 0)
-    .map((player) => ({
-      ...player,
-      buyIn: roundMoney(player.buyIn),
-      cashOut: roundMoney(player.cashOut),
-    }));
-  if (participants.length === 0) {
-    throw new Error("No PokerNow player buy-ins were found in this log.");
-  }
-
-  const sourceId =
-    fileName.match(/poker_now_log_([^.]+)\.csv$/i)?.[1] ?? fileName;
   return {
-    sourceId,
-    startedAt: Date.parse(rows[0].at),
-    endedAt: Date.parse(rows.at(-1)?.at ?? rows[0].at),
-    smallBlind,
-    bigBlind,
-    handCount: hands.size,
-    players: participants,
+    sourceId: sourceIdFromFileName(fileName),
+    startedAt,
+    endedAt,
+    handCount: 0,
+    players: [...players.values()].map(
+      ({ latestSessionStart: _latestSessionStart, ...player }) => player
+    ),
   };
 }

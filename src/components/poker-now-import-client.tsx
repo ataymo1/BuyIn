@@ -42,7 +42,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useConvexUser, useUserGroups } from "@/lib/convex-hooks";
-import { type PokerNowSession, parsePokerNowLog } from "@/lib/poker-now/parser";
+import {
+  type PokerNowSession,
+  parsePokerNowLedger,
+} from "@/lib/poker-now/parser";
 import { cn } from "@/lib/utils";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -243,7 +246,7 @@ export function PokerNowImportClient() {
       return;
     }
     try {
-      const parsed = parsePokerNowLog(await file.text(), file.name);
+      const parsed = parsePokerNowLedger(await file.text(), file.name);
       const nextMapping: Record<string, string> = {};
       const nextExtraNames: Record<string, string> = {};
       for (const imported of parsed.players) {
@@ -352,16 +355,17 @@ export function PokerNowImportClient() {
         <div>
           <h1 className="font-bold text-3xl">Import PokerNow session</h1>
           <p className="text-muted-foreground">
-            Upload a PokerNow CSV, match its names, and create a completed
+            Upload a PokerNow ledger, match its names, and create a completed
             session.
           </p>
         </div>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Log and group</CardTitle>
+          <CardTitle>Ledger and group</CardTitle>
           <CardDescription>
-            The file stays in your browser until you confirm the import.
+            In PokerNow, open Ledger and download the CSV. The file stays in
+            your browser until you confirm the import.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -389,11 +393,11 @@ export function PokerNowImportClient() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="pokerNowLog">PokerNow CSV log</Label>
+            <Label htmlFor="pokerNowLedger">PokerNow ledger CSV</Label>
             <Input
               accept=".csv,text/csv"
               disabled={!groupId || isLoading}
-              id="pokerNowLog"
+              id="pokerNowLedger"
               onChange={(event) => readFile(event.target.files?.[0])}
               type="file"
             />
@@ -415,9 +419,8 @@ export function PokerNowImportClient() {
           <CardHeader>
             <CardTitle>Match players</CardTitle>
             <CardDescription>
-              {includedPlayers.length} of {session.players.length} entries
+              {includedPlayers.length} of {session.players.length} players
               included · {includedPlayerCount} matched players ·{" "}
-              {session.handCount} hands ·{" "}
               {new Date(session.startedAt).toLocaleString()}
             </CardDescription>
           </CardHeader>
