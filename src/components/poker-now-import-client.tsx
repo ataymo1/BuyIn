@@ -6,8 +6,9 @@ import {
   ChevronsUpDown,
   FileUp,
   Loader2,
+  Trash2,
+  Undo2,
   UserPlus,
-  UserX,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -52,7 +53,6 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
 const CREATE_EXTRA = "__extra__";
-const EXCLUDE_PLAYER = "__exclude__";
 const normalize = (value: string) =>
   value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
 
@@ -115,8 +115,6 @@ function PlayerCombobox({
   let label = selected?.name ?? "Select a player";
   if (value === CREATE_EXTRA) {
     label = `Add as extra player “${extraName.trim() || importedName}”`;
-  } else if (value === EXCLUDE_PLAYER) {
-    label = "Exclude from import";
   }
 
   function select(nextValue: string) {
@@ -196,26 +194,6 @@ function PlayerCombobox({
                   )}
                 />
               </CommandItem>
-              <CommandItem
-                className="py-2.5"
-                keywords={["exclude", "ignore", "remove"]}
-                onSelect={() => select(EXCLUDE_PLAYER)}
-                value={EXCLUDE_PLAYER}
-              >
-                <UserX className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">Exclude this entry</span>
-                  <span className="block text-muted-foreground text-xs">
-                    Do not count it toward session totals
-                  </span>
-                </span>
-                <Check
-                  className={cn(
-                    "ml-2 h-4 w-4 shrink-0",
-                    value === EXCLUDE_PLAYER ? "opacity-100" : "opacity-0"
-                  )}
-                />
-              </CommandItem>
             </CommandGroup>
           </CommandList>
         </Command>
@@ -233,6 +211,9 @@ export function PokerNowImportClient() {
   const [session, setSession] = useState<PokerNowSession>();
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [extraNames, setExtraNames] = useState<Record<string, string>>({});
+  const [removedPlayerIds, setRemovedPlayerIds] = useState<Set<string>>(
+    new Set()
+  );
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -262,6 +243,7 @@ export function PokerNowImportClient() {
           alias?.playerId ?? nameMatch?.id ?? CREATE_EXTRA
         );
       }
+      setRemovedPlayerIds(new Set());
       setSession(parsed);
       setMapping(nextMapping);
       setExtraNames(nextExtraNames);
@@ -278,7 +260,7 @@ export function PokerNowImportClient() {
     if (!(session && groupId && userId)) {
       return;
     }
-    const invalidExtra = session.players.some(
+    const invalidExtra = includedPlayers.some(
       (player) =>
         mapping[player.sourceId] === CREATE_EXTRA &&
         !(extraNames[player.sourceId] ?? "").trim()
@@ -299,22 +281,20 @@ export function PokerNowImportClient() {
         smallBlind: session.smallBlind,
         bigBlind: session.bigBlind,
         handCount: session.handCount,
-        players: session.players
-          .filter((player) => mapping[player.sourceId] !== EXCLUDE_PLAYER)
-          .map((player) => ({
-            sourcePlayerId: player.sourceId,
-            displayName:
-              mapping[player.sourceId] === CREATE_EXTRA
-                ? (extraNames[player.sourceId] ?? player.name).trim()
-                : player.name,
-            buyIn: player.buyIn,
-            cashOut: player.cashOut,
-            playerId:
-              mapping[player.sourceId] &&
-              mapping[player.sourceId] !== CREATE_EXTRA
-                ? (mapping[player.sourceId] as Id<"players">)
-                : undefined,
-          })),
+        players: includedPlayers.map((player) => ({
+          sourcePlayerId: player.sourceId,
+          displayName:
+            mapping[player.sourceId] === CREATE_EXTRA
+              ? (extraNames[player.sourceId] ?? player.name).trim()
+              : player.name,
+          buyIn: player.buyIn,
+          cashOut: player.cashOut,
+          playerId:
+            mapping[player.sourceId] &&
+            mapping[player.sourceId] !== CREATE_EXTRA
+              ? (mapping[player.sourceId] as Id<"players">)
+              : undefined,
+        })),
       });
       if (result.status === "APPROVED") {
         router.push(`/games/${result.gameId}`);
@@ -322,6 +302,7 @@ export function PokerNowImportClient() {
       }
       setSuccess("Import sent to the group leader for approval.");
       setSession(undefined);
+      setRemovedPlayerIds(new Set());
       setMapping({});
       setExtraNames({});
       setSaving(false);
@@ -333,7 +314,11 @@ export function PokerNowImportClient() {
 
   const includedPlayers =
     session?.players.filter(
-      (player) => mapping[player.sourceId] !== EXCLUDE_PLAYER
+      (player) => !removedPlayerIds.has(player.sourceId)
+    ) ?? [];
+  const removedPlayers =
+    session?.players.filter((player) =>
+      removedPlayerIds.has(player.sourceId)
     ) ?? [];
   const includedPlayerCount = new Set(
     includedPlayers.map((player) => {
@@ -376,6 +361,7 @@ export function PokerNowImportClient() {
               onValueChange={(value) => {
                 setGroupId(value);
                 setSession(undefined);
+                setRemovedPlayerIds(new Set());
                 setMapping({});
                 setExtraNames({});
               }}
@@ -418,31 +404,55 @@ export function PokerNowImportClient() {
       {session ? (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Match players</CardTitle>
+            <CardTitle>Review players</CardTitle>
             <CardDescription>
-              {includedPlayers.length} of {session.players.length} players
-              included · {includedPlayerCount} matched players ·{" "}
+              Match each entry to a player. Remove duplicates or anyone who
+              didn’t play before creating the session.
+            </CardDescription>
+            <CardDescription>
+              {includedPlayers.length} of {session.players.length} entries
+              included · {includedPlayerCount} players ·{" "}
               {new Date(session.startedAt).toLocaleString()}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <PokerNowImportWarnings warnings={session.warnings} />
-            {session.players.map((player) => (
+            <PokerNowImportWarnings
+              warnings={session.warnings?.filter(
+                (warning) => !removedPlayerIds.has(warning.sourcePlayerId ?? "")
+              )}
+            />
+            {includedPlayers.map((player) => (
               <div
-                className={cn(
-                  "grid gap-2 rounded-lg border p-4 sm:grid-cols-[1fr_1.4fr] sm:items-center",
-                  mapping[player.sourceId] === EXCLUDE_PLAYER && "opacity-60"
-                )}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]"
                 key={player.sourceId}
               >
                 <div>
-                  <p className="font-medium">{player.name}</p>
-                  <p className="text-muted-foreground text-sm">
-                    Buy-in ${player.buyIn.toFixed(2)} · Cash-out $
-                    {player.cashOut.toFixed(2)}
+                  <p className="break-words font-medium">{player.name}</p>
+                  <p className="flex flex-wrap gap-x-3 text-muted-foreground text-sm tabular-nums">
+                    <span className="whitespace-nowrap">
+                      Buy-in ${player.buyIn.toFixed(2)}
+                    </span>
+                    <span className="whitespace-nowrap">
+                      Cash-out ${player.cashOut.toFixed(2)}
+                    </span>
                   </p>
                 </div>
-                <div className="space-y-2">
+                <Button
+                  aria-label={`Remove ${player.name} from import`}
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:col-start-3 sm:row-start-1"
+                  disabled={saving}
+                  onClick={() =>
+                    setRemovedPlayerIds((current) =>
+                      new Set(current).add(player.sourceId)
+                    )
+                  }
+                  size="sm"
+                  variant="ghost"
+                >
+                  <Trash2 aria-hidden="true" />
+                  Remove
+                </Button>
+                <div className="col-span-2 min-w-0 space-y-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                   <PlayerCombobox
                     candidates={candidates?.players ?? []}
                     extraName={extraNames[player.sourceId] ?? player.name}
@@ -487,7 +497,73 @@ export function PokerNowImportClient() {
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between gap-4 pt-2">
+            {removedPlayers.length > 0 ? (
+              <section
+                aria-label="Removed from import"
+                className="rounded-lg border border-dashed bg-muted/20 p-4"
+              >
+                <p className="font-medium text-sm">
+                  Removed from import · {removedPlayers.length}
+                </p>
+                <p className="mt-1 text-muted-foreground text-xs">
+                  These entries won’t count toward player stats or session
+                  totals.
+                </p>
+                <ul className="mt-3 divide-y">
+                  {removedPlayers.map((player) => (
+                    <li
+                      className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+                      key={player.sourceId}
+                    >
+                      <span className="min-w-0 break-words text-muted-foreground text-sm">
+                        {player.name}
+                      </span>
+                      <Button
+                        aria-label={`Undo removal of ${player.name}`}
+                        disabled={saving}
+                        onClick={() =>
+                          setRemovedPlayerIds((current) => {
+                            const next = new Set(current);
+                            next.delete(player.sourceId);
+                            return next;
+                          })
+                        }
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <Undo2 aria-hidden="true" />
+                        Undo
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <output aria-live="polite" className="sr-only">
+              {includedPlayers.length} entries included. {removedPlayers.length}{" "}
+              removed.
+            </output>
+            <dl className="grid grid-cols-2 gap-4 rounded-lg bg-muted/40 p-4 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Total buy-in</dt>
+                <dd className="mt-1 font-semibold tabular-nums">
+                  $
+                  {includedPlayers
+                    .reduce((total, player) => total + player.buyIn, 0)
+                    .toFixed(2)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Total cash-out</dt>
+                <dd className="mt-1 font-semibold tabular-nums">
+                  $
+                  {includedPlayers
+                    .reduce((total, player) => total + player.cashOut, 0)
+                    .toFixed(2)}
+                </dd>
+              </div>
+            </dl>
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
               {includedPlayerCount < 2 ? (
                 <p className="text-destructive text-sm">
                   Include at least two different players.

@@ -13,7 +13,7 @@ export interface PokerNowSession {
   bigBlind?: number;
   handCount: number;
   players: PokerNowPlayer[];
-  warnings?: { rowNumber: number; message: string }[];
+  warnings?: { rowNumber: number; message: string; sourcePlayerId?: string }[];
 }
 
 const REQUIRED_LEDGER_HEADERS = [
@@ -239,6 +239,7 @@ export function parsePokerNowLedger(
     if (entry.sessionStart === undefined) {
       warnings.push({
         rowNumber: index + 2,
+        sourcePlayerId: entry.sourceId,
         message:
           entry.sessionEnd === undefined
             ? `${entry.name} has no session timestamps. Their totals are included; the session date uses the other rows.`

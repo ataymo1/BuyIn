@@ -169,6 +169,7 @@ test("imports an end-only refunded row without losing its money or identity", ()
   ]);
   assert.equal(session.warnings.length, 1);
   assert.equal(session.warnings[0].rowNumber, 3);
+  assert.equal(session.warnings[0].sourcePlayerId, "old-id");
   assert.match(session.warnings[0].message, MISSING_START_WARNING);
 });
 
