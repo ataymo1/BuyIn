@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { PokerNowImportWarnings } from "@/components/poker-now-import-warnings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -425,6 +426,7 @@ export function PokerNowImportClient() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <PokerNowImportWarnings warnings={session.warnings} />
             {session.players.map((player) => (
               <div
                 className={cn(

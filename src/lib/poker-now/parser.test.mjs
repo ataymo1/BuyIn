@@ -9,6 +9,16 @@ const HEADERS_WITHOUT_NIT_ESCROW =
   "player_nickname,player_id,session_start_at,session_end_at,buy_in,buy_out,stack,net";
 const INVALID_LEDGER = /does not look like a PokerNow ledger CSV/;
 const UNBALANCED_TOTALS = /totals that do not balance/;
+const MISSING_START_WARNING = /Old account has no session start/;
+const MISSING_TIMESTAMPS_WARNING = /no session timestamps/;
+const NO_SESSION_DATE =
+  /no session timestamps.*Add a session start or end time/;
+const INVALID_START = /row 2.*invalid session start/;
+const INVALID_END = /row 2.*invalid session end/;
+const REVERSED_TIMESTAMPS = /ends before/;
+const NEGATIVE_AMOUNT = /negative chip amount/;
+const INVALID_NET = /invalid net/;
+const MISSING_BUY_IN = /missing buy-in/;
 
 test("aggregates repeated ledger sessions by PokerNow player ID", () => {
   const ledger = [
@@ -132,4 +142,140 @@ test("rejects ledger rows whose reported totals do not balance", () => {
     () => parsePokerNowLedger(ledger, "ledger_pglExample.csv"),
     UNBALANCED_TOTALS
   );
+});
+
+test("imports an end-only refunded row without losing its money or identity", () => {
+  const ledger = [
+    HEADERS,
+    '"New account",new-id,2026-09-29T03:11:02.702Z,,100,,2189,0,2089',
+    '"Old account",old-id,,2026-09-29T03:10:45.717Z,100,100,0,0,0',
+    '"Returning player",returning-id,2026-09-29T03:11:02.686Z,2026-09-29T06:26:32.265Z,500,0,0,0,-500',
+    '"Returning player",returning-id,2026-09-29T06:32:08.934Z,2026-09-29T08:23:11.182Z,200,0,0,0,-200',
+  ].join("\n");
+
+  const session = parsePokerNowLedger(ledger, "Poker Now Ledger (3).csv");
+
+  assert.equal(session.startedAt, Date.parse("2026-09-29T03:10:45.717Z"));
+  assert.equal(session.endedAt, Date.parse("2026-09-29T08:23:11.182Z"));
+  assert.deepEqual(session.players, [
+    { sourceId: "new-id", name: "New account", buyIn: 100, cashOut: 2189 },
+    { sourceId: "old-id", name: "Old account", buyIn: 100, cashOut: 100 },
+    {
+      sourceId: "returning-id",
+      name: "Returning player",
+      buyIn: 700,
+      cashOut: 0,
+    },
+  ]);
+  assert.equal(session.warnings.length, 1);
+  assert.equal(session.warnings[0].rowNumber, 3);
+  assert.match(session.warnings[0].message, MISSING_START_WARNING);
+});
+
+test("accepts all end-only rows and derives finite session boundaries", () => {
+  const session = parsePokerNowLedger(
+    [
+      HEADERS,
+      '"Alex",a, ,2026-09-29T04:00:00.000Z,100,120,0,0,20',
+      '"Blair",b,,2026-09-29T03:00:00.000Z,100,80,0,0,-20',
+    ].join("\n")
+  );
+
+  assert.equal(session.startedAt, Date.parse("2026-09-29T03:00:00.000Z"));
+  assert.equal(session.endedAt, Date.parse("2026-09-29T04:00:00.000Z"));
+  assert.equal(session.warnings.length, 2);
+  assert.equal(
+    session.players.reduce((sum, p) => sum + p.cashOut, 0),
+    200
+  );
+});
+
+test("keeps undated rows but prefers a dated nickname regardless of row order", () => {
+  const rows = [
+    '"Old name",a,,,100,100,0,0,0',
+    '"New name",a,2026-09-29T03:00:00.000Z,,100,,120,0,20',
+    '"Blair",b,2026-09-29T04:00:00.000Z,,100,,80,0,-20',
+  ];
+
+  for (const orderedRows of [rows, [...rows].reverse()]) {
+    const session = parsePokerNowLedger([HEADERS, ...orderedRows].join("\n"));
+
+    assert.equal(session.startedAt, Date.parse("2026-09-29T03:00:00.000Z"));
+    assert.equal(session.endedAt, Date.parse("2026-09-29T04:00:00.000Z"));
+    assert.deepEqual(
+      session.players.find((p) => p.sourceId === "a"),
+      {
+        sourceId: "a",
+        name: "New name",
+        buyIn: 200,
+        cashOut: 220,
+      }
+    );
+    assert.equal(session.warnings.length, 1);
+    assert.match(session.warnings[0].message, MISSING_TIMESTAMPS_WARNING);
+  }
+});
+
+test("uses the end time to order aliases when a start time is missing", () => {
+  const rows = [
+    '"New name",a,,2026-09-29T04:00:00.000Z,100,120,0,0,20',
+    '"Old name",a,2026-09-29T03:00:00.000Z,2026-09-29T03:30:00.000Z,100,80,0,0,-20',
+  ];
+  for (const orderedRows of [rows, [...rows].reverse()]) {
+    const session = parsePokerNowLedger([HEADERS, ...orderedRows].join("\n"));
+    assert.deepEqual(session.players, [
+      { sourceId: "a", name: "New name", buyIn: 200, cashOut: 200 },
+    ]);
+  }
+});
+
+test("requires at least one timestamp instead of inventing a session date", () => {
+  assert.throws(
+    () => parsePokerNowLedger(`${HEADERS}\n"Alex",a,,,100,100,0,0,0`),
+    NO_SESSION_DATE
+  );
+});
+
+test("does not warn for ordinary open sessions with a known start time", () => {
+  const session = parsePokerNowLedger(
+    `${HEADERS}\n"Alex",a,2026-09-29T03:00:00.000Z,,100,,120,0,20`
+  );
+  assert.deepEqual(session.warnings, []);
+});
+
+test("still rejects malformed timestamps and reversed known boundaries", () => {
+  for (const [start, end, error] of [
+    ["invalid", "2026-09-29T03:00:00.000Z", INVALID_START],
+    ["", "invalid", INVALID_END],
+    [
+      "2026-09-29T04:00:00.000Z",
+      "2026-09-29T03:00:00.000Z",
+      REVERSED_TIMESTAMPS,
+    ],
+  ]) {
+    assert.throws(
+      () =>
+        parsePokerNowLedger(
+          `${HEADERS}\n"Alex",a,${start},${end},100,100,0,0,0`
+        ),
+      error
+    );
+  }
+});
+
+test("missing timing does not bypass financial validation", () => {
+  for (const [amounts, error] of [
+    ["100,100,0,0,10", UNBALANCED_TOTALS],
+    ["-100,100,0,0,200", NEGATIVE_AMOUNT],
+    ["100,,0,0,NaN", INVALID_NET],
+    [",100,0,0,0", MISSING_BUY_IN],
+  ]) {
+    assert.throws(
+      () =>
+        parsePokerNowLedger(
+          `${HEADERS}\n"Alex",a,,2026-09-29T03:00:00.000Z,${amounts}`
+        ),
+      error
+    );
+  }
 });

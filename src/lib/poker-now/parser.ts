@@ -13,6 +13,7 @@ export interface PokerNowSession {
   bigBlind?: number;
   handCount: number;
   players: PokerNowPlayer[];
+  warnings?: { rowNumber: number; message: string }[];
 }
 
 const REQUIRED_LEDGER_HEADERS = [
@@ -35,7 +36,7 @@ interface LedgerEntry {
   name: string;
   buyIn: number;
   cashOut: number;
-  sessionStart: number;
+  sessionStart?: number;
   sessionEnd?: number;
 }
 
@@ -103,8 +104,11 @@ function parseOptionalNumber(value: string, column: string, rowNumber: number) {
 }
 
 function parseTimestamp(value: string, column: string, rowNumber: number) {
+  if (!value.trim()) {
+    return undefined;
+  }
   const timestamp = Date.parse(value);
-  if (!(value.trim() && Number.isFinite(timestamp))) {
+  if (!Number.isFinite(timestamp)) {
     throw new Error(
       `PokerNow ledger row ${rowNumber} has an invalid ${column}.`
     );
@@ -142,11 +146,16 @@ function parseLedgerEntry(
     "session start",
     rowNumber
   );
-  const sessionEndValue = value("session_end_at");
-  const sessionEnd = sessionEndValue.trim()
-    ? parseTimestamp(sessionEndValue, "session end", rowNumber)
-    : undefined;
-  if (sessionEnd !== undefined && sessionEnd < sessionStart) {
+  const sessionEnd = parseTimestamp(
+    value("session_end_at"),
+    "session end",
+    rowNumber
+  );
+  if (
+    sessionStart !== undefined &&
+    sessionEnd !== undefined &&
+    sessionEnd < sessionStart
+  ) {
     throw new Error(`PokerNow ledger row ${rowNumber} ends before it starts.`);
   }
 
@@ -215,12 +224,41 @@ export function parsePokerNowLedger(
   const entries = rows.map((row, index) =>
     parseLedgerEntry(row, indexes, index + 2)
   );
+  const warnings: NonNullable<PokerNowSession["warnings"]> = [];
+  // Missing row timestamps do not invalidate its chip totals. Use known
+  // boundaries without inventing a start time or dropping the player's money.
+  let startedAt = Number.POSITIVE_INFINITY;
+  let endedAt = Number.NEGATIVE_INFINITY;
+  for (const [index, entry] of entries.entries()) {
+    const firstKnownTime = entry.sessionStart ?? entry.sessionEnd;
+    const lastKnownTime = entry.sessionEnd ?? entry.sessionStart;
+    if (firstKnownTime !== undefined && lastKnownTime !== undefined) {
+      startedAt = Math.min(startedAt, firstKnownTime);
+      endedAt = Math.max(endedAt, lastKnownTime);
+    }
+    if (entry.sessionStart === undefined) {
+      warnings.push({
+        rowNumber: index + 2,
+        message:
+          entry.sessionEnd === undefined
+            ? `${entry.name} has no session timestamps. Their totals are included; the session date uses the other rows.`
+            : `${entry.name} has no session start. Their totals are included; their end time is used when determining the session date.`,
+      });
+    }
+  }
+  if (!Number.isFinite(startedAt)) {
+    throw new Error(
+      "The PokerNow ledger has no session timestamps. Add a session start or end time to the CSV, or download a ledger with timestamps."
+    );
+  }
   const players = new Map<
     string,
-    PokerNowPlayer & { latestSessionStart: number }
+    PokerNowPlayer & { latestKnownTime: number }
   >();
 
   for (const entry of entries) {
+    const latestKnownTime =
+      entry.sessionStart ?? entry.sessionEnd ?? Number.NEGATIVE_INFINITY;
     const player = players.get(entry.sourceId);
     if (!player) {
       players.set(entry.sourceId, {
@@ -228,31 +266,27 @@ export function parsePokerNowLedger(
         name: entry.name,
         buyIn: roundMoney(entry.buyIn),
         cashOut: entry.cashOut,
-        latestSessionStart: entry.sessionStart,
+        latestKnownTime,
       });
       continue;
     }
 
     player.buyIn = roundMoney(player.buyIn + entry.buyIn);
     player.cashOut = roundMoney(player.cashOut + entry.cashOut);
-    if (entry.sessionStart > player.latestSessionStart) {
+    if (latestKnownTime > player.latestKnownTime) {
       player.name = entry.name;
-      player.latestSessionStart = entry.sessionStart;
+      player.latestKnownTime = latestKnownTime;
     }
   }
-
-  const startedAt = Math.min(...entries.map((entry) => entry.sessionStart));
-  const endedAt = Math.max(
-    ...entries.map((entry) => entry.sessionEnd ?? entry.sessionStart)
-  );
 
   return {
     sourceId: sourceIdFromFileName(fileName),
     startedAt,
     endedAt,
     handCount: 0,
+    warnings,
     players: [...players.values()].map(
-      ({ latestSessionStart: _latestSessionStart, ...player }) => player
+      ({ latestKnownTime: _latestKnownTime, ...player }) => player
     ),
   };
 }

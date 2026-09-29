@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { Loader2, UserRoundCog } from "lucide-react";
 import { useState } from "react";
+import { PokerNowImportWarnings } from "@/components/poker-now-import-warnings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -302,6 +303,7 @@ export function PokerNowUsernameAssignments({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            <PokerNowImportWarnings warnings={recoverySession?.warnings} />
             {editablePlayers.map((player) => (
               <div className="space-y-2" key={player.sourcePlayerId}>
                 <Label htmlFor={`poker-now-${player.sourcePlayerId}`}>
