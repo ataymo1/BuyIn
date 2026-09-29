@@ -15,7 +15,7 @@ export default async function GroupSearchPage() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <main className="container mx-auto px-4 pt-6 pb-32 md:py-8 md:pb-8">
+      <main className="mx-auto max-w-5xl px-4 pt-8 pb-32 sm:px-6 md:pt-12 md:pb-12">
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-12">
