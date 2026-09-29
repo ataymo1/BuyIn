@@ -132,8 +132,8 @@ export function ClaimPlayerHistorySection({
           <CardTitle>Claim Past Sessions</CardTitle>
         </div>
         <CardDescription>
-          New to this group? Request to connect sessions from before you
-          joined. The group leader will review it separately.
+          New to this group? Request to connect sessions from before you joined.
+          The group leader will review it separately.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

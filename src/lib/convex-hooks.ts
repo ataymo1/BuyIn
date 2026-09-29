@@ -296,8 +296,7 @@ export function useSearchGroups(searchTerm: string) {
 
   return {
     groups: groups ?? [],
-    isLoading:
-      groups === undefined && userId !== undefined && searchTerm.trim() !== "",
+    isLoading: groups === undefined && searchTerm.trim() !== "",
   };
 }
 
@@ -312,8 +311,16 @@ export function useDiscoverableGroups() {
 
   return {
     groups: groups ?? [],
-    isLoading: groups === undefined && userId !== undefined,
+    isLoading: groups === undefined,
   };
+}
+
+export function useDiscoveryVolumeSummary() {
+  const { userId } = useConvexUser();
+  return useQuery(
+    api.groups.getDiscoveryVolumeSummary,
+    userId ? { userId } : "skip"
+  );
 }
 
 // Join request hooks

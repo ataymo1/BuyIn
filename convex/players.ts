@@ -61,9 +61,7 @@ export const getPlayerWithStats = query({
       gamePlayers.map((gamePlayer) => ctx.db.get(gamePlayer.gameId))
     );
     const gameById = new Map(
-      games
-        .filter((game) => game !== null)
-        .map((game) => [game._id, game])
+      games.filter((game) => game !== null).map((game) => [game._id, game])
     );
     const allowedGroupIds = args.groupIds?.length
       ? new Set(args.groupIds)

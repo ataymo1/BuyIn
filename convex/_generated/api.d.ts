@@ -13,6 +13,7 @@ import type * as games from "../games.js";
 import type * as group_admins from "../group_admins.js";
 import type * as groups from "../groups.js";
 import type * as helpers from "../helpers.js";
+import type * as lib_volume from "../lib/volume.js";
 import type * as migrations from "../migrations.js";
 import type * as player_claims from "../player_claims.js";
 import type * as players from "../players.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   group_admins: typeof group_admins;
   groups: typeof groups;
   helpers: typeof helpers;
+  "lib/volume": typeof lib_volume;
   migrations: typeof migrations;
   player_claims: typeof player_claims;
   players: typeof players;

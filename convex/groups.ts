@@ -7,6 +7,7 @@ import {
   getUserDisplaySummary,
   requireGroupManager,
 } from "./helpers";
+import { getCommunityVolume, getGroupVolume } from "./lib/volume";
 
 interface ResolvedLeaderboardStat {
   player: Doc<"players">;
@@ -500,7 +501,18 @@ export const removeMember = mutation({
   },
 });
 
-// Get discoverable groups (groups user is not a member of)
+// Community volume is independent of listing limits and the search term.
+export const getDiscoveryVolumeSummary = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    if (!(await ctx.db.get(args.userId))) {
+      throw new Error("User not found");
+    }
+    return await getCommunityVolume(ctx);
+  },
+});
+
+// Get discoverable groups, including current memberships.
 export const getDiscoverableGroups = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -530,10 +542,14 @@ export const getDiscoverableGroups = query({
           .withIndex("by_groupId", (q) => q.eq("groupId", group._id))
           .collect();
 
-        const owner = await ctx.db.get(group.ownerId);
+        const [owner, volume] = await Promise.all([
+          ctx.db.get(group.ownerId),
+          getGroupVolume(ctx, group._id),
+        ]);
 
         return {
           ...group,
+          ...volume,
           memberCount: members.length,
           ownerName: owner?.name ?? owner?.email ?? "Unknown",
           isMember: memberGroupIds.has(group._id),
@@ -586,10 +602,14 @@ export const searchGroups = query({
           .withIndex("by_groupId", (q) => q.eq("groupId", group._id))
           .collect();
 
-        const owner = await ctx.db.get(group.ownerId);
+        const [owner, volume] = await Promise.all([
+          ctx.db.get(group.ownerId),
+          getGroupVolume(ctx, group._id),
+        ]);
 
         return {
           ...group,
+          ...volume,
           memberCount: members.length,
           ownerName: owner?.name ?? owner?.email ?? "Unknown",
           isMember: memberGroupIds.has(group._id),

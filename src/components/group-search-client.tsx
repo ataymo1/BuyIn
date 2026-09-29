@@ -13,10 +13,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { GroupCardSkeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useConvexUser,
   useDiscoverableGroups,
+  useDiscoveryVolumeSummary,
   useRequestToJoin,
   useSearchGroups,
 } from "@/lib/convex-hooks";
@@ -29,6 +30,97 @@ const groupCardSkeletons = [
   "group-card-5",
   "group-card-6",
 ];
+
+const currency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+const sessionDate = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+function DiscoveryVolumeSummary() {
+  const summary = useDiscoveryVolumeSummary();
+
+  return (
+    <section
+      aria-busy={summary === undefined}
+      aria-label="Community buy-in totals"
+      className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-6 sm:p-8"
+    >
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="font-medium text-muted-foreground text-sm">
+            Total buy-ins · All time
+          </h2>
+          {summary === undefined ? (
+            <Skeleton
+              aria-label="Loading total buy-ins"
+              className="mt-3 h-12 w-64 max-w-full"
+            />
+          ) : (
+            <p className="mt-2 break-words font-semibold text-3xl tabular-nums tracking-tight sm:text-4xl">
+              {currency.format(summary.totalBuyIns)}
+            </p>
+          )}
+          <p className="mt-2 text-muted-foreground text-sm">
+            Across the BuyIn community, every season.
+          </p>
+        </div>
+        <dl className="grid shrink-0 grid-cols-2 gap-8 sm:gap-10">
+          <div>
+            <dt className="text-muted-foreground text-sm">Groups</dt>
+            <dd className="mt-1 font-semibold text-2xl tabular-nums">
+              {summary === undefined ? (
+                <Skeleton
+                  aria-label="Loading group count"
+                  className="h-8 w-12"
+                />
+              ) : (
+                summary.groupCount.toLocaleString("en-US")
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-sm">
+              Completed sessions
+            </dt>
+            <dd className="mt-1 font-semibold text-2xl tabular-nums">
+              {summary === undefined ? (
+                <Skeleton
+                  aria-label="Loading session count"
+                  className="h-8 w-12"
+                />
+              ) : (
+                summary.completedSessionCount.toLocaleString("en-US")
+              )}
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <p className="mt-6 border-violet-500/10 border-t pt-4 text-muted-foreground text-xs">
+        Approved buy-ins from completed sessions. Cash-outs are excluded.
+      </p>
+    </section>
+  );
+}
+
+function VolumeCardSkeleton() {
+  return (
+    <Card aria-label="Loading group" className="p-6">
+      <Skeleton className="h-5 w-36 max-w-full" />
+      <Skeleton className="mt-6 h-4 w-32 max-w-full" />
+      <Skeleton className="mt-2 h-9 w-40 max-w-full" />
+      <Skeleton className="mt-3 h-4 w-48 max-w-full" />
+      <div className="mt-6 flex justify-between gap-4 border-t pt-4">
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-8 w-28" />
+      </div>
+    </Card>
+  );
+}
 
 export function GroupSearchClient() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -138,7 +230,7 @@ export function GroupSearchClient() {
       return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {groupCardSkeletons.map((skeletonKey) => (
-            <GroupCardSkeleton key={skeletonKey} />
+            <VolumeCardSkeleton key={skeletonKey} />
           ))}
         </div>
       );
@@ -183,17 +275,54 @@ export function GroupSearchClient() {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => (
-          <Card key={group._id}>
+          <Card className="flex min-w-0 flex-col" key={group._id}>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">{group.name}</CardTitle>
+              <CardTitle className="break-words text-lg">
+                {group.name}
+              </CardTitle>
               {group.description && (
                 <CardDescription className="line-clamp-2">
                   {group.description}
                 </CardDescription>
               )}
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
+            <CardContent className="flex flex-1 flex-col">
+              <div className="mb-6">
+                <p className="text-muted-foreground text-xs">
+                  Total buy-ins · All time
+                </p>
+                <p className="mt-1 break-words font-semibold text-3xl tabular-nums tracking-tight">
+                  {currency.format(group.totalBuyIns)}
+                </p>
+                {group.completedSessionCount === 0 ? (
+                  <p className="mt-3 text-muted-foreground text-sm">
+                    No completed sessions yet
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-1 text-muted-foreground text-xs">
+                    <p>
+                      {group.completedSessionCount.toLocaleString("en-US")}{" "}
+                      completed{" "}
+                      {group.completedSessionCount === 1
+                        ? "session"
+                        : "sessions"}
+                    </p>
+                    {group.lastCompletedSessionAt !== null ? (
+                      <p>
+                        Last session{" "}
+                        <time
+                          dateTime={new Date(
+                            group.lastCompletedSessionAt
+                          ).toISOString()}
+                        >
+                          {sessionDate.format(group.lastCompletedSessionAt)}
+                        </time>
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                 <div className="flex items-center gap-4 text-muted-foreground text-sm">
                   <span className="flex items-center gap-1">
                     <Users className="h-4 w-4" />
@@ -216,9 +345,12 @@ export function GroupSearchClient() {
         <p className="text-muted-foreground">Search for poker groups to join</p>
       </div>
 
+      <DiscoveryVolumeSummary />
+
       <div className="relative">
         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
+          aria-label="Search groups by name"
           className="pl-10"
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search groups by name..."
