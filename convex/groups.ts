@@ -558,8 +558,10 @@ export const getDiscoverableGroups = query({
       })
     );
 
-    // Sort by member count and return all groups
-    return enrichedGroups.sort((a, b) => b.memberCount - a.memberCount);
+    // Show the highest all-time buy-in totals first.
+    return enrichedGroups.sort(
+      (a, b) => b.totalBuyIns - a.totalBuyIns || b.memberCount - a.memberCount
+    );
   },
 });
 
@@ -618,7 +620,7 @@ export const searchGroups = query({
       })
     );
 
-    return enrichedGroups;
+    return enrichedGroups.sort((a, b) => b.totalBuyIns - a.totalBuyIns);
   },
 });
 
