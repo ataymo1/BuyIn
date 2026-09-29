@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as games from "../games.js";
+import type * as group_admins from "../group_admins.js";
 import type * as groups from "../groups.js";
 import type * as helpers from "../helpers.js";
 import type * as migrations from "../migrations.js";
@@ -29,6 +30,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   games: typeof games;
+  group_admins: typeof group_admins;
   groups: typeof groups;
   helpers: typeof helpers;
   migrations: typeof migrations;

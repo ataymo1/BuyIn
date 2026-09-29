@@ -7,6 +7,7 @@ import {
   type QueryCtx,
   query,
 } from "./_generated/server";
+import { canUserManageGroup, requireGroupManager } from "./helpers";
 
 interface PlayerHistorySummary {
   gamesPlayed: number;
@@ -253,7 +254,7 @@ export const getPendingClaims = query({
   args: { groupId: v.id("groups"), userId: v.id("users") },
   handler: async (ctx, args) => {
     const group = await ctx.db.get(args.groupId);
-    if (group?.ownerId !== args.userId) {
+    if (!(await canUserManageGroup(ctx, group, args.userId))) {
       return [];
     }
     const games = await getGroupGames(ctx, args.groupId);
@@ -414,10 +415,7 @@ export const respondToClaim = mutation({
     if (!request || request.status !== "PENDING") {
       throw new Error("Claim request not found");
     }
-    const group = await ctx.db.get(request.groupId);
-    if (group?.ownerId !== args.userId) {
-      throw new Error("Only the group leader can review claims");
-    }
+    await requireGroupManager(ctx, request.groupId, args.userId);
     if (!args.approve) {
       await ctx.db.patch(request._id, {
         status: "REJECTED",

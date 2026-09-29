@@ -46,7 +46,7 @@ interface Member {
 interface MemberListProps {
   members: Member[];
   groupId: string;
-  isOwner: boolean;
+  canManageGroup: boolean;
   currentUserId: string;
   onInvite: (email: string) => Promise<void>;
   onRemove: (userId: string) => Promise<void>;
@@ -54,7 +54,7 @@ interface MemberListProps {
 
 export function MemberList({
   members,
-  isOwner,
+  canManageGroup,
   currentUserId,
   onInvite,
   onRemove,
@@ -101,7 +101,7 @@ export function MemberList({
             <CardTitle>Members</CardTitle>
             <CardDescription>Group members and their roles</CardDescription>
           </div>
-          {isOwner && (
+          {canManageGroup && (
             <Dialog
               onOpenChange={setIsInviteDialogOpen}
               open={isInviteDialogOpen}
@@ -191,7 +191,7 @@ export function MemberList({
                   <TableCell>
                     {new Date(member.joinedAt).toLocaleDateString()}
                   </TableCell>
-                  {isOwner && (
+                  {canManageGroup && (
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Link href={`/players/${member.user.id}`}>
@@ -212,7 +212,7 @@ export function MemberList({
                       </div>
                     </TableCell>
                   )}
-                  {!isOwner && (
+                  {!canManageGroup && (
                     <TableCell>
                       <Link href={`/players/${member.user.id}`}>
                         <Button size="sm" variant="outline">

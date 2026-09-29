@@ -2,7 +2,11 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
-import { requireGameManager } from "./helpers";
+import {
+  canUserManageGroup,
+  requireGameManager,
+  requireGroupManager,
+} from "./helpers";
 import { ensureCurrentSeason, getOrCreateFirstSeason } from "./seasons";
 
 const importedPlayer = v.object({
@@ -658,7 +662,7 @@ export const updateSessionMappings = mutation({
       ctx,
       game,
       args.userId,
-      "Only the group owner or session banker can edit username assignments"
+      "Only group owners, admins, or the session banker can edit username assignments"
     );
 
     const sessionPlayers = await ctx.db
@@ -775,7 +779,7 @@ export const restoreSessionMappings = mutation({
       ctx,
       game,
       args.userId,
-      "Only the group owner or session banker can restore username assignments"
+      "Only group owners, admins, or the session banker can restore username assignments"
     );
 
     const existingMappings = await ctx.db
@@ -987,7 +991,7 @@ export const getPendingRequests = query({
   args: { groupId: v.id("groups"), userId: v.id("users") },
   handler: async (ctx, args) => {
     const group = await ctx.db.get(args.groupId);
-    if (group?.ownerId !== args.userId) {
+    if (!(await canUserManageGroup(ctx, group, args.userId))) {
       return [];
     }
     const requests = await ctx.db
@@ -1043,7 +1047,7 @@ export const createSession = mutation({
       throw new Error("Group not found");
     }
     const season = await ensureCurrentSeason(ctx, group);
-    if (group.ownerId === args.createdById) {
+    if (await canUserManageGroup(ctx, group, args.createdById)) {
       const gameId = await persistSession(ctx, {
         ...importData,
         seasonId: season._id,
@@ -1079,10 +1083,7 @@ export const respondToRequest = mutation({
     if (!request || request.status !== "PENDING") {
       throw new Error("Import request not found");
     }
-    const group = await ctx.db.get(request.groupId);
-    if (group?.ownerId !== args.userId) {
-      throw new Error("Only the group leader can review imports");
-    }
+    const group = await requireGroupManager(ctx, request.groupId, args.userId);
     if (!args.approve) {
       await ctx.db.patch(request._id, {
         status: "REJECTED",

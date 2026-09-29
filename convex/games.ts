@@ -10,7 +10,7 @@ import {
 } from "./helpers";
 import { ensureCurrentSeason } from "./seasons";
 
-// Query to check if user can manage a game (is group owner or session banker)
+// Query to check if user can manage a game (is group owner, admin, or session banker)
 export const canManageGame = query({
   args: { gameId: v.id("games"), userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -254,7 +254,7 @@ export const updateGameStatus = mutation({
       ctx,
       game,
       args.userId,
-      "Only the group owner or session banker can update the game status"
+      "Only group owners, admins, or the session banker can update the game status"
     );
 
     await ctx.db.patch(args.gameId, { status: args.status });
@@ -282,7 +282,7 @@ export const updateGame = mutation({
       ctx,
       game,
       args.userId,
-      "Only the group owner or session banker can edit games"
+      "Only group owners, admins, or the session banker can edit games"
     );
 
     const { gameId, userId, ...updates } = args;
@@ -304,7 +304,7 @@ export const deleteGame = mutation({
       ctx,
       game,
       args.userId,
-      "Only the group owner or session banker can delete games"
+      "Only group owners, admins, or the session banker can delete games"
     );
 
     await deleteGameCascade(ctx, args.gameId);
@@ -395,7 +395,7 @@ export const updateGamePlayer = mutation({
       ctx,
       game,
       args.userId,
-      "Only the group owner or session banker can edit player totals"
+      "Only group owners, admins, or the session banker can edit player totals"
     );
 
     const buyIn = args.buyIn ?? gamePlayer.buyIn;

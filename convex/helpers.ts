@@ -3,6 +3,44 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 type DbCtx = QueryCtx | MutationCtx;
 
+export async function canUserManageGroup(
+  ctx: DbCtx,
+  group: Doc<"groups"> | null,
+  userId: Id<"users">
+) {
+  if (!group) {
+    return false;
+  }
+  if (group.ownerId === userId) {
+    return true;
+  }
+  if (!group.adminIds?.includes(userId)) {
+    return false;
+  }
+  const membership = await ctx.db
+    .query("groupMembers")
+    .withIndex("by_groupId_userId", (q) =>
+      q.eq("groupId", group._id).eq("userId", userId)
+    )
+    .first();
+  return membership !== null;
+}
+
+export async function requireGroupManager(
+  ctx: DbCtx,
+  groupId: Id<"groups">,
+  userId: Id<"users">
+) {
+  const group = await ctx.db.get(groupId);
+  if (!group) {
+    throw new Error("Group not found");
+  }
+  if (!(await canUserManageGroup(ctx, group, userId))) {
+    throw new Error("Only group owners or admins can manage this group");
+  }
+  return group;
+}
+
 export async function getUserDisplaySummary(ctx: DbCtx, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
   if (!user) {
@@ -44,7 +82,10 @@ export async function canUserManageGame(
   userId: Id<"users">
 ) {
   const group = await ctx.db.get(game.groupId);
-  if (group?.ownerId === userId) {
+  if (!group) {
+    return false;
+  }
+  if (await canUserManageGroup(ctx, group, userId)) {
     return true;
   }
   if (game.createdById !== userId) {

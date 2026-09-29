@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { deleteGameCascade, getUserDisplaySummary } from "./helpers";
+import {
+  canUserManageGroup,
+  deleteGameCascade,
+  getUserDisplaySummary,
+  requireGroupManager,
+} from "./helpers";
 
 interface ResolvedLeaderboardStat {
   player: Doc<"players">;
@@ -177,6 +182,12 @@ export const isGroupOwner = query({
   },
 });
 
+export const canManageGroup = query({
+  args: { groupId: v.id("groups"), userId: v.id("users") },
+  handler: async (ctx, args) =>
+    await canUserManageGroup(ctx, await ctx.db.get(args.groupId), args.userId),
+});
+
 // Get group standings (leaderboard)
 export const getGroupStandings = query({
   args: {
@@ -266,8 +277,7 @@ export const getGroupStandings = query({
           gameIds: new Set(),
         };
       }
-      playerStats[key].totalProfit +=
-        gp.profit ?? (gp.cashOut ?? 0) - gp.buyIn;
+      playerStats[key].totalProfit += gp.profit ?? (gp.cashOut ?? 0) - gp.buyIn;
       playerStats[key].gameIds.add(gp.gameId);
     }
 
@@ -337,10 +347,7 @@ export const updateGroup = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const group = await ctx.db.get(args.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Only the group owner can update this group");
-    }
+    await requireGroupManager(ctx, args.groupId, args.userId);
 
     const name = args.name?.trim();
     if (args.name !== undefined && !name) {
@@ -367,10 +374,7 @@ export const updateGroup = mutation({
 export const deleteGroup = mutation({
   args: { groupId: v.id("groups"), userId: v.id("users") },
   handler: async (ctx, args) => {
-    const group = await ctx.db.get(args.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Only the group owner can delete this group");
-    }
+    await requireGroupManager(ctx, args.groupId, args.userId);
 
     // Delete all group members
     const members = await ctx.db
@@ -435,10 +439,7 @@ export const addMember = mutation({
     role: v.optional(v.union(v.literal("OWNER"), v.literal("MEMBER"))),
   },
   handler: async (ctx, args) => {
-    const group = await ctx.db.get(args.groupId);
-    if (!group || group.ownerId !== args.actorId) {
-      throw new Error("Only the group owner can add members");
-    }
+    await requireGroupManager(ctx, args.groupId, args.actorId);
     if (args.role === "OWNER") {
       throw new Error("A group can only have one owner");
     }
@@ -476,10 +477,7 @@ export const removeMember = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const group = await ctx.db.get(args.groupId);
-    if (!group || group.ownerId !== args.actorId) {
-      throw new Error("Only the group owner can remove members");
-    }
+    const group = await requireGroupManager(ctx, args.groupId, args.actorId);
     if (group.ownerId === args.userId) {
       throw new Error("The group owner cannot be removed");
     }
@@ -493,6 +491,11 @@ export const removeMember = mutation({
 
     if (member) {
       await ctx.db.delete(member._id);
+    }
+    if (group.adminIds?.includes(args.userId)) {
+      await ctx.db.patch(group._id, {
+        adminIds: group.adminIds.filter((id) => id !== args.userId),
+      });
     }
   },
 });
@@ -642,13 +645,12 @@ export const requestToJoin = mutation({
   },
 });
 
-// Get pending requests for a group (owner only)
+// Get pending requests for group managers.
 export const getPendingRequests = query({
   args: { groupId: v.id("groups"), userId: v.id("users") },
   handler: async (ctx, args) => {
-    // Verify user is the owner
     const group = await ctx.db.get(args.groupId);
-    if (!group || group.ownerId !== args.userId) {
+    if (!(await canUserManageGroup(ctx, group, args.userId))) {
       return [];
     }
 
@@ -674,7 +676,7 @@ export const getPendingRequests = query({
   },
 });
 
-// Approve a join request (owner only)
+// Approve a join request.
 export const approveRequest = mutation({
   args: { requestId: v.id("joinRequests"), userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -683,11 +685,7 @@ export const approveRequest = mutation({
       throw new Error("Request not found");
     }
 
-    // Verify user is the owner
-    const group = await ctx.db.get(request.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Not authorized to approve requests for this group");
-    }
+    await requireGroupManager(ctx, request.groupId, args.userId);
     if (request.status !== "PENDING") {
       throw new Error("Request is not pending");
     }
@@ -727,7 +725,7 @@ export const approveRequest = mutation({
   },
 });
 
-// Reject a join request (owner only)
+// Reject a join request.
 export const rejectRequest = mutation({
   args: { requestId: v.id("joinRequests"), userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -736,11 +734,7 @@ export const rejectRequest = mutation({
       throw new Error("Request not found");
     }
 
-    // Verify user is the owner
-    const group = await ctx.db.get(request.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Not authorized to reject requests for this group");
-    }
+    await requireGroupManager(ctx, request.groupId, args.userId);
     if (request.status !== "PENDING") {
       throw new Error("Request is not pending");
     }

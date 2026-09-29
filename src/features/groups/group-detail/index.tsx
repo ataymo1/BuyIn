@@ -75,14 +75,14 @@ function GroupManagementSections({
   currentDescription,
   currentName,
   groupId,
-  isOwner,
+  canManageGroup,
   userId,
 }: {
   children: ReactNode;
   currentDescription?: string;
   currentName: string;
   groupId: Id<"groups">;
-  isOwner: boolean;
+  canManageGroup: boolean;
   userId?: Id<"users">;
 }) {
   return (
@@ -91,7 +91,7 @@ function GroupManagementSections({
         <ClaimPlayerHistorySection groupId={groupId} userId={userId} />
       ) : null}
 
-      {isOwner && userId ? (
+      {canManageGroup && userId ? (
         <>
           <PendingPlayerClaimsSection groupId={groupId} userId={userId} />
           <PendingImportRequestsSection groupId={groupId} userId={userId} />
@@ -101,7 +101,7 @@ function GroupManagementSections({
 
       {children}
 
-      {isOwner && userId ? (
+      {canManageGroup && userId ? (
         <GroupSettingsSection
           currentDescription={currentDescription}
           currentName={currentName}
@@ -183,8 +183,8 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
     groupId: typedGroupId,
   });
 
-  const isOwner = useQuery(
-    api.groups.isGroupOwner,
+  const canManageGroup = useQuery(
+    api.groups.canManageGroup,
     userId ? { groupId: typedGroupId, userId } : "skip"
   );
   const isMember = useQuery(
@@ -227,7 +227,8 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
   const isLoading = shouldShowGroupDetailSkeleton({
     groupLoading: group === undefined,
     membershipLoading:
-      Boolean(userId) && (isMember === undefined || isOwner === undefined),
+      Boolean(userId) &&
+      (isMember === undefined || canManageGroup === undefined),
     seasonDataLoading,
     seasonsLoading: Boolean(group) && !seasonsReady && !seasonSetup.error,
     userLoading: Boolean(userLoading),
@@ -290,8 +291,8 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
       />
 
       <SeasonNavigationSection
+        canManageGroup={Boolean(canManageGroup)}
         groupId={typedGroupId}
-        isOwner={Boolean(isOwner)}
         onSeasonChange={updateSeasonParam}
         onSeasonStarted={showCurrentSeason}
         seasons={seasons ?? []}
@@ -304,10 +305,10 @@ export function GroupDetailClient({ groupId }: GroupDetailClientProps) {
       <GroupStandingsSection standings={standings ?? []} />
 
       <GroupManagementSections
+        canManageGroup={Boolean(canManageGroup)}
         currentDescription={group.description}
         currentName={group.name}
         groupId={typedGroupId}
-        isOwner={Boolean(isOwner)}
         userId={userId}
       >
         <RecentSessionsSection games={completedGames.slice(0, 5)} />

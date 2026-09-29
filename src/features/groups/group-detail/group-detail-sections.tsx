@@ -263,7 +263,7 @@ function getSeasonDateRange(season: GroupSeason) {
 
 export function SeasonNavigationSection({
   groupId,
-  isOwner,
+  canManageGroup,
   onSeasonChange,
   onSeasonStarted,
   seasons,
@@ -271,7 +271,7 @@ export function SeasonNavigationSection({
   userId,
 }: {
   groupId: Id<"groups">;
-  isOwner: boolean;
+  canManageGroup: boolean;
   onSeasonChange: (seasonId: Id<"seasons"> | "all") => void;
   onSeasonStarted: () => void;
   seasons: GroupSeason[];
@@ -326,7 +326,7 @@ export function SeasonNavigationSection({
               View sessions and completed-session standings by season.
             </CardDescription>
           </div>
-          {isOwner && userId && currentSeason ? (
+          {canManageGroup && userId && currentSeason ? (
             <AlertDialog onOpenChange={setDialogOpen} open={dialogOpen}>
               <AlertDialogTrigger asChild>
                 <Button size="sm">

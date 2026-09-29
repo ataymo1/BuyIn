@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
+import { requireGroupManager } from "./helpers";
 
 const BACKFILL_BATCH_SIZE = 50;
 
@@ -189,10 +190,7 @@ export const startNewSeason = mutation({
     expectedCurrentSeasonId: v.id("seasons"),
   },
   handler: async (ctx, args) => {
-    const group = await ctx.db.get(args.groupId);
-    if (!group || group.ownerId !== args.userId) {
-      throw new Error("Only the group owner can start a new season");
-    }
+    const group = await requireGroupManager(ctx, args.groupId, args.userId);
 
     const currentSeason = await ensureCurrentSeason(ctx, group);
     if (currentSeason._id !== args.expectedCurrentSeasonId) {

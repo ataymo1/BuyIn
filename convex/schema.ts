@@ -130,6 +130,7 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     ownerId: v.id("users"),
+    adminIds: v.optional(v.array(v.id("users"))),
   })
     .index("by_ownerId", ["ownerId"])
     .searchIndex("search_by_name", { searchField: "name" }),
