@@ -28,6 +28,7 @@ const REQUIRED_LEDGER_HEADERS = [
 ] as const;
 const BOM = /^\uFEFF/;
 const LEDGER_FILE_NAME = /(?:^|[/\\])ledger_(.+?)(?: \(\d+\))?\.csv$/i;
+const LEDGER_CHIPS_PER_CURRENCY_UNIT = 100;
 
 type LedgerHeader = (typeof REQUIRED_LEDGER_HEADERS)[number] | "nit_escrow";
 
@@ -286,8 +287,15 @@ export function parsePokerNowLedger(
     endedAt,
     handCount: 0,
     warnings,
+    // Validate and aggregate in ledger chips, then convert to the currency
+    // amounts used by the import preview, game players, and transactions.
     players: [...players.values()].map(
-      ({ latestKnownTime: _latestKnownTime, ...player }) => player
+      ({ sourceId, name, buyIn, cashOut }) => ({
+        sourceId,
+        name,
+        buyIn: roundMoney(buyIn / LEDGER_CHIPS_PER_CURRENCY_UNIT),
+        cashOut: roundMoney(cashOut / LEDGER_CHIPS_PER_CURRENCY_UNIT),
+      })
     ),
   };
 }

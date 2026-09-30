@@ -20,6 +20,30 @@ const NEGATIVE_AMOUNT = /negative chip amount/;
 const INVALID_NET = /invalid net/;
 const MISSING_BUY_IN = /missing buy-in/;
 
+test("converts ledger chips to currency once, preserving cents and totals", () => {
+  const session = parsePokerNowLedger(
+    [
+      HEADERS,
+      '"Alex",a,2026-09-30T03:00:00.000Z,2026-09-30T04:00:00.000Z,2500,3721,0,1,1222',
+      '"Blair",b,2026-09-30T03:00:00.000Z,,2500,,1278,0,-1222',
+      '"Alex",a,2026-09-30T04:00:00.000Z,,100,,100,0,0',
+    ].join("\n")
+  );
+
+  assert.deepEqual(session.players, [
+    { sourceId: "a", name: "Alex", buyIn: 26, cashOut: 38.22 },
+    { sourceId: "b", name: "Blair", buyIn: 25, cashOut: 12.78 },
+  ]);
+  assert.equal(
+    session.players.reduce((sum, p) => sum + p.buyIn, 0),
+    51
+  );
+  assert.equal(
+    session.players.reduce((sum, p) => sum + p.cashOut, 0),
+    51
+  );
+});
+
 test("aggregates repeated ledger sessions by PokerNow player ID", () => {
   const ledger = [
     HEADERS,
@@ -39,20 +63,20 @@ test("aggregates repeated ledger sessions by PokerNow player ID", () => {
     {
       sourceId: "player-a",
       name: "Alex, Jr.",
-      buyIn: 7500,
-      cashOut: 6050,
+      buyIn: 75,
+      cashOut: 60.5,
     },
     {
       sourceId: "player-b",
       name: "Blair",
-      buyIn: 5000,
-      cashOut: 18_450,
+      buyIn: 50,
+      cashOut: 184.5,
     },
     {
       sourceId: "player-c",
       name: "Casey",
-      buyIn: 7500,
-      cashOut: 3722,
+      buyIn: 75,
+      cashOut: 37.22,
     },
   ]);
 });
@@ -74,8 +98,8 @@ test("includes nit escrow in cash-out totals", () => {
       cashOut,
     })),
     [
-      { sourceId: "player-a", buyIn: 2500, cashOut: 2500 },
-      { sourceId: "player-b", buyIn: 2500, cashOut: 5000 },
+      { sourceId: "player-a", buyIn: 25, cashOut: 25 },
+      { sourceId: "player-b", buyIn: 25, cashOut: 50 },
     ]
   );
 });
@@ -92,8 +116,8 @@ test("accepts non-nit ledgers without a nit escrow column", () => {
   assert.deepEqual(
     session.players.map(({ sourceId, cashOut }) => ({ sourceId, cashOut })),
     [
-      { sourceId: "player-a", cashOut: 2500 },
-      { sourceId: "player-b", cashOut: 5000 },
+      { sourceId: "player-a", cashOut: 25 },
+      { sourceId: "player-b", cashOut: 50 },
     ]
   );
 });
@@ -158,12 +182,12 @@ test("imports an end-only refunded row without losing its money or identity", ()
   assert.equal(session.startedAt, Date.parse("2026-09-29T03:10:45.717Z"));
   assert.equal(session.endedAt, Date.parse("2026-09-29T08:23:11.182Z"));
   assert.deepEqual(session.players, [
-    { sourceId: "new-id", name: "New account", buyIn: 100, cashOut: 2189 },
-    { sourceId: "old-id", name: "Old account", buyIn: 100, cashOut: 100 },
+    { sourceId: "new-id", name: "New account", buyIn: 1, cashOut: 21.89 },
+    { sourceId: "old-id", name: "Old account", buyIn: 1, cashOut: 1 },
     {
       sourceId: "returning-id",
       name: "Returning player",
-      buyIn: 700,
+      buyIn: 7,
       cashOut: 0,
     },
   ]);
@@ -187,7 +211,7 @@ test("accepts all end-only rows and derives finite session boundaries", () => {
   assert.equal(session.warnings.length, 2);
   assert.equal(
     session.players.reduce((sum, p) => sum + p.cashOut, 0),
-    200
+    2
   );
 });
 
@@ -208,8 +232,8 @@ test("keeps undated rows but prefers a dated nickname regardless of row order", 
       {
         sourceId: "a",
         name: "New name",
-        buyIn: 200,
-        cashOut: 220,
+        buyIn: 2,
+        cashOut: 2.2,
       }
     );
     assert.equal(session.warnings.length, 1);
@@ -225,7 +249,7 @@ test("uses the end time to order aliases when a start time is missing", () => {
   for (const orderedRows of [rows, [...rows].reverse()]) {
     const session = parsePokerNowLedger([HEADERS, ...orderedRows].join("\n"));
     assert.deepEqual(session.players, [
-      { sourceId: "a", name: "New name", buyIn: 200, cashOut: 200 },
+      { sourceId: "a", name: "New name", buyIn: 2, cashOut: 2 },
     ]);
   }
 });
