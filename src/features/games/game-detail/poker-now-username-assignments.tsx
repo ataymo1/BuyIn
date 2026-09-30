@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Loader2, UserRoundCog } from "lucide-react";
+import { ChevronDown, Loader2, UserRoundCog } from "lucide-react";
 import { useState } from "react";
 import { PokerNowImportWarnings } from "@/components/poker-now-import-warnings";
 import { Button } from "@/components/ui/button";
@@ -219,74 +219,95 @@ export function PokerNowUsernameAssignments({
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <UserRoundCog className="h-5 w-5" />
+      <details className="group rounded-xl border bg-card">
+        <summary className="flex cursor-pointer list-none items-center gap-3 p-5 [&::-webkit-details-marker]:hidden">
+          <UserRoundCog
+            aria-hidden="true"
+            className="h-5 w-5 shrink-0 text-muted-foreground"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-sm">
               PokerNow usernames
-            </CardTitle>
-            <CardDescription>
-              Assign imported usernames to members of this group.
-            </CardDescription>
-          </div>
-          {mappings.length > 0 ? (
-            <Button onClick={showEditor} size="sm" variant="outline">
-              Edit assignments
-            </Button>
-          ) : null}
-        </CardHeader>
-        <CardContent>
-          {mappings.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {mappings.map((mapping) => {
-                const player = candidates.players.find(
-                  (candidate) => candidate.id === mapping.playerId
-                );
-                return (
-                  <div
-                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
-                    key={mapping.sourcePlayerId}
-                  >
-                    <span className="min-w-0 truncate font-medium">
-                      {mapping.displayName}
-                    </span>
-                    <span className="min-w-0 truncate text-muted-foreground">
-                      {player?.name ?? "Unassigned"}
-                    </span>
-                  </div>
-                );
-              })}
+            </span>
+            <span className="block text-muted-foreground text-xs">
+              Imported username assignments
+            </span>
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <Card className="rounded-none border-0 border-t bg-transparent shadow-none">
+          <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <UserRoundCog className="h-5 w-5" />
+                PokerNow usernames
+              </CardTitle>
+              <CardDescription>
+                Assign imported usernames to members of this group.
+              </CardDescription>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-muted-foreground text-sm">
-                This session predates editable assignments. Upload its original
-                PokerNow CSV to restore the usernames, then assign them to group
-                members. Older imports can use the original game log.
-              </p>
-              <div className="max-w-sm space-y-2">
-                <Label htmlFor="restore-poker-now-ledger">
-                  Original PokerNow CSV
-                </Label>
-                <Input
-                  accept=".csv,text/csv"
-                  id="restore-poker-now-ledger"
-                  onChange={(event) =>
-                    readRecoveryLedger(event.target.files?.[0])
-                  }
-                  type="file"
-                />
+            {mappings.length > 0 ? (
+              <Button onClick={showEditor} size="sm" variant="outline">
+                Edit assignments
+              </Button>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            {mappings.length > 0 ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {mappings.map((mapping) => {
+                  const player = candidates.players.find(
+                    (candidate) => candidate.id === mapping.playerId
+                  );
+                  return (
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                      key={mapping.sourcePlayerId}
+                    >
+                      <span className="min-w-0 truncate font-medium">
+                        {mapping.displayName}
+                      </span>
+                      <span className="min-w-0 truncate text-muted-foreground">
+                        {player?.name ?? "Unassigned"}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              {error && !open ? (
-                <p className="rounded-md bg-destructive/10 p-3 text-destructive text-sm">
-                  {error}
+            ) : (
+              <div className="space-y-3">
+                <p className="text-muted-foreground text-sm">
+                  This session predates editable assignments. Upload its
+                  original PokerNow CSV to restore the usernames, then assign
+                  them to group members. Older imports can use the original game
+                  log.
                 </p>
-              ) : null}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <div className="max-w-sm space-y-2">
+                  <Label htmlFor="restore-poker-now-ledger">
+                    Original PokerNow CSV
+                  </Label>
+                  <Input
+                    accept=".csv,text/csv"
+                    id="restore-poker-now-ledger"
+                    onChange={(event) =>
+                      readRecoveryLedger(event.target.files?.[0])
+                    }
+                    type="file"
+                  />
+                </div>
+                {error && !open ? (
+                  <p className="rounded-md bg-destructive/10 p-3 text-destructive text-sm">
+                    {error}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </details>
 
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">

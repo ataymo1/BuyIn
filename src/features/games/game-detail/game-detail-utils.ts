@@ -7,3 +7,12 @@ export function getStatusColorClass(status: string): string {
   }
   return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
 }
+
+const sessionMoneyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+
+export function formatSessionMoney(amount: number): string {
+  return sessionMoneyFormatter.format(amount);
+}

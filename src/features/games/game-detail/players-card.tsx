@@ -1,32 +1,26 @@
 "use client";
 
-import {
-  ArrowUpDown,
-  ChevronDown,
-  ChevronUp,
-  Pencil,
-  PiggyBank,
-} from "lucide-react";
+import { ArrowUpDown, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { ResponsiveTable } from "@/components/ui/responsive-table";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type {
   EditingPlayerTotalsState,
   GamePlayerRow,
   PlayersSortState,
 } from "./game-detail-types";
+import { formatSessionMoney } from "./game-detail-utils";
 
 interface PlayersCardProps {
-  createdByName?: string | null;
   gamePlayers: GamePlayerRow[];
   isSessionCreator: boolean;
   onEditPlayerTotals: (value: EditingPlayerTotalsState) => void;
@@ -47,48 +41,29 @@ function getPlayerSortValue(
   );
 }
 
-function getProfit(gamePlayer: GamePlayerRow) {
-  return (
-    gamePlayer.profit ?? (gamePlayer.cashOut ?? 0) - (gamePlayer.buyIn ?? 0)
-  );
-}
-
-function getSortIcon(
-  isActive: boolean,
-  direction: PlayersSortState["direction"]
-) {
-  if (!isActive) {
-    return <ArrowUpDown className="h-3 w-3" />;
-  }
-  if (direction === "desc") {
-    return <ChevronDown className="h-3 w-3" />;
-  }
-  return <ChevronUp className="h-3 w-3" />;
-}
+const sortColumns = [
+  { key: "buyIn", label: "Buy-in" },
+  { key: "cashOut", label: "Cash-out" },
+  { key: "profit", label: "Profit" },
+] as const;
 
 export function PlayersCard({
-  createdByName,
   gamePlayers,
   isSessionCreator,
   onEditPlayerTotals,
 }: PlayersCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [playersSort, setPlayersSort] = useState<PlayersSortState>({
     direction: "desc",
     key: "profit",
   });
-
   const sortedGamePlayers = [...gamePlayers].sort((left, right) => {
-    const leftValue = getPlayerSortValue(left, playersSort.key);
-    const rightValue = getPlayerSortValue(right, playersSort.key);
-
-    if (leftValue === rightValue) {
+    const difference =
+      getPlayerSortValue(left, playersSort.key) -
+      getPlayerSortValue(right, playersSort.key);
+    if (difference === 0) {
       return (left.player?.name ?? "").localeCompare(right.player?.name ?? "");
     }
-
-    return playersSort.direction === "desc"
-      ? rightValue - leftValue
-      : leftValue - rightValue;
+    return playersSort.direction === "desc" ? -difference : difference;
   });
 
   function toggleSort(key: PlayersSortState["key"]) {
@@ -102,201 +77,127 @@ export function PlayersCard({
     );
   }
 
-  function renderSortableHeader(label: string, key: PlayersSortState["key"]) {
-    const isActive = playersSort.key === key;
-
-    return (
-      <button
-        className="inline-flex items-center gap-1 font-medium text-muted-foreground text-xs uppercase tracking-wide hover:text-foreground"
-        onClick={() => toggleSort(key)}
-        type="button"
-      >
-        <span>{label}</span>
-        {getSortIcon(isActive, playersSort.direction)}
-      </button>
-    );
-  }
-
-  function openEditPlayerTotals(gamePlayer: GamePlayerRow) {
-    onEditPlayerTotals({
-      buyIn: gamePlayer.buyIn.toFixed(2),
-      cashOut: (gamePlayer.cashOut ?? 0).toFixed(2),
-      playerId: gamePlayer.playerId as Id<"players">,
-      playerName: gamePlayer.player?.name ?? "Unknown",
-    });
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Players</CardTitle>
-            <CardDescription>
-              {gamePlayers.length}{" "}
-              {gamePlayers.length === 1 ? "player" : "players"} in this session
-              {createdByName ? (
-                <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                  <PiggyBank className="h-3 w-3" />
-                  {createdByName}
-                </span>
+    <div className="space-y-5 pt-5">
+      <p className="text-muted-foreground text-sm">
+        Buy-ins, cash-outs, and net results by player
+      </p>
+      {gamePlayers.length === 0 ? (
+        <p className="py-8 text-center text-muted-foreground text-sm">
+          No players yet
+        </p>
+      ) : (
+        <Table aria-label="Player ledger" className="text-xs sm:text-sm">
+          <TableHeader className="bg-muted/40">
+            <TableRow className="grid grid-cols-3 sm:table-row">
+              <TableHead className="hidden w-1/3 px-2 sm:table-cell sm:px-4">
+                Player
+              </TableHead>
+              {sortColumns.map(({ key, label }) => {
+                const active = playersSort.key === key;
+                const DirectionIcon =
+                  playersSort.direction === "desc" ? ChevronDown : ChevronUp;
+                const SortIcon = active ? DirectionIcon : ArrowUpDown;
+                const direction =
+                  playersSort.direction === "desc" ? "descending" : "ascending";
+                return (
+                  <TableHead
+                    aria-sort={active ? direction : undefined}
+                    className="flex h-auto items-center px-2 py-2 sm:table-cell sm:px-4 sm:text-right"
+                    key={key}
+                  >
+                    <button
+                      className="inline-flex items-center justify-end gap-1 whitespace-nowrap py-2 hover:text-foreground"
+                      onClick={() => toggleSort(key)}
+                      type="button"
+                    >
+                      {label}
+                      <SortIcon aria-hidden="true" className="h-3 w-3" />
+                    </button>
+                  </TableHead>
+                );
+              })}
+              {isSessionCreator ? (
+                <TableHead className="hidden w-10 px-1 sm:table-cell">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               ) : null}
-            </CardDescription>
-          </div>
-          <Button
-            className="h-8 w-8 p-0"
-            onClick={() => setIsExpanded((current) => !current)}
-            size="sm"
-            variant="ghost"
-          >
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {gamePlayers.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No players yet</p>
-        ) : (
-          <ResponsiveTable
-            columns={[
-              {
-                header: "Player",
-                key: "player",
-                render: (gamePlayer) =>
-                  gamePlayer.player?.id ? (
-                    <Link
-                      className="font-medium transition-colors hover:text-primary hover:underline"
-                      href={`/players/${gamePlayer.player.id}`}
-                    >
-                      {gamePlayer.player?.name}
-                    </Link>
-                  ) : (
-                    gamePlayer.player?.name
-                  ),
-              },
-              {
-                header: renderSortableHeader("Buy-In", "buyIn"),
-                key: "buyIn",
-                render: (gamePlayer) => `$${gamePlayer.buyIn.toFixed(2)}`,
-              },
-              {
-                header: renderSortableHeader("Cash-Out", "cashOut"),
-                key: "cashOut",
-                render: (gamePlayer) =>
-                  gamePlayer.cashOut !== null &&
-                  gamePlayer.cashOut !== undefined
-                    ? `$${gamePlayer.cashOut.toFixed(2)}`
-                    : "--",
-              },
-              {
-                header: renderSortableHeader("Profit", "profit"),
-                key: "profit",
-                render: (gamePlayer) => {
-                  const profit = getProfit(gamePlayer);
-
-                  return (
-                    <span
-                      className={`font-medium ${
-                        profit >= 0
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {profit >= 0 ? "+" : ""}${profit.toFixed(2)}
-                    </span>
-                  );
-                },
-              },
-              {
-                className: "w-10 text-right",
-                header: "",
-                key: "actions",
-                render: (gamePlayer) =>
-                  isSessionCreator ? (
-                    <Button
-                      onClick={() => openEditPlayerTotals(gamePlayer)}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  ) : null,
-              },
-            ]}
-            data={
-              isExpanded ? sortedGamePlayers : sortedGamePlayers.slice(0, 3)
-            }
-            keyExtractor={(gamePlayer) => gamePlayer.id}
-            renderCard={(gamePlayer) => {
-              const profit = getProfit(gamePlayer);
-
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedGamePlayers.map((gamePlayer) => {
+              const name = gamePlayer.player?.name ?? "Unknown";
+              const profit = getPlayerSortValue(gamePlayer, "profit");
               return (
-                <div className="rounded-lg border bg-card p-4">
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    {gamePlayer.player?.id ? (
-                      <Link
-                        className="font-medium transition-colors hover:text-primary hover:underline"
-                        href={`/players/${gamePlayer.player.id}`}
+                <TableRow
+                  className="grid grid-cols-3 sm:table-row"
+                  key={gamePlayer.id}
+                >
+                  <TableCell className="col-span-2 row-start-1 px-2 pt-4 pb-1 sm:px-4 sm:py-5">
+                    <div className="flex items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-muted text-muted-foreground text-xs sm:inline-flex"
                       >
-                        {gamePlayer.player?.name}
-                      </Link>
-                    ) : (
-                      <div className="font-medium">
-                        {gamePlayer.player?.name}
-                      </div>
-                    )}
-
-                    {isSessionCreator ? (
+                        {name
+                          .split(" ")
+                          .map((part) => part[0])
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase()}
+                      </span>
+                      {gamePlayer.player?.id ? (
+                        <Link
+                          className="break-words font-medium hover:underline"
+                          href={`/players/${gamePlayer.player.id}`}
+                        >
+                          {name}
+                        </Link>
+                      ) : (
+                        <span className="break-words font-medium">{name}</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="row-start-2 whitespace-nowrap px-2 pt-1 pb-4 tabular-nums sm:px-4 sm:py-4 sm:text-right">
+                    {formatSessionMoney(gamePlayer.buyIn)}
+                  </TableCell>
+                  <TableCell className="row-start-2 whitespace-nowrap px-2 pt-1 pb-4 tabular-nums sm:px-4 sm:py-4 sm:text-right">
+                    {gamePlayer.cashOut == null
+                      ? "—"
+                      : formatSessionMoney(gamePlayer.cashOut)}
+                  </TableCell>
+                  <TableCell
+                    className={`row-start-2 whitespace-nowrap px-2 pt-1 pb-4 font-medium tabular-nums sm:px-4 sm:py-4 sm:text-right ${profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                  >
+                    {profit >= 0 ? "+" : ""}
+                    {formatSessionMoney(profit)}
+                  </TableCell>
+                  {isSessionCreator ? (
+                    <TableCell className="col-start-3 row-start-1 px-1 py-1 text-right sm:py-4">
                       <Button
-                        className="h-7 w-7 p-0"
-                        onClick={() => openEditPlayerTotals(gamePlayer)}
-                        size="sm"
+                        aria-label={`Edit totals for ${name}`}
+                        className="h-9 w-9"
+                        onClick={() =>
+                          onEditPlayerTotals({
+                            buyIn: gamePlayer.buyIn.toFixed(2),
+                            cashOut: (gamePlayer.cashOut ?? 0).toFixed(2),
+                            playerId: gamePlayer.playerId as Id<"players">,
+                            playerName: name,
+                          })
+                        }
+                        size="icon"
                         variant="ghost"
                       >
-                        <Pencil className="h-3 w-3" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                    ) : null}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Buy-In</p>
-                      <p className="font-medium">
-                        ${gamePlayer.buyIn.toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Cash-Out</p>
-                      <p className="font-medium">
-                        {gamePlayer.cashOut !== null &&
-                        gamePlayer.cashOut !== undefined
-                          ? `$${gamePlayer.cashOut.toFixed(2)}`
-                          : "--"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Profit</p>
-                      <p
-                        className={`font-medium ${
-                          profit >= 0
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        {profit >= 0 ? "+" : ""}${profit.toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                    </TableCell>
+                  ) : null}
+                </TableRow>
               );
-            }}
-          />
-        )}
-      </CardContent>
-    </Card>
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </div>
   );
 }

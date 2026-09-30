@@ -6,11 +6,10 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { GameDetailDialogs } from "./game-detail-dialogs";
 import { GameDetailSkeleton } from "./game-detail-skeleton";
 import { PendingTransactionsCard } from "./pending-transactions-card";
-import { PlayersCard } from "./players-card";
 import { PokerNowUsernameAssignments } from "./poker-now-username-assignments";
 import { SessionActionsCard } from "./session-actions-card";
 import { SessionHeader } from "./session-header";
-import { TransactionsCard } from "./transactions-card";
+import { SessionLedger } from "./session-ledger";
 import { useGameDetailController } from "./use-game-detail-controller";
 
 interface GameDetailClientProps {
@@ -85,21 +84,16 @@ export function GameDetailClient({ gameId }: GameDetailClientProps) {
         status={game.status}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <PlayersCard
-          createdByName={game.createdBy?.name}
-          gamePlayers={gamePlayers}
-          isSessionCreator={isSessionCreator}
-          onEditPlayerTotals={onEditPlayerTotals}
-        />
-        <TransactionsCard
-          isDeletingTxId={isDeletingTxId}
-          isSessionCreator={isSessionCreator}
-          onDeleteTransaction={onDeleteTransaction}
-          onEditTransaction={onEditTransaction}
-          transactions={finalizedTransactions}
-        />
-      </div>
+      <SessionLedger
+        gamePlayers={gamePlayers}
+        isDeletingTxId={isDeletingTxId}
+        isSessionCreator={isSessionCreator}
+        key={gameId}
+        onDeleteTransaction={onDeleteTransaction}
+        onEditPlayerTotals={onEditPlayerTotals}
+        onEditTransaction={onEditTransaction}
+        transactions={finalizedTransactions}
+      />
 
       {canManage && game.importSource === "POKER_NOW" && game.group ? (
         <PokerNowUsernameAssignments
