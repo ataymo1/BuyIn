@@ -209,6 +209,11 @@ export function PokerNowImportClient() {
   const { groups, isLoading } = useUserGroups();
   const [groupId, setGroupId] = useState(searchParams.get("groupId") ?? "");
   const [session, setSession] = useState<PokerNowSession>();
+  const [ledgerFile, setLedgerFile] = useState<{
+    text: string;
+    name: string;
+  }>();
+  const [amountDivisor, setAmountDivisor] = useState<1 | 100>(1);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [extraNames, setExtraNames] = useState<Record<string, string>>({});
   const [removedPlayerIds, setRemovedPlayerIds] = useState<Set<string>>(
@@ -228,7 +233,10 @@ export function PokerNowImportClient() {
       return;
     }
     try {
-      const parsed = parsePokerNowLedger(await file.text(), file.name);
+      const text = await file.text();
+      const parsed = parsePokerNowLedger(text, file.name);
+      setLedgerFile({ text, name: file.name });
+      setAmountDivisor(1);
       const nextMapping: Record<string, string> = {};
       const nextExtraNames: Record<string, string> = {};
       for (const imported of parsed.players) {
@@ -389,6 +397,49 @@ export function PokerNowImportClient() {
               type="file"
             />
           </div>
+          {session && ledgerFile ? (
+            <div className="space-y-2">
+              <Label htmlFor="ledger-amount-units">CSV amounts</Label>
+              <Select
+                disabled={saving}
+                onValueChange={(value) => {
+                  const divisor = value === "100" ? 100 : 1;
+                  setAmountDivisor(divisor);
+                  setSession(
+                    parsePokerNowLedger(
+                      ledgerFile.text,
+                      ledgerFile.name,
+                      divisor
+                    )
+                  );
+                }}
+                value={String(amountDivisor)}
+              >
+                <SelectTrigger
+                  aria-describedby="ledger-amount-help"
+                  id="ledger-amount-units"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">
+                    Dollars — 100 in CSV = $100.00
+                  </SelectItem>
+                  <SelectItem value="100">
+                    Cents — 100 in CSV = $1.00
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p
+                className="text-muted-foreground text-sm"
+                id="ledger-amount-help"
+              >
+                Amounts are kept as written by default. Choose cents only if
+                your table uses 100 chips per dollar. The preview and imported
+                totals use this setting.
+              </p>
+            </div>
+          ) : null}
           {error ? (
             <p className="rounded-md bg-destructive/10 p-3 text-destructive text-sm">
               {error}

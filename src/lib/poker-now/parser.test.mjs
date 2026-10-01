@@ -20,30 +20,6 @@ const NEGATIVE_AMOUNT = /negative chip amount/;
 const INVALID_NET = /invalid net/;
 const MISSING_BUY_IN = /missing buy-in/;
 
-test("converts ledger chips to currency once, preserving cents and totals", () => {
-  const session = parsePokerNowLedger(
-    [
-      HEADERS,
-      '"Alex",a,2026-09-30T03:00:00.000Z,2026-09-30T04:00:00.000Z,2500,3721,0,1,1222',
-      '"Blair",b,2026-09-30T03:00:00.000Z,,2500,,1278,0,-1222',
-      '"Alex",a,2026-09-30T04:00:00.000Z,,100,,100,0,0',
-    ].join("\n")
-  );
-
-  assert.deepEqual(session.players, [
-    { sourceId: "a", name: "Alex", buyIn: 26, cashOut: 38.22 },
-    { sourceId: "b", name: "Blair", buyIn: 25, cashOut: 12.78 },
-  ]);
-  assert.equal(
-    session.players.reduce((sum, p) => sum + p.buyIn, 0),
-    51
-  );
-  assert.equal(
-    session.players.reduce((sum, p) => sum + p.cashOut, 0),
-    51
-  );
-});
-
 test("aggregates repeated ledger sessions by PokerNow player ID", () => {
   const ledger = [
     HEADERS,
@@ -63,20 +39,20 @@ test("aggregates repeated ledger sessions by PokerNow player ID", () => {
     {
       sourceId: "player-a",
       name: "Alex, Jr.",
-      buyIn: 75,
-      cashOut: 60.5,
+      buyIn: 7500,
+      cashOut: 6050,
     },
     {
       sourceId: "player-b",
       name: "Blair",
-      buyIn: 50,
-      cashOut: 184.5,
+      buyIn: 5000,
+      cashOut: 18_450,
     },
     {
       sourceId: "player-c",
       name: "Casey",
-      buyIn: 75,
-      cashOut: 37.22,
+      buyIn: 7500,
+      cashOut: 3722,
     },
   ]);
 });
@@ -98,8 +74,8 @@ test("includes nit escrow in cash-out totals", () => {
       cashOut,
     })),
     [
-      { sourceId: "player-a", buyIn: 25, cashOut: 25 },
-      { sourceId: "player-b", buyIn: 25, cashOut: 50 },
+      { sourceId: "player-a", buyIn: 2500, cashOut: 2500 },
+      { sourceId: "player-b", buyIn: 2500, cashOut: 5000 },
     ]
   );
 });
@@ -116,8 +92,8 @@ test("accepts non-nit ledgers without a nit escrow column", () => {
   assert.deepEqual(
     session.players.map(({ sourceId, cashOut }) => ({ sourceId, cashOut })),
     [
-      { sourceId: "player-a", cashOut: 25 },
-      { sourceId: "player-b", cashOut: 50 },
+      { sourceId: "player-a", cashOut: 2500 },
+      { sourceId: "player-b", cashOut: 5000 },
     ]
   );
 });
@@ -182,12 +158,12 @@ test("imports an end-only refunded row without losing its money or identity", ()
   assert.equal(session.startedAt, Date.parse("2026-09-29T03:10:45.717Z"));
   assert.equal(session.endedAt, Date.parse("2026-09-29T08:23:11.182Z"));
   assert.deepEqual(session.players, [
-    { sourceId: "new-id", name: "New account", buyIn: 1, cashOut: 21.89 },
-    { sourceId: "old-id", name: "Old account", buyIn: 1, cashOut: 1 },
+    { sourceId: "new-id", name: "New account", buyIn: 100, cashOut: 2189 },
+    { sourceId: "old-id", name: "Old account", buyIn: 100, cashOut: 100 },
     {
       sourceId: "returning-id",
       name: "Returning player",
-      buyIn: 7,
+      buyIn: 700,
       cashOut: 0,
     },
   ]);
@@ -211,7 +187,7 @@ test("accepts all end-only rows and derives finite session boundaries", () => {
   assert.equal(session.warnings.length, 2);
   assert.equal(
     session.players.reduce((sum, p) => sum + p.cashOut, 0),
-    2
+    200
   );
 });
 
@@ -232,8 +208,8 @@ test("keeps undated rows but prefers a dated nickname regardless of row order", 
       {
         sourceId: "a",
         name: "New name",
-        buyIn: 2,
-        cashOut: 2.2,
+        buyIn: 200,
+        cashOut: 220,
       }
     );
     assert.equal(session.warnings.length, 1);
@@ -249,7 +225,7 @@ test("uses the end time to order aliases when a start time is missing", () => {
   for (const orderedRows of [rows, [...rows].reverse()]) {
     const session = parsePokerNowLedger([HEADERS, ...orderedRows].join("\n"));
     assert.deepEqual(session.players, [
-      { sourceId: "a", name: "New name", buyIn: 2, cashOut: 2 },
+      { sourceId: "a", name: "New name", buyIn: 200, cashOut: 200 },
     ]);
   }
 });
@@ -303,4 +279,66 @@ test("missing timing does not bypass financial validation", () => {
       error
     );
   }
+});
+
+test("converts cents only when explicitly selected, preserving cents and totals", () => {
+  const session = parsePokerNowLedger(
+    [
+      HEADERS,
+      '"Alex",a,2026-09-30T03:00:00.000Z,2026-09-30T04:00:00.000Z,2500,3721,0,1,1222',
+      '"Blair",b,2026-09-30T03:00:00.000Z,,2500,,1278,0,-1222',
+      '"Alex",a,2026-09-30T04:00:00.000Z,,100,,100,0,0',
+    ].join("\n"),
+    "ledger_cents.csv",
+    100
+  );
+
+  assert.deepEqual(session.players, [
+    { sourceId: "a", name: "Alex", buyIn: 26, cashOut: 38.22 },
+    { sourceId: "b", name: "Blair", buyIn: 25, cashOut: 12.78 },
+  ]);
+  assert.equal(
+    session.players.reduce((sum, p) => sum + p.buyIn, 0),
+    51
+  );
+  assert.equal(
+    session.players.reduce((sum, p) => sum + p.cashOut, 0),
+    51
+  );
+});
+
+test("preserves dollar-denominated rebuys from the reported October ledger", () => {
+  const csv = [
+    HEADERS,
+    '"Player A",a,2026-10-01T08:15:15.550Z,2026-10-01T08:37:13.772Z,100,0,0,0,-100',
+    '"Player A",a,2026-10-01T07:00:41.368Z,2026-10-01T07:50:03.497Z,264,0,0,0,-264',
+    '"Player A",a,2026-10-01T03:01:29.461Z,2026-10-01T04:22:26.580Z,188,364,0,0,176',
+    '"Player A",a,2026-10-01T01:09:11.110Z,2026-10-01T01:39:48.217Z,100,188,0,0,88',
+    '"Player A",a,2026-10-01T00:52:16.786Z,2026-10-01T01:07:47.594Z,100,0,0,0,-100',
+    '"Player B",b,2026-10-01T06:31:55.150Z,2026-10-01T09:24:06.323Z,262,0,0,0,-262',
+    '"Player C",c,2026-10-01T06:25:14.482Z,2026-10-01T08:52:43.065Z,100,775,0,0,675',
+    '"Player C",c,2026-10-01T06:01:30.175Z,2026-10-01T06:23:34.093Z,200,0,0,0,-200',
+    '"Player C",c,2026-10-01T02:15:06.179Z,2026-10-01T06:00:44.340Z,100,0,0,0,-100',
+  ].join("\n");
+  assert.deepEqual(parsePokerNowLedger(csv).players, [
+    { sourceId: "a", name: "Player A", buyIn: 752, cashOut: 552 },
+    { sourceId: "b", name: "Player B", buyIn: 262, cashOut: 0 },
+    { sourceId: "c", name: "Player C", buyIn: 400, cashOut: 775 },
+  ]);
+});
+
+test("preserves decimal dollars and changing units never compounds scaling", () => {
+  const csv = [
+    HEADERS,
+    '"Alex",a,2026-10-01T00:00:00Z,,100.25,,125.75,0,25.50',
+    '"Blair",b,2026-10-01T00:00:00Z,,100.25,,74.75,0,-25.50',
+  ].join("\n");
+  const dollars = parsePokerNowLedger(csv);
+  assert.deepEqual(dollars.players, [
+    { sourceId: "a", name: "Alex", buyIn: 100.25, cashOut: 125.75 },
+    { sourceId: "b", name: "Blair", buyIn: 100.25, cashOut: 74.75 },
+  ]);
+  const cents = parsePokerNowLedger(csv, "ledger.csv", 100);
+  assert.equal(cents.players[0].cashOut, 1.26);
+  assert.deepEqual(parsePokerNowLedger(csv).players, dollars.players);
 });

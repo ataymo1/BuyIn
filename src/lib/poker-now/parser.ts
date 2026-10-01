@@ -28,7 +28,6 @@ const REQUIRED_LEDGER_HEADERS = [
 ] as const;
 const BOM = /^\uFEFF/;
 const LEDGER_FILE_NAME = /(?:^|[/\\])ledger_(.+?)(?: \(\d+\))?\.csv$/i;
-const LEDGER_CHIPS_PER_CURRENCY_UNIT = 100;
 
 type LedgerHeader = (typeof REQUIRED_LEDGER_HEADERS)[number] | "nit_escrow";
 
@@ -219,7 +218,8 @@ function sourceIdFromFileName(fileName: string) {
 
 export function parsePokerNowLedger(
   text: string,
-  fileName = "poker-now-ledger.csv"
+  fileName = "poker-now-ledger.csv",
+  amountDivisor: 1 | 100 = 1
 ): PokerNowSession {
   const { indexes, rows } = getLedgerRows(text);
   const entries = rows.map((row, index) =>
@@ -287,14 +287,15 @@ export function parsePokerNowLedger(
     endedAt,
     handCount: 0,
     warnings,
-    // Validate and aggregate in ledger chips, then convert to the currency
-    // amounts used by the import preview, game players, and transactions.
+    // CSV headers do not identify currency units. Preserve amounts by default;
+    // divide only when the importer explicitly selects cents. Convert after
+    // aggregation so rounding cannot accumulate across rebuys.
     players: [...players.values()].map(
       ({ sourceId, name, buyIn, cashOut }) => ({
         sourceId,
         name,
-        buyIn: roundMoney(buyIn / LEDGER_CHIPS_PER_CURRENCY_UNIT),
-        cashOut: roundMoney(cashOut / LEDGER_CHIPS_PER_CURRENCY_UNIT),
+        buyIn: roundMoney(buyIn / amountDivisor),
+        cashOut: roundMoney(cashOut / amountDivisor),
       })
     ),
   };
